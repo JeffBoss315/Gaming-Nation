@@ -2099,6 +2099,47 @@ function defaultServiceUrl() {
   return '';
 }
 
+/* Where the company service listens when it is running beside you. */
+const LOCAL_SERVICE = 'http://localhost:7040';
+
+/* Ask the machine this client is on whether the service is running.
+
+   One request, with a short deadline. If nothing answers, the client
+   carries on exactly as before and says nothing — not running the
+   service is the normal case, and a warning on every start for the
+   ordinary case is noise that teaches people to ignore warnings.
+
+   An address set by hand in Settings still wins: this only fills in
+   when nothing else has said where the service is. */
+async function discoverLocalService() {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (window.HLL_SERVICE) return false;
+    if ((Store.db.settings.fleetUrl || '').trim()) return false;
+    if (typeof fetch !== 'function') return false;
+
+    const stop = new AbortController();
+    const bell = setTimeout(() => stop.abort(), 1200);
+
+    let ok = false;
+    try {
+      const res = await fetch(LOCAL_SERVICE + '/status',
+        { cache: 'no-store', signal: stop.signal });
+      ok = res.ok;
+    } catch (e) { ok = false; }
+    clearTimeout(bell);
+
+    if (!ok) return false;
+
+    window.HLL_SERVICE = LOCAL_SERVICE;
+    console.log('[HLL] company service found on ' + LOCAL_SERVICE);
+    return true;
+
+  } catch (e) {
+    return false;
+  }
+}
+
 const Sync = {
   timer: null, pushTimer: null, version: 0,
   status: 'off', lastError: null, applying: false,
@@ -5694,6 +5735,16 @@ function startServices() {
   GameWatch.start();
   Sync.start();          /* and shares one company with every other machine */
   Fleet.start();
+
+  /* If the service is running on this machine, everything above should be
+     using it. Started again once we know, rather than left off because the
+     answer had not arrived yet when boot ran. */
+  discoverLocalService().then((found) => {
+    if (!found) return;
+    Sync.start();
+    Fleet.start();
+    render();
+  });
 
   if (Store.db.settings.liveTelemetry) {
     Telemetry.start();
