@@ -3179,6 +3179,11 @@ function registerFormHTML() {
 
 let sessionOnly = false;   /* set when "keep me signed in" is unticked */
 
+/* The page somebody asked for before they were asked to sign in. Set by
+   render() when it puts the sign-in screen up over a real route, and spent
+   by doLogin() the moment they are through. */
+let wantedRoute = null;
+
 function doLogin(driver, msg) {
     // Save the authenticated driver
     state.user = driver;
@@ -3213,10 +3218,12 @@ function doLogin(driver, msg) {
         `${driver.rank || 'Driver'} · ${driverId}`
     );
 
-    // Go to dashboard
-    go('#/dashboard');
+    /* Where they were going before they were stopped, or the dashboard.
+       Spent on use, so it cannot send the next sign-in somewhere unexpected. */
+    const going = wantedRoute || '#/dashboard';
+    wantedRoute = null;
+    go(going);
 
-    // Render dashboard
     render();
 }
 
@@ -12669,7 +12676,23 @@ function pageErrorHTML(route, err) {
 
 function render() {
   const app = $('#app');
-  if (!state.user) { app.innerHTML = viewAuth(); bindAuth(); bindMagnetic(app); return; }
+  if (!state.user) {
+    /* Where they were trying to go, kept for after they sign in.
+
+       The whole hash used to be discarded here: someone following a link to
+       #/downloads got the sign-in screen — correctly, the client is only for
+       drivers who have been released it — and then landed on the dashboard,
+       with no sign that the page they asked for existed. They would try the
+       link again, get the dashboard again, and conclude the download was
+       broken. Nothing said "sign in and you will be taken there". */
+    const asked = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
+    if (asked && ROUTES[asked] && asked !== 'dashboard') wantedRoute = '#/' + asked;
+
+    app.innerHTML = viewAuth();
+    bindAuth();
+    bindMagnetic(app);
+    return;
+  }
 
   if (!$('#shell')) app.innerHTML = shellHTML();
   else {
