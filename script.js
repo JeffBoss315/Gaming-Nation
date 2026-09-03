@@ -1106,6 +1106,24 @@ async function recruiterSupabaseId() {
   }
 }
 
+/* Where the company talks. A driver has been asked for a Discord username
+   since the application form existed, and until now the platform never once
+   told them where to actually go — the word appeared eleven times and the
+   server appeared nowhere.
+
+   Kept as a constant because it is quoted on the community page, on the
+   application form and in the welcome a new driver is sent, and an invite
+   that has been changed in two of those three places is worse than none. */
+const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
+
+/* target and rel together: an invite opens away from the platform, and
+   without noopener the page it opens can reach back into this one */
+function discordLink(label, cls) {
+  return '<a class="' + (cls || 'btn btn-primary') + '" href="' + DISCORD_INVITE
+    + '" target="_blank" rel="noopener noreferrer">'
+    + icon('discord') + esc(label || 'Join the Discord') + '</a>';
+}
+
 const OWNER_SEED = {
   driverId: 'HLL-1001',
   name: 'Jeff Boss',
@@ -4639,6 +4657,7 @@ function applyFormHTML() {
       </select><span class="err-msg hide" data-err="country"></span></div>
 
     <div class="field"><label for="ap-discord">Discord username</label>
+      <div class="xs t3 mb-8">Not on the server yet? ${discordLink('Join the Heavyline Discord', 'link')}</div>
       <input class="input" id="ap-discord" name="discord" value="${esc(d.discord || u.discord || '')}"
         placeholder="yourname">
       <span class="hint">Optional — it is how recruitment usually reaches you.</span></div>
@@ -4769,6 +4788,7 @@ function viewCommunity() {
       <div><div class="eyebrow">One fleet · one community</div>
         <h1 class="page-title">Community</h1>
         <p class="page-sub">Announcements, Discord and everything happening around the fleet</p></div>
+      <div class="row gap-8">${discordLink('Join the Discord')}</div>
       <button class="btn btn-primary" data-act="discord-connect">${icon('discord')}Open Discord</button>
     </div>
 
@@ -8405,6 +8425,10 @@ const LiveMap = {
     const cutoff = Date.now() - 95000;
     this.drivers = Array.from(by.values()).filter((d) => !d.at || d.at > cutoff);
     this.online = true;
+
+    /* the game already said what is being driven; the register listens */
+    adoptReportedUnits(this.drivers);
+
     this.paint();
   },
 
@@ -8525,6 +8549,109 @@ const LiveMap = {
   },
 };
 
+
+/* ============================================================
+   THE FLEET REGISTER, KEPT BY THE GAME
+   ------------------------------------------------------------
+   Every telemetry frame carries the tractor a driver is sitting
+   in and the trailer behind it. The register was typed in by
+   hand anyway — somebody added "Scania S 730", somebody else
+   coupled a trailer to it, and the moment a driver switched
+   truck in game the two stopped agreeing with no way to tell.
+
+   So nothing is assigned here any more. A unit appears the
+   first time it is reported, it is coupled to whoever is
+   driving it, and it is marked as coming from the game so a
+   manager can see which rows they own and which the fleet
+   filled in for them.
+
+   What is deliberately NOT done: nothing is ever deleted. A
+   truck that stops being reported has been parked, not scrapped,
+   and a register that forgets its own history is no register.
+   ============================================================ */
+
+/* Matched on the name the game reports, folded and squeezed, because the
+   same tractor comes back as "Scania S 730" and "Scania  S730" depending on
+   which mod wrote it. */
+const unitKey = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function adoptReportedUnits(list) {
+  if (!Store.db) return;
+  const trucks = Store.db.trucks || (Store.db.trucks = []);
+  const trailers = Store.db.trailers || (Store.db.trailers = []);
+  const now = new Date().toISOString();
+  let changed = false;
+
+  (list || []).forEach((d) => {
+    if (!d || !d.id) return;
+
+    /* ---- the tractor ---- */
+    if (d.truck) {
+      const key = unitKey(d.truck);
+      let t = trucks.find((x) => x && (unitKey(x.gameName) === key
+        || unitKey((x.make || '') + ' ' + (x.model || '')) === key));
+
+      if (!t) {
+        /* The game gives a make and a model run together. Split on the first
+           word, which is the make for every tractor in either title. */
+        const parts = String(d.truck).trim().split(/\s+/);
+        t = {
+          id: 'HLT-' + randI(300, 899),
+          make: parts[0] || 'Unknown',
+          model: parts.slice(1).join(' ') || String(d.truck),
+          gameName: d.truck,
+          hp: null, chassis: '', plate: '', year: null, livery: 'none',
+          mileage: 0, serviceKm: null, cab: '', gearbox: '', notes: '',
+          lastService: null, nextService: null,
+          status: 'active', assignedTo: null,
+          fromGame: true, firstSeen: now,
+        };
+        t.unit = 'Unit ' + t.id.split('-')[1];
+        trucks.push(t);
+        changed = true;
+        Store.logActivity(d.id, 'fleet', 'truck',
+          (d.name || d.id) + ' brought ' + d.truck + ' onto the fleet', '', true);
+      }
+
+      if (t.assignedTo !== d.id) { t.assignedTo = d.id; changed = true; }
+      if (t.status !== 'active') { t.status = 'active'; changed = true; }
+      t.lastSeen = now;
+    }
+
+    /* ---- and what is behind it ---- */
+    if (d.trailer) {
+      const key = unitKey(d.trailer);
+      let tr = trailers.find((x) => x && (unitKey(x.gameName) === key
+        || unitKey(x.type) === key));
+
+      if (!tr) {
+        tr = {
+          id: 'HLR-' + randI(300, 899),
+          type: d.trailer,
+          gameName: d.trailer,
+          cargo: (d.job && d.job.cargo) || '—',
+          axles: null, weight: '—',
+          status: 'active', assignedTruck: null,
+          fromGame: true, firstSeen: now,
+        };
+        trailers.push(tr);
+        changed = true;
+      }
+
+      if (d.job && d.job.cargo && tr.cargo !== d.job.cargo) { tr.cargo = d.job.cargo; changed = true; }
+      if (tr.status !== 'active') { tr.status = 'active'; changed = true; }
+
+      /* coupled to the tractor this driver is reporting, by its id */
+      const pulling = trucks.find((x) => x && x.assignedTo === d.id);
+      if (pulling && tr.assignedTruck !== pulling.id) { tr.assignedTruck = pulling.id; changed = true; }
+      tr.lastSeen = now;
+    }
+  });
+
+  /* Only when something actually moved: this runs on every position frame,
+     and Store.save() pushes to Supabase a moment later. */
+  if (changed) Store.save();
+}
 
 /* ============================================================
    ONE TRUCK, IN FULL
