@@ -107,7 +107,7 @@ if (Test-Path $res) {
     Set-Content -Path (Join-Path $any 'ic_launcher_round.xml') -Value $adaptive -Encoding UTF8
     Write-Host '  adaptive icon descriptors + colors.xml'
 } else {
-    Write-Host '  (no android project — skipped launcher icons)'
+    Write-Host '  (no android project - skipped launcher icons)'
 }
 
 # A small square mark: the logo's wordmark is unreadable at 30px, so crop to
@@ -139,6 +139,15 @@ function Write-Mark {
 
 Write-Host 'in-app mark'
 Write-Mark (Join-Path $iconsDir 'mark.png') 256
+
+# Favicons come from the mark, not the full logo. A browser tab is 16px and
+# the app switcher is not much more; at that size the wordmark under the
+# truck is a grey smudge and the whole icon reads as a dark blob. The truck
+# alone is still a truck at 16px.
+Write-Host 'favicons (the mark - the wordmark is a smudge at tab size)'
+Write-Mark (Join-Path $iconsDir 'favicon-32.png') 32
+Write-Mark (Join-Path $iconsDir 'favicon-64.png') 64
+Write-Mark (Join-Path $iconsDir 'favicon-180.png') 180
 
 $logo.Dispose()
 Write-Host 'done'

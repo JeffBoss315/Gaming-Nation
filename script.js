@@ -569,8 +569,36 @@ const Accounts = {
          2. CREATE HEAVYLINE DRIVER ROW
          ============================================================ */
 
-      const { data: driver, error: driverError } =
-        await window.hllSupabase
+      /* The row is made by a trigger on auth.users — see
+         supabase/migrations/20260903_driver_row_on_signup.sql. It has to
+         be, because with email confirmation on signUp() returns a user and
+         no session, so there is no auth.uid() yet and the insert policy
+         (auth.uid() = auth_user_id) refuses the one person entitled to
+         make the row. That is the "new row violates row-level security
+         policy for table drivers" a new driver was seeing.
+
+         Give the trigger a moment, then read what it made. */
+      let driver = null;
+      for (let tries = 0; tries < 5 && !driver; tries++) {
+        if (tries) await new Promise((r) => setTimeout(r, 250));
+        const { data } = await window.hllSupabase
+          .from('drivers')
+          .select('*')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        driver = data || null;
+      }
+
+      if (driver) {
+        console.log('[HLL] Driver record created by Supabase:', driver);
+      }
+
+      /* No trigger installed yet: fall back to making it here. This only
+         works when there is a session — that is, with email confirmation
+         off — which is exactly the case where it used to work. */
+      const { data: inserted, error: driverError } = driver
+        ? { data: driver, error: null }
+        : await window.hllSupabase
           .from('drivers')
           .insert({
             /* Every column public.drivers actually has. country is not one
@@ -588,13 +616,17 @@ const Accounts = {
           .select()
           .maybeSingle();
 
-      /* Written, but not readable back. The row exists; this account just
-         cannot SELECT it, so there is no id to hang the application off.
-         Say which of the two it is — a bare 406 says neither. */
+      driver = inserted || driver;
+
+      /* Nothing made the row, and nothing said why. Almost always the
+         trigger is not installed and email confirmation is on, so the
+         browser could not make it either — name that, rather than
+         repeating Supabase's wording at somebody who cannot act on it. */
       if (!driverError && !driver) {
-        throw new Error('Your driver record was created but could not be read '
-          + 'back. Supabase needs a SELECT policy on drivers for the signed-in '
-          + 'user.');
+        throw new Error('Your account was created but your driver record was '
+          + 'not. Run supabase/migrations/20260903_driver_row_on_signup.sql, '
+          + 'which makes that record on the database side where it is allowed '
+          + 'to, then sign in — the record will be waiting.');
       }
 
       if (driverError) {
@@ -1115,6 +1147,27 @@ async function recruiterSupabaseId() {
    application form and in the welcome a new driver is sent, and an invite
    that has been changed in two of those three places is worse than none. */
 const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
+
+/* Where this platform lives, as far as the outside world is concerned.
+
+   This matters for one thing above all: the address a password-reset email
+   points back at. That link is opened later, on whatever machine the person
+   happens to be at, so it cannot be built from the origin the request was
+   made from — a driver who asked for a reset while the site was open on a
+   dev server got an email pointing at localhost:3000, which is nothing at
+   all on their machine.
+
+   tools/build-www.js writes window.HLL_SITE_URL into the pages it builds,
+   from site.config.json. Falling back to the origin keeps development
+   working, where localhost really is the right answer. */
+function publicSiteUrl() {
+  try {
+    if (typeof window !== 'undefined' && window.HLL_SITE_URL) {
+      return String(window.HLL_SITE_URL).replace(/\/$/, '');
+    }
+  } catch (e) { /* nothing to go on */ }
+  return String(location.origin || '').replace(/\/$/, '');
+}
 
 /* target and rel together: an invite opens away from the platform, and
    without noopener the page it opens can reach back into this one */
@@ -2244,8 +2297,11 @@ async function resetHeavylinePassword(email) {
                 .resetPasswordForEmail(
                     email,
                     {
+                        /* the public address, not this browser's origin —
+                           see publicSiteUrl() for why that difference is
+                           the whole bug */
                         redirectTo:
-                            window.location.origin +
+                            publicSiteUrl() +
                             '/reset-password.html'
                     }
                 );
@@ -10445,17 +10501,17 @@ function saveFleetService() {
    file to decide which builds travel with the site, so after cutting a new
    release change the version and all three filenames together. */
 const CLIENT_RELEASE = {
-  version: '4.7.0',
+  version: '4.8.0',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Heavyline-Trucker-4.7.0-windows-setup.exe',
-      size: '80.6 MB', note: 'Installs to your machine and adds a Start menu entry.' },
+      file: 'release/Heavyline-Trucker-4.8.0-windows-setup.exe',
+      size: '80.7 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Heavyline-Trucker-4.7.0-windows-portable.exe',
-      size: '80.2 MB', note: 'No installation — just run it. Good for a USB stick.' },
+      file: 'release/Heavyline-Trucker-4.8.0-windows-portable.exe',
+      size: '80.3 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Heavyline-Trucker-4.7.0-android.apk',
-      size: '6.5 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
+      file: 'release/Heavyline-Trucker-4.8.0-android.apk',
+      size: '6.6 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
 

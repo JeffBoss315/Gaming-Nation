@@ -142,7 +142,9 @@ if (!SITE_URL) {
   }, null, 2).split('\n').join('\n    ');
 
   const seo = [
-    '<link rel="canonical" href="' + SITE_URL + '/">',
+    '<script>window.HLL_SITE_URL = ' + JSON.stringify(SITE_URL) + ';</script>',
+    '',
+    '    <link rel="canonical" href="' + SITE_URL + '/">',
     '',
     '    <meta property="og:url" content="' + SITE_URL + '/">',
     '    <meta property="og:image" content="' + SITE_URL + '/hll.jpg">',
