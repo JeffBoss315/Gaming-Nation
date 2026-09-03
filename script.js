@@ -728,6 +728,9 @@ const Accounts = {
         /* keep the local application */
         Store.db.applications.unshift(application);
 
+        /* select() so the new row comes back — its id is what setStatus
+           needs later to move this application through the stages. An
+           insert on its own returns no data. */
         const { data: savedApplication, error: applicationError } =
           await window.hllSupabase
             .from('applications')
@@ -746,49 +749,30 @@ const Accounts = {
                  reference. */
               driver_id: driver.id,
 
-              /* who is handling it; null if his row could not be read,
-                 which leaves it unassigned rather than failing the insert */
-              reviewed_by: recruiterId
+              /* who is handling it, not who decided it — reviewed_at stays
+                 null until somebody actually decides */
+              reviewed_by: recruiterId,
+              onboarding_status: 'pending'
             })
             .select()
             .maybeSingle();
 
-        console.log('[HLL TEST] SUPABASE APPLICATION RESULT', {
-          savedApplication,
-          applicationError
-        });
-
-        /* Same again: written, but not readable back. Treated as a failure
-           because the uuid is what setStatus() later needs to find the row. */
-        if (!applicationError && !savedApplication) {
-          console.warn('[HLL] The application was filed but could not be read '
-            + 'back — check the SELECT policy on applications.');
-        }
-
         if (applicationError) {
-          console.error('[HLL] Failed to save application:', applicationError);
+          console.error(
+            '[HLL] Could not file the registration application:',
+            applicationError
+          );
 
-          /* Supabase rejected it, so the local copy goes too. */
-          Store.db.applications =
-            Store.db.applications.filter((item) => item.id !== application.id);
-
-          /* And so does the driver row written a moment ago. Leaving it
-             would put somebody on the roster who never applied, and the
-             next attempt on the same email would fail on driver_code or
-             auth_user_id being taken.
-
-             The Auth user cannot be removed from the browser — that needs
-             the service key — so a retry signs in rather than signs up.
-             Say so plainly instead of implying the slate is clean. */
+          /* The driver row is already written. Take it back out, or the
+             person is left half-registered: a driver record with no
+             application, which the recruitment screen will never show and
+             nobody will ever action. */
           const { error: rollbackError } = await window.hllSupabase
             .from('drivers')
             .delete()
             .eq('id', driver.id);
 
           if (rollbackError) {
-            console.error('[HLL] Could not remove the orphaned driver row:',
-              rollbackError);
-          } else {
             console.warn('[HLL] Rolled back driver row', driver.id,
               '— the Auth user remains and must be removed in Supabase.');
           }
@@ -1135,7 +1119,7 @@ async verify(handle, password) {
    about an account that does not change. A driver code can be
    reissued and an email can be edited; the uid is the account.
    ============================================================ */
-const RECRUITER_AUTH_ID = '6b669e49-323e-475d-9a1e-c19b88e7cb31';
+const RECRUITER_AUTH_ID = '5aa94154-a4de-4ede-b6db-9aae677966d4';
 const RECRUITER_EMAIL = 'jeffboss730@gmail.com';
 
 /* The recruiter's local driver record — what Store.notify and the
@@ -1553,42 +1537,116 @@ const RESET_STAMP = 'hll.resetToOwner.v2';
 /* Empties the company back to its owner. Only records belonging to someone
    else go — the owner's own tickets, applications and history survive, so a
    later re-run cannot wipe work the company has done since. */
+   
 function resetToOwner() {
-  try { if (localStorage.getItem(RESET_STAMP)) return 0; } catch (e) { return 0; }
+
+  try {
+    if (localStorage.getItem(RESET_STAMP)) return 0;
+  } catch (e) {
+    return 0;
+  }
 
   const keepId = OWNER_SEED.driverId;
+
   const mine = (v) => !v || v === keepId;
 
   const accounts = Accounts.all();
   const others = accounts.filter((a) => a.driverId !== keepId);
-  if (others.length) Accounts.save(accounts.filter((a) => a.driverId === keepId));
+
+  if (others.length) {
+    Accounts.save(
+      accounts.filter((a) => a.driverId === keepId)
+    );
+  }
 
   const db = Store.db;
-  const removedDrivers = (db.drivers || []).filter((d) => d.id !== keepId);
-  db.drivers = (db.drivers || []).filter((d) => d.id === keepId);
 
-  db.applications = (db.applications || []).filter((a) => mine(a.driverId));
-  db.tickets = (db.tickets || []).filter((t) => mine(t.driverId));
-  db.notifications = (db.notifications || []).filter((n) => mine(n.driverId));
-  db.activity = (db.activity || []).filter((a) => mine(a.driverId));
-  db.assignments = (db.assignments || []).filter((a) => mine(a.driverId));
-  db.jobs = (db.jobs || []).filter((j) => mine(j.driverId));
+  /*
+   * Drivers
+   * Keep only the owner driver.
+   */
+  const removedDrivers = (db.drivers || [])
+    .filter((d) => d.id !== keepId);
+
+  db.drivers = (db.drivers || [])
+    .filter((d) => d.id === keepId);
+
+  /*
+   * IMPORTANT:
+   *
+   * Applications are NOT touched here.
+   *
+   * Supabase is the source of truth for recruitment
+   * applications. Applications.pull() is responsible for
+   * replacing Store.db.applications with the Supabase data.
+   *
+   * Do NOT filter, seed, restore, or preserve applications
+   * from the local company blob.
+   */
+
+  db.tickets = (db.tickets || [])
+    .filter((t) => mine(t.driverId));
+
+  db.notifications = (db.notifications || [])
+    .filter((n) => mine(n.driverId));
+
+  db.activity = (db.activity || [])
+    .filter((a) => mine(a.driverId));
+
+  db.assignments = (db.assignments || [])
+    .filter((a) => mine(a.driverId));
+
+  db.jobs = (db.jobs || [])
+    .filter((j) => mine(j.driverId));
 
   (db.events || []).forEach((e) => {
-    if (Array.isArray(e.registered)) e.registered = e.registered.filter((r) => mine(r.driverId));
-    if (e.leaderId && e.leaderId !== keepId) e.leaderId = null;
+
+    if (Array.isArray(e.registered)) {
+      e.registered = e.registered.filter(
+        (r) => mine(r.driverId)
+      );
+    }
+
+    if (e.leaderId && e.leaderId !== keepId) {
+      e.leaderId = null;
+    }
+
   });
-  (db.trucks || []).forEach((t) => { if (t.assignedTo && t.assignedTo !== keepId) t.assignedTo = null; });
-  db.announcements = (db.announcements || []).filter((a) => mine(a.author));
+
+  (db.trucks || []).forEach((t) => {
+
+    if (t.assignedTo && t.assignedTo !== keepId) {
+      t.assignedTo = null;
+    }
+
+  });
+
+  db.announcements = (db.announcements || [])
+    .filter((a) => mine(a.author));
 
   Store.save();
-  try { localStorage.setItem(RESET_STAMP, new Date().toISOString()); } catch (e) {}
+
+  try {
+    localStorage.setItem(
+      RESET_STAMP,
+      new Date().toISOString()
+    );
+  } catch (e) {}
 
   const n = removedDrivers.length + others.length;
+
   if (n) {
-    console.info('[HLL] company cleared back to its owner — removed '
-      + removedDrivers.length + ' driver record(s) and ' + others.length + ' login(s)');
+
+    console.info(
+      '[HLL] company cleared back to its owner — removed '
+      + removedDrivers.length
+      + ' driver record(s) and '
+      + others.length
+      + ' login(s)'
+    );
+
   }
+
   return n;
 }
 
@@ -7528,46 +7586,147 @@ const Sync = {
     catch (e) { console.warn('[HLL] the service sent something unusable', e); }
   },
 
-  mergeInner(db, remote) {
-    db.drivers = this.mergeList(db.drivers, remote.drivers, 'lastSeen');
-    db.applications = this.mergeList(db.applications, remote.applications, 'submitted');
-    db.assignments = this.mergeList(db.assignments, remote.assignments, 'at');
-    db.tickets = this.mergeList(db.tickets, remote.tickets, 'updated');
-    /* Merged on 'updated', not on 'date'. A convoy's date is when it departs
-       and never changes, so merging on it meant whichever copy you already
-       had always won and a roster change from another machine was silently
-       thrown away. 'updated' moves every time the convoy does. */
-    db.events = this.mergeList(db.events, remote.events, 'updated');
-    db.jobs = this.mergeList(db.jobs, remote.jobs, 'finished').slice(0, 500);
-    /* a session is stamped when it ends, so an open one merges on its start */
-    db.sessions = this.mergeList(db.sessions, remote.sessions, 'ended')
-      .sort((a, b) => new Date(b.started) - new Date(a.started)).slice(0, 400);
-    db.trucks = this.mergeList(db.trucks, remote.trucks);
-    db.trailers = this.mergeList(db.trailers, remote.trailers);
-    db.announcements = this.mergeList(db.announcements, remote.announcements, 'date');
-    db.notifications = this.mergeList(db.notifications, remote.notifications, 'at').slice(0, 300);
-    db.activity = this.mergeList(db.activity, remote.activity, 'at')
-      .sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 200);
-    if (remote.meta && remote.meta.founded && !db.meta.founded) db.meta.founded = remote.meta.founded;
+mergeInner(db, remote) {
 
-    /* logins travel with the company, or nobody could sign in on a second machine */
-    if (Array.isArray(remote.accounts)) {
-      const mine = Accounts.all();
-      const by = new Map();
-      remote.accounts.forEach((a) => { if (a && a.driverId) by.set(a.driverId, a); });
-      mine.forEach((a) => {
-        if (!a || !a.driverId) return;
-        const other = by.get(a.driverId);
-        if (!other) { by.set(a.driverId, a); return; }
-        const x = new Date(a.passwordChanged || a.created || 0).getTime();
-        const y = new Date(other.passwordChanged || other.created || 0).getTime();
-        by.set(a.driverId, x >= y ? a : other);
-      });
-      Accounts.save(Array.from(by.values()));
-    }
-    normaliseCompany();
-    Store.save();
-  },
+  db.drivers = this.mergeList(db.drivers, remote.drivers, 'lastSeen');
+
+  /*
+   * Applications are NOT merged from the company service.
+   *
+   * Supabase is the source of truth for recruitment applications.
+   * Applications.pull() loads the complete applications collection
+   * immediately after the company service is absorbed.
+   *
+   * This prevents old company-blob applications such as "Boss Jeff"
+   * from being restored into Store.db.applications.
+   */
+
+  db.assignments = this.mergeList(
+    db.assignments,
+    remote.assignments,
+    'at'
+  );
+
+  db.tickets = this.mergeList(
+    db.tickets,
+    remote.tickets,
+    'updated'
+  );
+
+  /*
+   * Merged on 'updated', not on 'date'.
+   * A convoy's date is when it departs and never changes, so
+   * merging on it meant whichever copy you already had always won.
+   */
+  db.events = this.mergeList(
+    db.events,
+    remote.events,
+    'updated'
+  );
+
+  db.jobs = this.mergeList(
+    db.jobs,
+    remote.jobs,
+    'finished'
+  ).slice(0, 500);
+
+  /*
+   * A session is stamped when it ends, so an open session
+   * merges on its start.
+   */
+  db.sessions = this.mergeList(
+    db.sessions,
+    remote.sessions,
+    'ended'
+  )
+    .sort((a, b) => new Date(b.started) - new Date(a.started))
+    .slice(0, 400);
+
+  db.trucks = this.mergeList(
+    db.trucks,
+    remote.trucks
+  );
+
+  db.trailers = this.mergeList(
+    db.trailers,
+    remote.trailers
+  );
+
+  db.announcements = this.mergeList(
+    db.announcements,
+    remote.announcements,
+    'date'
+  );
+
+  db.notifications = this.mergeList(
+    db.notifications,
+    remote.notifications,
+    'at'
+  ).slice(0, 300);
+
+  db.activity = this.mergeList(
+    db.activity,
+    remote.activity,
+    'at'
+  )
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 200);
+
+  if (
+    remote.meta &&
+    remote.meta.founded &&
+    !db.meta.founded
+  ) {
+    db.meta.founded = remote.meta.founded;
+  }
+
+  /*
+   * Logins travel with the company, so accounts can work
+   * across machines.
+   */
+  if (Array.isArray(remote.accounts)) {
+
+    const mine = Accounts.all();
+    const by = new Map();
+
+    remote.accounts.forEach((a) => {
+      if (a && a.driverId) {
+        by.set(a.driverId, a);
+      }
+    });
+
+    mine.forEach((a) => {
+
+      if (!a || !a.driverId) return;
+
+      const other = by.get(a.driverId);
+
+      if (!other) {
+        by.set(a.driverId, a);
+        return;
+      }
+
+      const x = new Date(
+        a.passwordChanged || a.created || 0
+      ).getTime();
+
+      const y = new Date(
+        other.passwordChanged || other.created || 0
+      ).getTime();
+
+      by.set(
+        a.driverId,
+        x >= y ? a : other
+      );
+    });
+
+    Accounts.save(Array.from(by.values()));
+  }
+
+  normaliseCompany();
+
+  Store.save();
+},
 
   payload() {
     const db = Store.db;
@@ -7625,24 +7784,28 @@ const Sync = {
 
       this.version = data.version || 0;
 
-      if (data.data) {
-        Store.db = {
-          ...Store.db,
-          ...data.data
-        };
-      }
+if (data.data) {
+  Store.db = {
+    ...Store.db,
+    ...data.data
+  };
+}
 
-      this.status = 'ok';
-      this.lastError = null;
-      this.lastAt = Date.now();
+this.status = 'ok';
+this.lastError = null;
+this.lastAt = Date.now();
 
-      /* Then whatever the service has that Supabase does not. */
-      await this.absorbService();
-
-      /* The company blob has just replaced Store.db.applications wholesale,
-         so the shared table is read back over the top of it — after the
-         merge, never before. */
-      await Applications.pull();
+/*
+ * The service/company blob may contain old local applications.
+ * Supabase is the authoritative source for applications.
+ *
+ * Therefore:
+ * 1. Absorb the service/company data.
+ * 2. Immediately reload applications from Supabase.
+ * 3. Applications.pull() replaces Store.db.applications completely.
+ */
+await this.absorbService();
+await Applications.pull();
 
       if (moved) {
         console.log('[HLL] Company pulled from Supabase:', {
@@ -7695,8 +7858,6 @@ const Sync = {
 
           /* the driver pages read the raw row off this */
           window.currentDriver = driver;
-
-          console.log('[HLL] Dashboard driver loaded:', state.user);
           render();
 
         } catch (err) {
@@ -7977,80 +8138,91 @@ const Applications = {
       && String(a.email || '').toLowerCase() === email) || null;
   },
 
-  async pull() {
-    if (!this.on()) return false;
-    if (!(await Sync.signedIn())) return false;
+async pull() {
+  if (!this.on()) return false;
+  if (!(await Sync.signedIn())) return false;
 
-    try {
-      const { data, error } = await window.hllSupabase
-        .from('applications')
-        .select(this.COLUMNS)
-        .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await window.hllSupabase
+      .from('applications')
+      .select(this.COLUMNS)
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const list = Store.db.applications || (Store.db.applications = []);
-      let changed = 0;
-      let added = 0;
+    /*
+     * Supabase is the source of truth.
+     * Do not merge remote applications into an old local list.
+     *
+     * This prevents deleted/cleared applications from remaining
+     * in Store.db.applications as stale demo or localStorage data.
+     */
+    const remoteRows = data || [];
+    const previous = Store.db.applications || [];
 
-      (data || []).forEach((row) => {
-        const local = this.localFor(list, row);
-        const merged = this.fromRow(row, local);
+    const next = remoteRows.map((row) => {
+      const local = this.localFor(previous, row);
+      return this.fromRow(row, local);
+    });
 
-        if (!local) {
-          list.unshift(merged);
-          added++;
-          changed++;
-          return;
-        }
+    const changed =
+      previous.length !== next.length ||
+      next.some((item, index) => {
+        const old = previous[index];
+        if (!old) return true;
 
-        /* only the columns Supabase owns; a local-only edit is not undone */
-        const moved = local.status !== merged.status
-          || local.supabaseId !== merged.supabaseId
-          || local.reviewedAt !== merged.reviewedAt;
-
-        Object.assign(local, merged);
-        if (moved) changed++;
+        return (
+          old.supabaseId !== item.supabaseId ||
+          old.status !== item.status ||
+          old.reviewedAt !== item.reviewedAt ||
+          old.submitted !== item.submitted
+        );
       });
 
-      this.status = 'ok';
-      this.lastError = null;
-      this.lastAt = Date.now();
+    /*
+     * Replace the entire application collection.
+     * If Supabase has zero rows, the local collection becomes zero rows.
+     */
+    Store.db.applications = next;
 
-      /* Saving unconditionally would push the company blob back up every ten
-         seconds for a table that had not moved. */
-      if (changed) {
-        Store.save();
+    this.status = 'ok';
+    this.lastError = null;
+    this.lastAt = Date.now();
 
-        console.log('[HLL] Applications pulled from Supabase:', {
-          rows: (data || []).length,
-          added,
-          changed
-        });
+    if (changed) {
+      Store.save();
 
-        /* Store.save() writes; it does not paint. Without this an
-           application filed on another machine sat in Store.db until
-           something else happened to trigger a render — so the recruitment
-           screen was correct and stale at the same time.
+      console.log('[HLL] Applications pulled from Supabase:', {
+        rows: remoteRows.length,
+        previous: previous.length,
+        current: next.length
+      });
 
-           Only where an application is actually on screen: this runs on the
-           ten-second company clock, and a blanket render() would take the
-           caret out of whatever a recruiter was typing. */
-        const showing = state.route && ['recruitment', 'admin', 'dashboard']
-          .includes(state.route.name);
+      /*
+       * Repaint only recruitment-related screens.
+       */
+      const showing =
+        state.route &&
+        ['recruitment', 'admin', 'dashboard'].includes(state.route.name);
 
-        if (showing) render();
-      }
-
-      return true;
-
-    } catch (error) {
-      this.status = 'error';
-      this.lastError = supabaseError(error);
-      console.error('[HLL] Applications pull failed:', this.lastError, error);
-      return false;
+      if (showing) render();
     }
-  },
+
+    return true;
+
+  } catch (error) {
+    this.status = 'error';
+    this.lastError = supabaseError(error);
+
+    console.error(
+      '[HLL] Applications pull failed:',
+      this.lastError,
+      error
+    );
+
+    return false;
+  }
+},
 
   /* A recruiter moving somebody through the stages. Written straight to the
      shared table so the next person to look sees the same thing, rather than

@@ -2141,55 +2141,196 @@ const Sync = {
     return Array.from(by.values());
   },
 
-  async pull() {
-    if (!this.on() || this.applying) return;
-    try {
-      const res = await fetch(this.url() + '/api/company', { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const body = await res.json();
-      this.version = body.version || 0;
-      const remote = body.data;
-      if (!remote) { this.status = 'ok'; return; }
+async pull() {
 
-      this.applying = true;
-      const db = Auth.hqDb() || { drivers: [], applications: [], assignments: [], events: [],
-        jobs: [], tickets: [], activity: [], notifications: [] };
-      db.drivers = this.mergeList(db.drivers, remote.drivers, 'lastSeen');
-      db.applications = this.mergeList(db.applications, remote.applications, 'submitted');
-      db.assignments = this.mergeList(db.assignments, remote.assignments, 'at');
-      db.tickets = this.mergeList(db.tickets, remote.tickets, 'updated');
-      db.events = this.mergeList(db.events, remote.events, 'date');
-      db.jobs = this.mergeList(db.jobs, remote.jobs, 'finished').slice(0, 500);
-      db.activity = this.mergeList(db.activity, remote.activity, 'at').slice(0, 200);
-      db.notifications = this.mergeList(db.notifications, remote.notifications, 'at').slice(0, 300);
-      Auth.saveHqDb(db);
+  if (!this.on() || this.applying) return;
 
-      if (Array.isArray(remote.accounts)) {
-        const by = new Map();
-        remote.accounts.forEach((a) => { if (a && a.driverId) by.set(a.driverId, a); });
-        Auth.accounts().forEach((a) => { if (a && a.driverId && !by.has(a.driverId)) by.set(a.driverId, a); });
-        try { localStorage.setItem(HQ_ACCOUNTS, JSON.stringify(Array.from(by.values()))); } catch (e) {}
-      }
-      this.applying = false;
-      this.status = 'ok';
-      this.lastError = null;
+  try {
 
-      /* the signed-in driver's own figures may have moved on elsewhere */
-      if (Store.db.driver) {
-        const rec = Auth.driverRecord(Store.db.driver.hllId);
-        if (rec) {
-          Store.db.driver.rank = rankNameFor(rec);
-          Store.db.driver.role = rec.role || 'driver';
-          Store.save();
-        }
-      }
-      render();
-    } catch (e) {
-      this.applying = false;
-      this.status = 'error';
-      this.lastError = e.message;
+    const res = await fetch(
+      this.url() + '/api/company',
+      { cache: 'no-store' }
+    );
+
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status);
     }
-  },
+
+    const body = await res.json();
+
+    this.version = body.version || 0;
+
+    const remote = body.data;
+
+    if (!remote) {
+      this.status = 'ok';
+      return;
+    }
+
+    this.applying = true;
+
+    const db = Auth.hqDb() || {
+      drivers: [],
+      applications: [],
+      assignments: [],
+      events: [],
+      jobs: [],
+      tickets: [],
+      activity: [],
+      notifications: []
+    };
+
+    /*
+     * Company service synchronization.
+     *
+     * IMPORTANT:
+     * Applications are NOT merged from the company service.
+     *
+     * Supabase public.applications is the authoritative source
+     * for recruitment applications.
+     *
+     * Applications.pull() is responsible for loading them.
+     */
+
+    db.drivers = this.mergeList(
+      db.drivers,
+      remote.drivers,
+      'lastSeen'
+    );
+
+    /*
+     * DO NOT merge remote applications here.
+     *
+     * Old code:
+     * db.applications = this.mergeList(
+     *   db.applications,
+     *   remote.applications,
+     *   'submitted'
+     * );
+     */
+
+    db.assignments = this.mergeList(
+      db.assignments,
+      remote.assignments,
+      'at'
+    );
+
+    db.tickets = this.mergeList(
+      db.tickets,
+      remote.tickets,
+      'updated'
+    );
+
+    db.events = this.mergeList(
+      db.events,
+      remote.events,
+      'date'
+    );
+
+    db.jobs = this.mergeList(
+      db.jobs,
+      remote.jobs,
+      'finished'
+    ).slice(0, 500);
+
+    db.activity = this.mergeList(
+      db.activity,
+      remote.activity,
+      'at'
+    ).slice(0, 200);
+
+    db.notifications = this.mergeList(
+      db.notifications,
+      remote.notifications,
+      'at'
+    ).slice(0, 300);
+
+    Auth.saveHqDb(db);
+
+    if (Array.isArray(remote.accounts)) {
+
+      const by = new Map();
+
+      remote.accounts.forEach((a) => {
+        if (a && a.driverId) {
+          by.set(a.driverId, a);
+        }
+      });
+
+      Auth.accounts().forEach((a) => {
+        if (
+          a &&
+          a.driverId &&
+          !by.has(a.driverId)
+        ) {
+          by.set(a.driverId, a);
+        }
+      });
+
+      try {
+        localStorage.setItem(
+          HQ_ACCOUNTS,
+          JSON.stringify(Array.from(by.values()))
+        );
+      } catch (e) {}
+
+    }
+
+    this.applying = false;
+    this.status = 'ok';
+    this.lastError = null;
+
+    /*
+     * The signed-in driver's own figures may have moved
+     * on another machine.
+     */
+    if (Store.db.driver) {
+
+      const rec = Auth.driverRecord(
+        Store.db.driver.hllId
+      );
+
+      if (rec) {
+
+        Store.db.driver.rank = rankNameFor(rec);
+
+        Store.db.driver.role =
+          rec.role || 'driver';
+
+        Store.save();
+
+      }
+
+    }
+
+    /*
+     * Recruitment applications are loaded separately
+     * from Supabase, which is the source of truth.
+     */
+    if (
+      typeof Applications !== 'undefined' &&
+      typeof Applications.pull === 'function' &&
+      await Sync.signedIn()
+    ) {
+      await Applications.pull();
+    }
+
+    render();
+
+  } catch (e) {
+
+    this.applying = false;
+    this.status = 'error';
+    this.lastError = e.message;
+
+    console.error(
+      '[HLL] Company service pull failed:',
+      e
+    );
+
+  }
+
+},
 
   push() {
     if (!this.on()) return;

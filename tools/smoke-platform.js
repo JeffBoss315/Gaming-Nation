@@ -4,6 +4,11 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+/* Registration goes through Supabase Auth. Without a stand-in this probe
+   signs up against the LIVE project on every run — leaving a real Auth user
+   and a real drivers row in the company people are actually using. */
+const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
+
 /* resolved, not taken as given: 'npm run smoke:*' passes '.', and a relative
    root turns require(ROOT + '/desktop-capture') into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
@@ -20,6 +25,7 @@ app.whenReady().then(async () => {
     if (level >= 2) errors.push(msg);
   });
   await win.loadFile(path.join(ROOT, 'index.html'));
+  await win.webContents.executeJavaScript(FAKE_SUPABASE);
   await new Promise((r) => setTimeout(r, 1800));
 
   const out = await win.webContents.executeJavaScript(`(async () => {
@@ -89,8 +95,15 @@ app.whenReady().then(async () => {
 
       /* 8. the management paths: recruit, tickets, roles */
       const email = 'probe' + Store.db.drivers.length + '@example.com';
-      await Accounts.register({ name: 'Probe Driver', email, password: 'ProbePass123',
-        country: 'Netherlands', discord: 'probe' });
+      /* register(account, password, country) — the password and the country
+         are positional. Passing them inside the account object left signUp
+         with an undefined password, and the probe died on "Signup requires a
+         valid password" without ever reaching the screens below. */
+      await Accounts.register(
+        { name: 'Probe Driver', email, discord: 'probe' },
+        'ProbePass123',
+        'Netherlands'
+      );
       const cand = Accounts.all().find(a => a.email === email);
       say('signup created an account', cand ? cand.driverId : 'NO');
       const appn = Store.db.applications.find(a => a.email === email);
