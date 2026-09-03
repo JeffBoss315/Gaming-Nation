@@ -1,0 +1,95 @@
+# Publish the website to Cloudflare Pages on every push.
+#
+# WHY THIS EXISTS ALONGSIDE pages.yml
+#
+# GitHub Pages answers from four fixed addresses (185.199.108-111.153)
+# that some ISPs simply do not carry — jeffboss315.github.io times out on
+# exactly the connection this company is run from. Cloudflare answers from
+# whichever edge is nearest, on addresses that are almost never blocked.
+# So the site is published to both, and heavyline.pages.dev is the one to
+# hand to drivers.
+#
+# TWO WAYS TO GET PUSH-TO-DEPLOY. YOU ONLY NEED ONE.
+#
+#   1. Connect the repository in the Cloudflare dashboard. Nothing to
+#      configure here and no secrets to keep:
+#
+#        dash.cloudflare.com -> Workers & Pages -> heavyline
+#          -> Settings -> Builds & deployments -> Connect to Git
+#        Build command      node tools/build-www.js
+#        Output directory   www
+#
+#      Cloudflare then builds every push itself and this workflow stays
+#      asleep, which is why it checks for the token before doing anything.
+#
+#   2. Or add two repository secrets and let this workflow do it:
+#
+#        Settings -> Secrets and variables -> Actions -> New repository secret
+#        CLOUDFLARE_API_TOKEN     a token with the "Cloudflare Pages: Edit"
+#                                 permission on this account
+#        CLOUDFLARE_ACCOUNT_ID    c54290a31703c611a3387fd22b2c147a
+#
+# Do NOT use `npm run www` as the build command anywhere: that runs
+# tools/scan.js first, which is a release audit and fails on a clean
+# checkout because release/ is gitignored. The builder alone needs no
+# dependencies at all.
+
+name: Publish to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A deploy already in flight is allowed to finish rather than being
+# cancelled: a half-applied deploy is worse than a slightly stale one.
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Without the token there is nothing this job can do, and a workflow
+      # that fails red on every push teaches people to ignore the red. If
+      # Cloudflare is building from Git instead, this is the expected path.
+      - name: Is there a token to deploy with
+        id: check
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=no" >> "$GITHUB_OUTPUT"
+            echo "No Cloudflare credentials set — skipping."
+            echo "Either connect the repo in the Cloudflare dashboard, or add"
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as repository secrets."
+          fi
+
+      # tools/build-www.js is plain node with no dependencies, so npm ci
+      # would only pull Electron in for no reason.
+      - name: Build the site
+        if: steps.check.outputs.ready == 'yes'
+        run: node tools/build-www.js
+
+      # A deploy that publishes an empty directory takes the site down and
+      # reports success. Check something is actually there first.
+      - name: Check something was built
+        if: steps.check.outputs.ready == 'yes'
+        run: |
+          test -f www/index.html || { echo "www/index.html missing"; exit 1; }
+          echo "built $(find www -type f | wc -l) files"
+
+      - name: Deploy
+        if: steps.check.outputs.ready == 'yes'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy www --project-name=heavyline --branch=main
