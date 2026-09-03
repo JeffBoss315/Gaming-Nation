@@ -681,6 +681,11 @@ table.tbl tbody tr:last-child td{border-bottom:0}
     radial-gradient(120% 90% at 50% 40%, #10141b 0%, #0a0d13 55%, #06080c 100%);
   font-family:inherit;
 }
+/* A road this company runs, lifted off the grey network behind it. The
+   glow is what separates it at the zoom where the whole of Europe fits in
+   the panel and a 2px line is all there is to go on. */
+.game-map .road-run{filter:drop-shadow(0 0 3px rgba(232,168,56,.55))}
+
 /* the hairline down the middle of a carriageway, only worth seeing close up */
 .game-map .road-centre{opacity:0;transition:opacity .2s var(--ease)}
 .game-map.leaflet-zoom-anim .road-centre{transition:none}

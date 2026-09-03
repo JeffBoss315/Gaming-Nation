@@ -231,6 +231,14 @@ if (!SITE_URL) {
   ].join('\n'));
   site.log.push('sitemap.xml       (search engines)');
 
+  /* GitHub Pages has no rewrite rule: it serves 404.html for anything that
+     is not a file on disk. The app routes on the hash, so a deep link is
+     normally a real file anyway — but a stray path should land on the
+     platform rather than on GitHub's own error page. Same document, so it
+     boots and the hash takes over. */
+  site.write('404.html', read('index.html'));
+  site.log.push('404.html          (so a stray path still opens the app)');
+
   /* GitHub Pages reads its custom domain from a CNAME file. Only for a real
      domain — a *.pages.dev or *.netlify.app host needs none. */
   /* the hostname, not the whole URL: a project site carries a path, and a

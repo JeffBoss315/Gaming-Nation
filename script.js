@@ -8144,7 +8144,7 @@ function setAssignmentState(id, next) {
    no telemetry of its own — it asks the fleet service where everyone is. */
 const LiveMap = {
   map: null, roadLayer: null, routeLayer: null, cityLayer: null, fleetLayer: null,
-  _graph: null, _graphGame: null,
+  _graph: null, _graphGame: null, _roadSig: null,
   timer: null, drivers: [], online: false, lastError: null,
   game: 'ets2',
 
@@ -8194,25 +8194,40 @@ const LiveMap = {
       const pa = M.cities[a], pb = M.cities[b];
       return (pa && pb) ? [gameLatLng(pa), gameLatLng(pb)] : null;
     };
-    /* Four passes, and the order is the whole effect.
+    /* Four passes, and the order is the whole effect: a wash that gives the
+       land its body, a dark casing so a road reads as a road rather than a
+       scratch, the grey carriageway, and then — over the top — the roads
+       this company actually runs, in amber.
 
-       A wash that gives the land its body, a dark casing so a road reads as
-       a road rather than a scratch, the amber carriageway, and a hairline
-       down the middle of it that only shows once you are zoomed in.
+       The two-tone network is the point. On the in-game atlas a road you
+       have driven is gold and one you have not is grey, and anybody reading
+       this map has that distinction in their head already. Here it means
+       something a dispatcher can use: gold is where Heavyline goes. */
+    const driven = this.drivenRoads();
+    const isDriven = (r) => driven.has(r[0] < r[1] ? r[0] + '|' + r[1] : r[1] + '|' + r[0]);
 
-       Amber rather than grey because that is what a trunk route looks like
-       on the in-game atlas, and this map is read by people who have that
-       one in their heads. */
-    [['#10151d', 16, .55],
-     ['#1a1206', 4.4, .95],
-     ['#e0a12c', 1.6, .95],
-     ['#ffd98a', .5, .8]].forEach((spec, i) => {
+    const passes = [
+      { colour: () => '#10151d', weight: 16, opacity: .55 },          /* land */
+      { colour: () => '#151b25', weight: 4.2, opacity: .95 },         /* casing */
+      { colour: () => '#78838f', weight: 1.15, opacity: .9,           /* untravelled */
+        only: (r) => !isDriven(r), tip: true },
+      { colour: () => '#e8a838', weight: 1.9, opacity: 1,             /* ours */
+        only: isDriven, tip: true, className: 'road-run' },
+    ];
+
+    passes.forEach((pass) => {
       roads.forEach((r) => {
+        if (pass.only && !pass.only(r)) return;
         const p = pts(r); if (!p) return;
-        const line = L.polyline(p, { color: spec[0], weight: spec[1], opacity: spec[2],
-          lineCap: 'round', lineJoin: 'round', interactive: i === 2,
-          className: i === 3 ? 'road-centre' : '' });
-        if (i === 2) line.bindTooltip(cityLabel(r[0]) + ' — ' + cityLabel(r[1]), { sticky: true });
+        const line = L.polyline(p, {
+          color: pass.colour(r), weight: pass.weight, opacity: pass.opacity,
+          lineCap: 'round', lineJoin: 'round', interactive: !!pass.tip,
+          className: pass.className || '',
+        });
+        if (pass.tip) {
+          line.bindTooltip(cityLabel(r[0]) + ' — ' + cityLabel(r[1])
+            + (isDriven(r) ? ' · run by Heavyline' : ''), { sticky: true });
+        }
         line.addTo(this.roadLayer);
       });
     });
@@ -8285,6 +8300,39 @@ const LiveMap = {
       });
     }
     return null;
+  },
+
+  /* Every stretch of road the company has actually put a truck down.
+
+     Taken from the runs on the record and from whatever is moving right
+     now, each resolved to a path through the network and broken into its
+     legs. Segments are keyed with their two ends sorted, because a road is
+     the same road whichever way it was driven.
+
+     Capped at the most recent few hundred runs: past that the picture stops
+     changing and the work does not. */
+  drivenRoads() {
+    const out = new Set();
+    const asked = new Set();
+
+    const consider = (from, to) => {
+      if (!from || !to) return;
+      const key = from + '>' + to;
+      if (asked.has(key)) return;
+      asked.add(key);
+
+      const path = this.routeBetween(from, to);
+      if (!path) return;
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i], b = path[i + 1];
+        out.add(a < b ? a + '|' + b : b + '|' + a);
+      }
+    };
+
+    (Store.db.jobs || []).slice(0, 400).forEach((j) => j && consider(j.from, j.to));
+    (this.drivers || []).forEach((d) => d.job && consider(d.job.from, d.job.to));
+
+    return out;
   },
 
   /* Every load currently being run, drawn over the network in the accent.
@@ -8401,6 +8449,24 @@ const LiveMap = {
 
     /* the load a truck is running is part of drawing the truck */
     this.drawRoutes();
+
+    /* A truck that has just taken a load turns its corridor gold, so the
+       network is redrawn when the set of runs changes — and only then,
+       because redrawing several hundred polylines on every position update
+       would cost far more than it shows. */
+    const signature = (this.drivers || [])
+      .map((d) => (d.job ? d.job.from + '>' + d.job.to : '')).sort().join(',')
+      + '#' + ((Store.db.jobs || []).length);
+    if (signature !== this._roadSig) {
+      this._roadSig = signature;
+      /* draw() fills the towns as well as the roads, so both layers are
+         cleared. Clearing only the roads left every town drawn a second
+         time on each redraw, piling up markers and labels for as long as
+         the page stayed open. */
+      if (this.roadLayer) this.roadLayer.clearLayers();
+      if (this.cityLayer) this.cityLayer.clearLayers();
+      if (this.roadLayer) { this.draw(); this.syncLabels(); }
+    }
 
     this.drivers.forEach((d) => {
       if (d.game && d.game !== this.game) return;
