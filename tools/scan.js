@@ -1,0 +1,227 @@
+/* Static audit of the two front-ends.
+ *
+ * Both apps are plain script files with no build step, so nothing catches a
+ * button wired to a handler that was never written, an icon name that does not
+ * exist, or a function that was renamed on one side only. This walks the
+ * sources and reports those. Run it before a release:
+ *
+ *     node tools/scan.js
+ *
+ * Exits non-zero if anything is wrong, so it can gate a build.
+ */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const uniq = (a) => [...new Set(a)];
+const all = (src, re) => [...src.matchAll(re)];
+
+/* Targets: the entry file plus anything it shares. */
+const TARGETS = [
+  { name: 'platform', files: ['script.js', 'map-data.js'], pages: ['index.html', 'admin.html'] },
+  { name: 'client', files: ['tracker.js', 'map-data.js'], pages: ['tracker.html'] },
+];
+
+/* Every class name with a rule behind it, from both stylesheets. */
+const cssClasses = new Set(
+  all(read('style.css') + '\n' + read('tracker.css'), /\.([a-zA-Z][a-zA-Z0-9_-]*)/g)
+    .map((m) => m[1]));
+
+/* Class names that exist so JavaScript can find the element again, and are
+   never meant to carry styling. */
+const QUERY_HOOKS = ['hit', 'adm-role'];
+
+/* Every line of front-end source, for questions that cross file boundaries. */
+const EVERY_SOURCE = uniq(TARGETS.flatMap((t) => t.files)).map(read).join('\n');
+
+let problems = 0;
+const fail = (app, kind, detail) => {
+  problems++;
+  console.log(`  ✗ [${app}] ${kind}: ${detail}`);
+};
+
+for (const t of TARGETS) {
+  const src = t.files.map(read).join('\n');
+  const pages = t.pages.map(read).join('\n');
+  const whole = src + '\n' + pages;
+  console.log(`\n${t.name} (${t.files.join(', ')})`);
+
+  /* 1. every data-act a screen emits must be handled */
+  const emitted = uniq(all(whole, /data-act=\\?["']([a-zA-Z0-9-]+)/g).map((m) => m[1]));
+  /* an action chosen at render time — data-act="${on ? 'a' : 'b'}" */
+  const inline = uniq(all(whole, /data-act="\$\{[^}]*?'([a-zA-Z0-9-]+)'[^}]*?\}/g).map((m) => m[1]));
+  const handled = uniq([
+    ...all(src, /case\s+'([a-zA-Z0-9-]+)'\s*:/g).map((m) => m[1]),
+    ...all(src, /\bact\s*===\s*'([a-zA-Z0-9-]+)'/g).map((m) => m[1]),
+    /* a modal or toast can bind its own buttons directly instead */
+    ...all(src, /\[data-act="([a-zA-Z0-9-]+)"\]/g).map((m) => m[1]),
+  ]);
+  emitted.filter((a) => !handled.includes(a))
+    .forEach((a) => fail(t.name, 'button with no handler', `data-act="${a}"`));
+  emitted.push(...inline);
+  /* the reverse: a handler nothing can reach is dead weight. Route names share
+     the same switch shape, so only look at the block that dispatches clicks. */
+  const actBlock = (() => {
+    const at = src.search(/function (onAction|handleAction|handle|act)\s*\(/);
+    if (at < 0) return src;
+    return src.slice(at, at + 40000);
+  })();
+  uniq(all(actBlock, /case\s+'([a-zA-Z0-9-]+)'\s*:/g).map((m) => m[1]))
+    .filter((a) => !emitted.includes(a))
+    .forEach((a) => fail(t.name, 'handler nothing triggers', `case '${a}'`));
+
+  /* 2. icon names must exist, or the glyph silently falls back */
+  const iconKeys = (() => {
+    const at = src.search(/const (ICONS|ICON_PATHS|GLYPHS|P)\s*=\s*\{/);
+    if (at < 0) return null;
+    const body = src.slice(at, src.indexOf('\n};', at));
+    return uniq(all(body, /^\s*([a-zA-Z0-9_]+)\s*:/gm).map((m) => m[1]));
+  })();
+  if (iconKeys) {
+    uniq(all(whole, /\bicon\(\s*'([a-zA-Z0-9_]+)'/g).map((m) => m[1]))
+      .filter((n) => !iconKeys.includes(n))
+      .forEach((n) => fail(t.name, 'icon does not exist', `icon('${n}')`));
+  }
+
+  /* 3. an element the code reads by id must be rendered somewhere */
+  const readIds = uniq([
+    ...all(src, /getElementById\(\s*'([a-zA-Z0-9_-]+)'/g).map((m) => m[1]),
+    ...all(src, /\bg\(\s*'([a-zA-Z0-9_-]+)'\s*\)/g).map((m) => m[1]),
+  ]);
+  readIds.filter((id) => !new RegExp('id=\\\\?["\']' + id + '\\b').test(whole))
+    .forEach((id) => fail(t.name, 'reads an element nothing renders', `#${id}`));
+
+  /* 4. a setting nothing reads is a switch wired to nothing */
+  let settingKeys = [];
+  const sAt = src.indexOf('settings: {');
+  if (sAt > 0) {
+    const decl = src.slice(sAt, src.indexOf('\n    },', sAt));
+    settingKeys = [...decl.matchAll(/^\s{6}([a-zA-Z0-9_]+)\s*:/gm)].map((m) => m[1]);
+    settingKeys
+      .filter((k) => !new RegExp('\\.' + k + '\\b').test(src))
+      .forEach((k) => fail(t.name, 'setting nothing reads', `settings.${k}`));
+  }
+
+  /* 5. a class the markup asks for with no rule behind it silently does
+        nothing — a missing .pill left every status chip as bare text */
+  const used = uniq(all(whole, /class="([^"$`]*)"/g)
+    .flatMap((m) => m[1].split(/\s+/))
+    .filter((c) => c && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(c)));
+  used.filter((c) => !cssClasses.has(c) && !QUERY_HOOKS.includes(c))
+    .forEach((c) => fail(t.name, 'class with no rule anywhere', '.' + c));
+
+  /* 6. a helper called from inside a template but defined nowhere.
+
+        Screens are built by interpolating helpers — ${myAssignmentsHTML(u)} —
+        so deleting one while a screen still calls it throws at render time and
+        takes the whole page down. Only `${name(` is checked, which is narrow
+        enough to be certain and is exactly where this goes wrong. */
+  /* Names bound by a parameter list, including destructured ones — a callback
+     like .map(([k, cur, goal, f2]) => `${f2(cur)}`) is calling a local, not a
+     helper that has gone missing. */
+  const params = all(EVERY_SOURCE, /\(([^()]{0,240})\)\s*=>/g)
+    .flatMap((m) => m[1].split(','))
+    .map((x) => x.replace(/[[\]{}\s]/g, '').split(/[=:]/)[0])
+    .filter((x) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(x));
+
+  const declared = new Set([
+    ...all(EVERY_SOURCE, /(?:^|\n)\s*(?:function|const|let|var)\s+([a-zA-Z0-9_$]+)/g).map((m) => m[1]),
+    ...all(EVERY_SOURCE, /(?:^|\n)\s{2}([a-zA-Z0-9_$]+)\s*\(/g).map((m) => m[1]),
+    ...params,
+    'esc', 'icon', 'fmt', 'can', 'Math', 'Object', 'Array', 'String', 'Number',
+    'JSON', 'Date', 'sum', 'clamp',
+  ]);
+  uniq(all(src, /\$\{\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g).map((m) => m[1]))
+    .filter((n) => !declared.has(n))
+    .forEach((n) => fail(t.name, 'a screen calls a helper that does not exist', n + '()'));
+
+  /* 7. a function nothing calls is either a missing wire or dead weight.
+        Counted across the whole project: map-data.js is shared, so a helper
+        only the client uses is not dead just because the platform ignores it. */
+  uniq(all(t.files.map(read).join('\n'), /^function ([a-zA-Z0-9_$]+)\s*\(/gm).map((m) => m[1]))
+    .filter((n) => all(EVERY_SOURCE, new RegExp('\\b' + n + '\\b', 'g')).length <= 1)
+    .forEach((n) => fail(t.name, 'function nothing calls', n + '()'));
+
+  console.log(`  ${emitted.length} actions · ${iconKeys ? iconKeys.length : '?'} icons · `
+    + `${readIds.length} element ids · ${settingKeys.length} settings · ${used.length} classes`);
+}
+
+/* 8. every asset a page links must ship in the packaged app */
+console.log('\npackaging');
+const pkg = JSON.parse(read('package.json'));
+const shipped = (pkg.build && pkg.build.files) || [];
+/* electron-builder globs → a regex, in one pass so the output of one
+   substitution is never re-substituted by the next */
+const globRe = (p) => new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  .replace(/\*\*\/\*|\*\*|\*|\?/g, (m) => (m === '?' ? '[^/]' : m === '*' ? '[^/]*' : '.*')) + '$');
+const covers = (f) => shipped.some((p) => p === f || p.replace(/^!/, '') === f
+  || (p.includes('*') && globRe(p).test(f)));
+for (const page of ['tracker.html']) {
+  uniq(all(read(page), /(?:src|href)=["'](?!https?:|data:|#)([^"']+)["']/g).map((m) => m[1].split('?')[0]))
+    .filter((f) => !covers(f))
+    .forEach((f) => fail('client', 'linked but not in build.files', `${page} → ${f}`));
+}
+console.log(`  build.files covers ${shipped.length} pattern(s)`);
+
+/* 9. the download page must describe builds that are actually there, at the
+      size it claims — a stale link is worse than no link */
+console.log('\nrelease');
+const rel = read('script.js').slice(read('script.js').indexOf('const CLIENT_RELEASE'));
+const listed = all(rel.slice(0, rel.indexOf('};')), /file:\s*'([^']+)'[\s\S]*?size:\s*'([\d.]+) MB'/g);
+if (!listed.length) fail('platform', 'download page', 'no builds are listed');
+for (const [, file, claimed] of listed) {
+  let stat = null;
+  try { stat = fs.statSync(path.join(ROOT, file)); } catch (e) { /* missing */ }
+  if (!stat) { fail('platform', 'download page names a build that is not built', file); continue; }
+  const mb = (stat.size / 1e6).toFixed(1);
+  if (Math.abs(mb - claimed) > 0.15) {
+    fail('platform', 'download size is wrong', `${file} says ${claimed} MB, is ${mb} MB`);
+  }
+}
+if (listed.length) console.log(`  ${listed.length} build(s) listed and present`);
+
+/* 10. the two payloads must stay two payloads.
+
+      The tracking client is a download. It belongs inside the Android app and
+      the Windows build, and it must not appear on the public website — where
+      it would be a page anybody could wander onto instead of the drivers'
+      site. These checks fail the build if that ever gets crossed again. */
+console.log('\npayloads');
+const builder = read('tools/build-www.js');
+const cap = JSON.parse(read('capacitor.config.json'));
+
+if (cap.webDir !== 'app-www') {
+  fail('build', 'the Android app would bundle the website',
+    `capacitor webDir is "${cap.webDir}", expected "app-www"`);
+}
+if (!/const APP\s*=[\s\S]{0,160}'app-www'/.test(builder)) {
+  fail('build', 'the builder no longer writes the app payload', 'app-www is not assembled');
+}
+if (!/site\.write\('index\.html', read\('index\.html'\)\)/.test(builder)) {
+  fail('build', "the website's index.html is not the drivers' site", 'check build-www.js');
+}
+if (/site\.(write|copy)\([^)]*tracker/.test(builder)) {
+  fail('build', 'the website payload carries the tracking client',
+    'the client is a download, not a page');
+}
+
+/* and if a build is sitting there, check what it actually contains */
+const built = path.join(ROOT, 'www');
+if (fs.existsSync(built)) {
+  const strays = fs.readdirSync(built).filter((f) => /^tracker\./.test(f));
+  strays.forEach((f) => fail('build', 'the built website contains a client file', 'www/' + f));
+  const home = path.join(built, 'index.html');
+  if (fs.existsSync(home) && /HLL_SITE\s*=\s*'admin'/.test(fs.readFileSync(home, 'utf8'))) {
+    fail('build', 'the built website opens on the console', 'www/index.html');
+  }
+  if (fs.existsSync(home) && !/HLL_SITE\s*=\s*'drivers'/.test(fs.readFileSync(home, 'utf8'))) {
+    fail('build', "the built website does not open on the drivers' site", 'www/index.html');
+  }
+  console.log('  www/ holds ' + fs.readdirSync(built).length + ' entries');
+}
+if (!problems) console.log('  website and app payloads are separate');
+
+console.log(problems ? `\n${problems} problem(s)\n` : '\nclean\n');
+process.exit(problems ? 1 : 0);

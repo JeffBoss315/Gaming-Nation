@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <meta name="theme-color" content="#070910">
+
+    <meta
+        name="description"
+        content="Heavyline Logistics — the digital headquarters of the HLL fleet. Convoys, drivers, fleet management, rankings and achievements in one command centre."
+    >
+
+    <title>Heavyline Logistics — Virtual Trucking Company | Convoys, Fleet &amp; Dispatch</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- =========================================================
+         FINDING THIS PAGE
+
+         Only the tags that do not name a host live here. Anything
+         absolute — the canonical, og:url, the image URLs, the JSON-LD —
+         is written by tools/build-www.js from site.config.json, because
+         an absolute URL is a claim about where this site lives and the
+         source cannot know that.
+
+         A canonical pointing at a host you do not own is worse than
+         none at all: it tells Google the real page is elsewhere.
+    ========================================================== -->
+
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <meta name="author" content="Heavyline Logistics">
+    <meta name="application-name" content="Heavyline Logistics">
+
+    <!-- what a shared link looks like on Discord, Slack, LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Heavyline Logistics">
+    <meta property="og:title" content="Heavyline Logistics — virtual trucking company">
+    <meta property="og:description" content="The digital headquarters of the HLL fleet. Convoys, dispatch, live fleet tracking, driver rankings and achievements, in one command centre.">
+    <meta property="og:image:alt" content="The Heavyline Logistics emblem">
+    <meta property="og:locale" content="en_GB">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Heavyline Logistics — virtual trucking company">
+    <meta name="twitter:description" content="Convoys, dispatch, live fleet tracking, driver rankings and achievements, in one command centre.">
+
+    <!-- HLL_SEO — the build injects canonical, og:url, image URLs and
+         structured data here when site.config.json names a host. -->
+
+    <!-- App icon -->
+    <link rel="icon" href="icons/icon-192.png">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+
+    <!-- Heavyline styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!--
+        Heavyline has two front-ends:
+        - Driver website: index.html
+        - Admin console: admin.html
+    -->
+    <script>
+        window.HLL_SITE = 'drivers';
+
+        window.HLL_PAGES = {
+            drivers: 'index.html',
+            admin: 'admin.html'
+        };
+    </script>
+</head>
+
+<body>
+
+    <!-- =========================================================
+         SOCIAL ICON SPRITE
+    ========================================================== -->
+
+    <svg
+        width="0"
+        height="0"
+        style="position:absolute"
+        aria-hidden="true"
+        focusable="false"
+    >
+
+        <symbol id="i-github" viewBox="0 0 24 24">
+            <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2.17c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/>
+        </symbol>
+
+        <symbol id="i-linkedin" viewBox="0 0 24 24">
+            <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05a3.74 3.74 0 0 1 3.37-1.85c3.6 0 4.27 2.37 4.27 5.46zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/>
+        </symbol>
+
+        <symbol id="i-youtube" viewBox="0 0 24 24">
+            <path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 0 0 .5 6.19C0 8.08 0 12 0 12s0 3.92.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14C24 15.92 24 12 24 12s0-3.92-.5-5.81zM9.55 15.57V8.43L15.82 12z"/>
+        </symbol>
+
+        <symbol id="i-tiktok" viewBox="0 0 24 24">
+            <path d="M16.6 0h-3.4v16.2a2.9 2.9 0 0 1-2.9 2.9 2.9 2.9 0 0 1 0-5.8c.3 0 .6 0 .9.1v-3.5a6.4 6.4 0 0 0-.9-.1 6.3 6.3 0 1 0 6.3 6.3V7.9a7.9 7.9 0 0 0 4.6 1.5V5.9a4.6 4.6 0 0 1-4.6-4.6z"/>
+        </symbol>
+
+        <symbol id="i-facebook" viewBox="0 0 24 24">
+            <path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/>
+        </symbol>
+
+    </svg>
+
+
+    <!-- =========================================================
+         AMBIENT BACKGROUND
+    ========================================================== -->
+
+    <div class="bg-fx" aria-hidden="true">
+        <div class="bg-grid"></div>
+    </div>
+
+
+    <!-- =========================================================
+         APPLICATION SPLASH SCREEN
+    ========================================================== -->
+
+    <div
+        class="splash"
+        id="splash"
+        role="status"
+        aria-label="Starting Heavyline"
+    >
+
+        <div class="splash-inner">
+
+            <div class="splash-word">
+                HEAVYLINE
+            </div>
+
+            <div class="splash-sub">
+                LOGISTICS
+            </div>
+
+            <div class="splash-road">
+
+                <div class="splash-fill"></div>
+
+                <div class="splash-lane"></div>
+
+                <svg
+                    class="splash-lorry"
+                    viewBox="0 0 300 96"
+                    aria-hidden="true"
+                >
+
+                    <g
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="4.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+
+                        <!-- Trailer -->
+                        <path d="M8 20 L150 20 L150 66 L8 66 Z"/>
+                        <path d="M18 66 L86 66"/>
+
+                        <!-- Sleeper and cab -->
+                        <path d="M150 20 C150 12 156 8 164 8 L196 8 C204 8 208 13 210 20"/>
+                        <path d="M210 20 L212 40 L214 62 L228 68 L252 68"/>
+
+                        <!-- Windscreen -->
+                        <path d="M216 22 L246 20 L250 42 L214 44 Z"/>
+
+                        <!-- Bonnet, grille and bumper -->
+                        <path d="M214 44 C226 44 240 48 250 56 L258 62"/>
+                        <path d="M258 62 L262 70 L252 74"/>
+                        <path d="M252 56 L276 58 L280 72 L252 74"/>
+                        <path d="M258 62 L274 63 M258 67 L274 68"/>
+
+                        <!-- Exhaust stack -->
+                        <path d="M210 6 L210 26"/>
+
+                        <!-- Wheels -->
+                        <circle cx="46" cy="76" r="13"/>
+                        <circle cx="46" cy="76" r="5"/>
+
+                        <circle cx="86" cy="76" r="13"/>
+                        <circle cx="86" cy="76" r="5"/>
+
+                        <circle cx="176" cy="76" r="13"/>
+                        <circle cx="176" cy="76" r="5"/>
+
+                        <circle cx="216" cy="76" r="13"/>
+                        <circle cx="216" cy="76" r="5"/>
+
+                    </g>
+
+                </svg>
+
+            </div>
+
+            <div
+                class="splash-note"
+                id="splashNote"
+            >
+                Starting…
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================================
+         SPLASH SAFETY TIMER
+    ========================================================== -->
+
+    <script>
+        window.__hllSplashAt = Date.now();
+
+        window.__hllSplash = setTimeout(function () {
+
+            var splash = document.getElementById('splash');
+
+            if (splash) {
+                splash.classList.add('gone');
+            }
+
+        }, 9000);
+    </script>
+
+
+    <!-- =========================================================
+         APPLICATION ROOT
+    ========================================================== -->
+
+    <div
+        id="app"
+        role="application"
+        aria-label="Heavyline Logistics application"
+    ></div>
+
+
+    <!-- Layered UI -->
+    <div id="layers"></div>
+
+    <div
+        class="toasts"
+        id="toasts"
+        role="status"
+        aria-live="polite"
+    ></div>
+
+
+    <!-- =========================================================
+         NO JAVASCRIPT MESSAGE
+    ========================================================== -->
+
+    <noscript>
+
+        <div
+            style="
+                max-width:640px;
+                margin:60px auto;
+                padding:24px;
+                border:1px solid rgba(255,255,255,.14);
+                border-radius:20px;
+                background:rgba(14,20,30,.8)
+            "
+        >
+
+            <h1 style="font-size:20px;margin-bottom:8px">
+                JavaScript required
+            </h1>
+
+            <p style="color:#a5b2c4">
+                The Heavyline Logistics command centre is an interactive
+                application and needs JavaScript enabled.
+            </p>
+
+        </div>
+
+    </noscript>
+
+
+    <!-- =========================================================
+         SUPABASE
+    ========================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js"></script>
+
+    <script src="supabase-client.js"></script>
+
+
+    <!-- =========================================================
+         LEAFLET MAP
+    ========================================================== -->
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+
+    <script src="map-data.js"></script>
+
+
+    <!-- =========================================================
+         HEAVYLINE APPLICATION
+    ========================================================== -->
+
+    <script src="script.js"></script>
+
+</body>
+</html>

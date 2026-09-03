@@ -1,0 +1,17 @@
+{
+  "appId": "com.heavyline.heavylinetrucker",
+  "appName": "Heavyline Trucker",
+  "webDir": "app-www",
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0a0c0f"
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

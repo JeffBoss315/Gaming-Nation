@@ -1,0 +1,14 @@
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\bin\Debug\net8.0\hll-telemetry-adapter.exe
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\bin\Debug\net8.0\hll-telemetry-adapter.deps.json
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\bin\Debug\net8.0\hll-telemetry-adapter.runtimeconfig.json
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\bin\Debug\net8.0\hll-telemetry-adapter.dll
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\bin\Debug\net8.0\hll-telemetry-adapter.pdb
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\HllTelemetryAdapter.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\HllTelemetryAdapter.AssemblyInfoInputs.cache
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\HllTelemetryAdapter.AssemblyInfo.cs
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\HllTelemetryAdapter.csproj.CoreCompileInputs.cache
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\hll-telemetry-adapter.dll
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\refint\hll-telemetry-adapter.dll
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\hll-telemetry-adapter.pdb
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\HllTelemetryAdapter.genruntimeconfig.cache
+C:\Users\jeffb\OneDrive\Desktop\VS CODE\PROJECTS\hll\telemetry-adapter\obj\Debug\net8.0\ref\hll-telemetry-adapter.dll

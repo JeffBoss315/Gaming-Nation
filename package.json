@@ -1,0 +1,132 @@
+{
+  "name": "heavyline-trucker",
+  "productName": "Heavyline Trucker",
+  "version": "4.8.0",
+  "description": "Heavyline Logistics driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
+  "author": "Heavyline Logistics",
+  "main": "electron-main.js",
+  "private": true,
+  "scripts": {
+    "serve": "node serve.js",
+    "serve:lan": "node serve.js --lan",
+    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-brand-icons.ps1",
+    "start": "electron .",
+    "dist": "node tools/scan.js && electron-builder --win --publish never",
+    "dist:portable": "node tools/scan.js && electron-builder --win portable --publish never",
+    "dist:linux": "node tools/scan.js && electron-builder --linux AppImage --publish never",
+    "dist:mac": "node tools/scan.js && electron-builder --mac --publish never",
+    "www": "node tools/scan.js && node tools/build-www.js",
+    "android": "node tools/scan.js && node tools/build-apk.js",
+    "android:open": "npx cap open android",
+    "fleet": "node fleet-server.js",
+    "telemetry:build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-telemetry-adapter.ps1",
+    "telemetry": "node telemetry-bridge.js",
+    "connector": "node game-connector.js",
+    "scan": "node tools/scan.js",
+    "smoke:realtime": "node tools/smoke-realtime.js",
+    "smoke:connector": "node tools/smoke-connector.js",
+    "smoke:outbox": "node tools/smoke-outbox.js",
+    "smoke:convoyauth": "node tools/smoke-convoy-auth.js",
+    "smoke:convoy": "node_modules/electron/dist/electron.exe tools/smoke-convoy.js .",
+    "smoke:liverun": "node_modules/electron/dist/electron.exe tools/smoke-live-run.js .",
+    "smoke:web": "node_modules/electron/dist/electron.exe tools/smoke-platform.js .",
+    "smoke:app": "node_modules/electron/dist/electron.exe tools/smoke-client.js .",
+    "smoke:recruit": "node_modules/electron/dist/electron.exe tools/smoke-recruitment.js .",
+    "smoke:sites": "node_modules/electron/dist/electron.exe tools/smoke-sites.js .",
+    "smoke:errors": "node_modules/electron/dist/electron.exe tools/smoke-errors.js .",
+    "smoke:company": "node_modules/electron/dist/electron.exe tools/smoke-company.js ."
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.heavyline.trucker",
+    "productName": "Heavyline Trucker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "game-connector.js",
+      "telemetry-bridge.js",
+      "desktop-capture.js",
+      "tracker.html",
+      "tracker.css",
+      "tracker.js",
+      "map-data.js",
+      "manifest.webmanifest",
+      "sw.js",
+      "vendor/**/*",
+      "hll.jpg",
+      "icons/**/*",
+      "index.html",
+      "admin.html",
+      "style.css",
+      "script.js",
+      "supabase-client.js",
+      "!node_modules/**/*",
+      "!android/**/*",
+      "!www/**/*",
+      "!app-www/**/*",
+      "!dist-apk/**/*",
+      "!release/**/*",
+      "!tools/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/icon.ico",
+      "artifactName": "${productName} ${version} ${arch}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Heavyline Trucker",
+      "installerIcon": "icons/icon.ico",
+      "uninstallerIcon": "icons/icon.ico",
+      "installerHeaderIcon": "icons/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "icons/icon-1024.png",
+      "category": "Utility"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "icons/icon-1024.png",
+      "category": "public.app-category.utilities"
+    },
+    "afterPack": "./tools/after-pack.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@supabase/supabase-js": "^2.112.4"
+  }
+}

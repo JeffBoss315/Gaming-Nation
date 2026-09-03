@@ -1,0 +1,60 @@
+# Publish the website to GitHub Pages — free, including a custom domain.
+#
+# Enable it once: repository Settings -> Pages -> Source: GitHub Actions.
+# Then every push to main rebuilds and publishes www/.
+#
+# Set siteUrl in site.config.json first. With it empty the build writes no
+# canonical, no robots.txt and no sitemap — the site works, it just does
+# not tell Google where it lives.
+
+name: Publish website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A run already in flight is finished rather than cancelled: a half-applied
+# deploy is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No dependencies are needed to build the site — tools/build-www.js is
+      # plain node. npm ci would only pull Electron in for no reason.
+      - name: Build the site
+        run: node tools/scan.js && node tools/build-www.js
+
+      - name: Check something was actually built
+        run: |
+          test -f www/index.html || { echo "www/index.html missing"; exit 1; }
+          echo "built $(find www -type f | wc -l) files"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

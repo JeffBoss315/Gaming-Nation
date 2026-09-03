@@ -1,0 +1,1900 @@
+/* ============================================================
+   HEAVYLINE LOGISTICS — HLL Digital Headquarters
+   Design system: restrained, flat, professional.
+   One accent colour. Solid surfaces. Minimal motion.
+   ============================================================ */
+
+/* ---------- 1. Tokens ---------- */
+:root{
+  /* Brand — a single accent, used sparingly.
+
+     --accent-rgb carries the channels so every translucent use can go
+     through rgba(var(--accent-rgb), a). The accent used to be written out
+     by hand in twenty-six places; now it is written once. */
+  --accent-rgb:79,127,255;
+  --accent:#4f7fff;
+  --accent-hover:#7397ff;
+  --accent-soft:rgba(var(--accent-rgb),.13);
+  --accent-line:rgba(var(--accent-rgb),.34);
+
+  /* Surfaces. Cooler than they were, and spaced further apart in lightness:
+     the old ramp put --panel and --panel-2 within two points of each other,
+     so a card inside a card read as one flat area. Every step is now visible
+     without any of them going light enough to compete with the content
+     sitting on top of it. */
+  --bg:#070910;
+  --panel:#0d111a;
+  --panel-2:#141926;
+  --panel-3:#1c2333;
+  --line:#212936;
+  --line-2:#2f3849;
+
+  /* Text. The two quiet tones were close enough to read as one, and
+     --text-3 sat under 4.5:1 against --panel. Both are lifted, so a label
+     is legible on its own and the step between them is still obvious. */
+  --text:#e9edf5;
+  --text-2:#9fabbf;
+  --text-3:#7f8b9e;   /* 4.64:1 on --panel-3, the lightest surface it lands on */
+
+  /* semantic — status only, never decoration */
+  /* Status only, never decoration — and each one a clearly different hue
+     from the accent, so "this is a link" never reads as "this is fine". */
+  --ok:#2ee0a0;
+  --info:#22d3ee;
+  --warn:#f7b32b;
+  --danger:#fb6a80;
+  --violet:#a78bfa;
+
+  /* geometry — a touch softer, which is most of what reads as current */
+  --r-sm:7px; --r:10px; --r-lg:14px; --r-xl:18px;
+  --sidebar:236px;
+  --topbar:60px;
+  --maxw:1480px;
+
+  --t-fast:.12s ease;
+  --t:.18s ease;
+
+  --font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+}
+
+/* ---------- 2. Reset ---------- */
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.6;
+  letter-spacing:-.005em;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img,svg{display:block;max-width:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,h5,p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+table{border-collapse:collapse;width:100%}
+::selection{background:rgba(var(--accent-rgb),.28)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#262d36;border-radius:99px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:#333c47;background-clip:content-box}
+
+/* Ambient layer kept in the markup but deliberately near-invisible. */
+.bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-grid{display:none}
+
+/* Default size for every icon() SVG. Component rules below are more specific
+   and still win; this only stops a bare icon stretching to fill its box. */
+.ic{width:1.05em;height:1.05em;flex:none;display:inline-block;vertical-align:-.15em}
+.chev{color:var(--text-3)}
+
+/* ---------- 3. Utilities ---------- */
+.row{display:flex;align-items:center;gap:10px}
+.row-b{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.row-t{display:flex;gap:12px}
+.col{display:flex;flex-direction:column}
+.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.gap-4{gap:4px}.gap-6{gap:6px}.gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}.gap-20{gap:20px}
+.mt-4{margin-top:4px}.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mt-20{margin-top:20px}.mt-24{margin-top:24px}
+.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}.mb-20{margin-bottom:20px}
+.t2{color:var(--text-2)}.t3{color:var(--text-3)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tnum{font-variant-numeric:tabular-nums}
+.center{text-align:center}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hide{display:none !important}
+.cap{text-transform:uppercase;letter-spacing:.08em}
+.xs{font-size:11px}.sm{font-size:12px}.md{font-size:13px}.lg{font-size:15px}.xl{font-size:19px}
+.b5{font-weight:500}.b6{font-weight:500}.b7{font-weight:600}.b8{font-weight:600}
+.grad-text{color:var(--accent)}
+.divider{height:1px;background:var(--line);margin:16px 0}
+.scroll-y{overflow-y:auto}
+.link{color:var(--accent);font-weight:500;cursor:pointer}
+.link:hover{text-decoration:underline}
+
+/* ---------- 4. Shell ---------- */
+#app{position:relative;z-index:1;min-height:100vh}
+.shell{display:grid;grid-template-columns:var(--sidebar) 1fr;min-height:100vh}
+
+.sidebar{
+  position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;
+  background:var(--panel);
+  border-right:1px solid var(--line);
+  z-index:60;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:0 16px;height:var(--topbar);flex:none;border-bottom:1px solid var(--line)}
+.brand-mark{
+  width:30px;height:30px;flex:none;border-radius:7px;
+  background:var(--accent);
+  display:grid;place-items:center;
+}
+.brand-mark{overflow:hidden;background:none}
+.brand-mark img{width:100%;height:100%;object-fit:cover;display:block}
+.brand-mark svg{width:17px;height:17px;color:#04070f}
+.brand-name{font-weight:600;letter-spacing:.02em;font-size:13.5px;line-height:1.2}
+.brand-sub{font-size:9px;letter-spacing:.16em;color:var(--text-3);font-weight:600;text-transform:uppercase}
+
+.nav{flex:1;overflow-y:auto;padding:14px 10px}
+.nav-group{margin-bottom:18px}
+.nav-label{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);font-weight:600;padding:0 10px 7px}
+.nav-item{
+  position:relative;display:flex;align-items:center;gap:10px;
+  padding:7px 10px;border-radius:var(--r);color:var(--text-2);
+  font-weight:450;font-size:13px;margin-bottom:1px;
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.nav-item svg{width:16px;height:16px;flex:none;color:var(--text-3)}
+.nav-item:hover{background:var(--panel-2);color:var(--text)}
+.nav-item:hover svg{color:var(--text-2)}
+.nav-item.active{background:var(--panel-3);color:var(--text);font-weight:500}
+.nav-item.active svg{color:var(--accent)}
+.nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:99px;
+  background:var(--panel-3);color:var(--text-2);font-size:10px;font-weight:600;display:grid;place-items:center}
+.nav-item.active .nav-badge{background:var(--accent-soft);color:var(--accent)}
+
+.side-foot{padding:10px;border-top:1px solid var(--line)}
+.side-user{display:flex;align-items:center;gap:9px;padding:7px;border-radius:var(--r);
+  transition:background var(--t-fast);width:100%;text-align:left}
+.side-user:hover{background:var(--panel-2)}
+.side-user .chev{width:15px;height:15px}
+.side-motto{display:none}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:50;height:var(--topbar);
+  display:flex;align-items:center;gap:10px;padding:0 20px;
+  background:var(--bg);border-bottom:1px solid var(--line);
+}
+.icon-btn{
+  width:32px;height:32px;border-radius:var(--r);display:grid;place-items:center;
+  color:var(--text-3);position:relative;flex:none;
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.icon-btn svg{width:17px;height:17px}
+.icon-btn:hover{background:var(--panel-2);color:var(--text)}
+.icon-btn .dot{position:absolute;top:6px;right:7px;width:6px;height:6px;border-radius:50%;
+  background:var(--accent);border:1.5px solid var(--bg)}
+
+.search{position:relative;flex:1;max-width:340px}
+.search > svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-3)}
+.search input{
+  width:100%;height:34px;padding:0 58px 0 34px;border-radius:var(--r);
+  background:var(--panel);border:1px solid var(--line);color:var(--text);font-size:13px;
+  transition:border-color var(--t);
+}
+.search input::placeholder{color:var(--text-3)}
+.search input:focus{outline:none;border-color:var(--line-2)}
+.kbd{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:10px;font-family:var(--mono);
+  color:var(--text-3);border:1px solid var(--line);padding:1px 5px;border-radius:4px;pointer-events:none}
+
+.status-pill{display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:99px;
+  background:var(--panel);border:1px solid var(--line);color:var(--text-2);font-size:11.5px;font-weight:500;white-space:nowrap}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+
+.page{padding:24px 20px 56px;max-width:var(--maxw);width:100%;margin:0 auto}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+.page-title{font-size:21px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+.page-sub{color:var(--text-2);font-size:13px;margin-top:4px}
+.eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);font-weight:600;margin-bottom:6px}
+
+/* ---------- 5. Cards ---------- */
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg)}
+.card-pad{padding:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.card-title{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.card-title svg{width:15px;height:15px;color:var(--text-3)}
+.card-body{padding:18px}
+.card.hover{transition:border-color var(--t)}
+.card.hover:hover{border-color:var(--line-2)}
+.clip{overflow:hidden}
+
+.grid{display:grid;gap:14px}
+.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.g-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.g-main{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.g-auto{grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.g-auto-lg{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.g-cal{grid-template-columns:minmax(0,1fr) 330px}
+.span-2{grid-column:span 2}
+
+/* Stat tile: number first, no decoration. */
+.stat{position:relative;padding:16px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line)}
+.stat-ico{width:26px;height:26px;display:grid;place-items:center;color:var(--text-3)}
+.stat-ico svg{width:16px;height:16px}
+.stat-val{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:8px;font-variant-numeric:tabular-nums}
+.stat-lbl{font-size:11.5px;color:var(--text-3);font-weight:450;margin-top:2px}
+.delta{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:500;white-space:nowrap;color:var(--text-3)}
+.delta svg{width:11px;height:11px;flex:none}
+.delta.up{color:var(--ok)}
+.delta.down{color:var(--danger)}
+
+/* ---------- 6. Buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:34px;padding:0 13px;border-radius:var(--r);font-weight:500;font-size:13px;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+  transition:background var(--t-fast),border-color var(--t-fast);white-space:nowrap;
+}
+.btn svg{width:15px;height:15px;color:var(--text-3)}
+.btn:hover{background:var(--panel-3);border-color:var(--line-2)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary svg{color:#fff}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-ghost{background:transparent}
+.btn-danger{background:transparent;border-color:rgba(239,95,95,.32);color:#f79a9a}
+.btn-danger svg{color:#f79a9a}
+.btn-danger:hover{background:rgba(239,95,95,.10);border-color:rgba(239,95,95,.5)}
+.btn-ok{background:transparent;border-color:rgba(62,207,142,.32);color:#7fdcb4}
+.btn-ok svg{color:#7fdcb4}
+.btn-ok:hover{background:rgba(62,207,142,.10);border-color:rgba(62,207,142,.5)}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.btn-sm svg{width:13px;height:13px}
+.btn-lg{height:40px;padding:0 20px;font-size:13.5px}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn-block{width:100%}
+
+.seg{display:inline-flex;padding:3px;gap:2px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r)}
+.seg button{padding:5px 11px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text-3);transition:all var(--t-fast)}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--panel-3);color:var(--text)}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{padding:11px 14px;font-size:13px;font-weight:500;color:var(--text-3);
+  border-bottom:1.5px solid transparent;margin-bottom:-1px;transition:color var(--t-fast),border-color var(--t-fast);white-space:nowrap}
+.tabs button:hover{color:var(--text-2)}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+
+/* ---------- 7. Badges / chips ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:5px;
+  font-size:11px;font-weight:500;background:var(--panel-2);color:var(--text-2);border:1px solid var(--line);white-space:nowrap}
+.badge svg{width:11px;height:11px}
+.badge.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
+.badge.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
+.badge.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
+.badge.info{color:var(--info);border-color:rgba(74,163,240,.28);background:rgba(74,163,240,.09)}
+.badge.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.badge.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
+.badge.solid{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r);
+  background:var(--panel-2);border:1px solid var(--line);font-size:12px;font-weight:450;color:var(--text-2);cursor:pointer;transition:all var(--t-fast)}
+.chip:hover{background:var(--panel-3);color:var(--text)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+/* Avatars — one neutral tone. Identity comes from the name, not the colour. */
+.avatar{position:relative;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-weight:500;color:var(--text-2);background:var(--panel-3);border:1px solid var(--line);letter-spacing:.01em}
+.avatar.me{background:var(--accent);color:#fff;border-color:var(--accent)}
+.avatar.a-24{width:24px;height:24px;font-size:9.5px}
+.avatar.a-32{width:30px;height:30px;font-size:11px}
+.avatar.a-40{width:38px;height:38px;font-size:13px}
+.avatar.a-52{width:48px;height:48px;font-size:16px}
+.avatar.a-96{width:72px;height:72px;font-size:24px;border-radius:var(--r-lg)}
+.avatar.a-120{width:88px;height:88px;font-size:28px;border-radius:var(--r-lg)}
+.avatar-ring{box-shadow:none}
+.presence{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--panel)}
+.presence.online{background:var(--ok)}
+.presence.driving{background:var(--info)}
+.presence.offline{background:var(--text-3)}
+.stack{display:flex}
+.stack .avatar{margin-left:-7px;box-shadow:0 0 0 2px var(--panel)}
+.stack .avatar:first-child{margin-left:0}
+.stack .more{margin-left:-7px;width:30px;height:30px;border-radius:50%;background:var(--panel-3);color:var(--text-3);
+  display:grid;place-items:center;font-size:10px;font-weight:500;box-shadow:0 0 0 2px var(--panel);flex:none;border:1px solid var(--line)}
+
+/* Rank shown as text, not an insignia badge. */
+.rank-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text-2)}
+.rank-ins{width:6px;height:6px;border-radius:50%;font-size:0;color:transparent;overflow:hidden;flex:none}
+
+/* ---------- 8. Tables ---------- */
+.table-wrap{overflow-x:auto}
+table.tbl{font-size:13px;min-width:620px}
+table.tbl th{
+  text-align:left;font-size:11px;color:var(--text-3);font-weight:500;
+  padding:10px 16px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--panel);z-index:2;white-space:nowrap;
+}
+table.tbl th.sortable{cursor:pointer;user-select:none}
+table.tbl th.sortable:hover{color:var(--text)}
+table.tbl td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.tbl tbody tr{transition:background var(--t-fast)}
+table.tbl tbody tr:hover{background:var(--panel-2)}
+table.tbl tbody tr.clickable{cursor:pointer}
+table.tbl tbody tr:last-child td{border-bottom:0}
+.rank-num{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:500;
+  background:var(--panel-2);color:var(--text-3);font-variant-numeric:tabular-nums;border:1px solid var(--line)}
+.rank-num.g1{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.rank-num.g2,.rank-num.g3{background:var(--panel-3);color:var(--text-2)}
+
+/* ---------- 9. Progress ---------- */
+.bar{height:4px;border-radius:99px;background:var(--panel-3);overflow:hidden}
+.bar > i{display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .4s ease}
+.bar.thin{height:3px}
+.bar.ok > i{background:var(--ok)}
+.bar.info > i{background:var(--info)}
+.bar.warn > i{background:var(--warn)}
+.bar.danger > i{background:var(--danger)}
+.bar.violet > i{background:var(--violet)}
+
+.ring{position:relative;display:grid;place-items:center}
+.ring svg{transform:rotate(-90deg)}
+.ring .ring-val{position:absolute;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- 10. Charts ---------- */
+.chart{width:100%;display:block;overflow:visible}
+.chart .grid-line{stroke:var(--line);stroke-width:1}
+.chart .axis-lbl{fill:var(--text-3);font-size:10px;font-family:var(--font);font-weight:450}
+.chart .area{opacity:1}
+.chart .line{fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.chart .pt{opacity:0}
+.chart .bar-r{transition:opacity var(--t-fast);cursor:pointer}
+.chart .bar-r:hover{opacity:.72}
+.chart-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--text-2)}
+.chart-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+.spark{width:100%;height:34px}
+
+/* ---------- 11. Map ---------- */
+.map{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--panel-2);border:1px solid var(--line)}
+.map svg{width:100%;display:block}
+.map-land{fill:var(--panel-3);stroke:var(--line);stroke-width:1}
+.map-route{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.map-route-bg{fill:none;stroke:var(--line-2);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.map-node{cursor:pointer}
+.map-lbl{fill:var(--text-2);font-size:10px;font-weight:450;font-family:var(--font);
+  paint-order:stroke;stroke:var(--panel-2);stroke-width:3;stroke-linejoin:round}
+.map-lbl.sub{fill:var(--text-3);font-size:8.5px}
+.map-overlay{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.map-legend{position:absolute;right:12px;bottom:12px;display:flex;gap:12px;padding:6px 10px;border-radius:var(--r);
+  background:var(--panel);border:1px solid var(--line);font-size:11px;color:var(--text-3)}
+.map-legend i{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px}
+.truck-marker{filter:none}
+
+/* ---------- 12. Feed / timeline ---------- */
+.feed{display:flex;flex-direction:column}
+.feed-item{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+.feed-item:last-child{border-bottom:0;padding-bottom:0}
+.feed-item:first-child{padding-top:0}
+.feed-ico{width:28px;height:28px;border-radius:var(--r-sm);flex:none;display:grid;place-items:center;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--text-3)}
+.feed-ico svg{width:14px;height:14px}
+
+.timeline{position:relative;padding-left:22px}
+.timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--line)}
+.tl-item{position:relative;padding-bottom:18px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{content:"";position:absolute;left:-20px;top:6px;width:7px;height:7px;border-radius:50%;
+  background:var(--panel);border:1.5px solid var(--line-2)}
+.tl-item.done::before{background:var(--text-3);border-color:var(--text-3)}
+.tl-item.now::before{background:var(--accent);border-color:var(--accent)}
+
+/* ---------- 13. Forms ---------- */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}
+.field > label{font-size:12px;font-weight:500;color:var(--text-2)}
+.field .hint{font-size:11.5px;color:var(--text-3)}
+.input,.select,.textarea{
+  width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:0 11px;height:36px;color:var(--text);font-size:13px;transition:border-color var(--t);
+}
+.textarea{height:auto;min-height:96px;padding:9px 11px;resize:vertical;line-height:1.6;font-family:inherit}
+.select{appearance:none;-webkit-appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2369727f' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:15px;padding-right:32px}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--accent-line)}
+.input::placeholder,.textarea::placeholder{color:var(--text-3)}
+.input.err,.textarea.err,.select.err{border-color:rgba(239,95,95,.55)}
+.err-msg{font-size:11.5px;color:var(--danger)}
+.check{display:flex;align-items:flex-start;gap:9px;cursor:pointer;padding:9px 11px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--panel-2);transition:border-color var(--t-fast)}
+.check:hover{border-color:var(--line-2)}
+.check input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none;cursor:pointer}
+.check.on{border-color:var(--accent-line)}
+.switch{position:relative;width:36px;height:20px;border-radius:99px;background:var(--panel-3);
+  border:1px solid var(--line);transition:background var(--t);flex:none}
+.switch::after{content:"";position:absolute;left:2px;top:1.5px;width:14px;height:14px;border-radius:50%;
+  background:var(--text-3);transition:transform var(--t),background var(--t)}
+.switch.on{background:var(--accent);border-color:var(--accent)}
+.switch.on::after{transform:translateX(16px);background:#fff}
+.dropzone{border:1px dashed var(--line-2);border-radius:var(--r);padding:22px;text-align:center;
+  color:var(--text-3);transition:border-color var(--t);cursor:pointer;background:var(--panel-2)}
+.dropzone:hover{border-color:var(--accent-line)}
+
+/* ---------- 14. Overlays ---------- */
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(5,7,9,.7);
+  display:grid;place-items:center;padding:20px;overflow-y:auto}
+.modal{width:100%;max-width:540px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-xl);
+  box-shadow:0 24px 60px -24px rgba(0,0,0,.8);max-height:calc(100vh - 40px);display:flex;flex-direction:column;margin:auto}
+.modal.wide{max-width:800px}
+.modal.narrow{max-width:400px}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+.modal-body{padding:18px 20px;overflow-y:auto}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(380px,100%);z-index:210;
+  background:var(--panel);border-left:1px solid var(--line-2);display:flex;flex-direction:column}
+.drawer-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.drawer-body{flex:1;overflow-y:auto;padding:8px 10px 20px}
+
+.toasts{position:fixed;right:18px;bottom:18px;z-index:300;display:flex;flex-direction:column;gap:8px;
+  max-width:min(340px,calc(100vw - 36px))}
+.toast{display:flex;gap:10px;padding:11px 13px;border-radius:var(--r-lg);background:var(--panel-3);
+  border:1px solid var(--line-2);box-shadow:0 16px 36px -18px rgba(0,0,0,.9)}
+.toast.out{opacity:0;transition:opacity var(--t)}
+.toast-ico{width:22px;height:22px;flex:none;display:grid;place-items:center;color:var(--text-3)}
+.toast-ico svg{width:14px;height:14px}
+.toast.ok .toast-ico{color:var(--ok)}
+.toast.info .toast-ico{color:var(--info)}
+.toast.warn .toast-ico{color:var(--warn)}
+.toast.danger .toast-ico{color:var(--danger)}
+
+.menu{position:absolute;z-index:120;min-width:196px;background:var(--panel);border:1px solid var(--line-2);
+  border-radius:var(--r-lg);padding:5px;box-shadow:0 20px 44px -20px rgba(0,0,0,.85)}
+.menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 10px;
+  border-radius:var(--r-sm);font-size:13px;color:var(--text-2);transition:background var(--t-fast),color var(--t-fast)}
+.menu button svg{width:14px;height:14px;color:var(--text-3)}
+.menu button:hover{background:var(--panel-2);color:var(--text)}
+.menu .sep{height:1px;background:var(--line);margin:4px 0}
+.menu button.danger{color:#f79a9a}
+.scrim{position:fixed;inset:0;z-index:55;background:rgba(5,7,9,.6)}
+
+/* ---------- 15. Notifications ---------- */
+.notif{display:flex;gap:10px;padding:11px;border-radius:var(--r);transition:background var(--t-fast);cursor:pointer;position:relative}
+.notif:hover{background:var(--panel-2)}
+.notif.unread::after{content:"";position:absolute;right:11px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.notif-ico{width:30px;height:30px;border-radius:var(--r-sm);flex:none;display:grid;place-items:center;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--text-3)}
+.notif-ico svg{width:14px;height:14px}
+
+/* ---------- 16. Convoy / fleet ---------- */
+.convoy-card{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--panel);
+  border:1px solid var(--line);transition:border-color var(--t);display:flex;flex-direction:column}
+.convoy-card:hover{border-color:var(--line-2)}
+.convoy-banner{height:92px;position:relative;overflow:hidden;background:var(--panel-2);border-bottom:1px solid var(--line)}
+.convoy-banner .haul{position:absolute;inset:0;opacity:.9}
+.convoy-banner .haul .map{position:absolute;inset:0;border:0;border-radius:0;background:transparent}
+.convoy-banner .haul .map svg{width:100%;height:100%}
+.convoy-banner::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(17,20,25,.55),rgba(17,20,25,.15) 60%)}
+.convoy-date{position:absolute;left:12px;top:12px;z-index:2;text-align:center;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px}
+.convoy-date .d{font-size:16px;font-weight:600;line-height:1.1}
+.convoy-date .m{font-size:9px;letter-spacing:.1em;color:var(--text-3);font-weight:600;text-transform:uppercase}
+.route-line{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.route-line .dotA{width:6px;height:6px;border-radius:50%;background:var(--text-3);flex:none}
+.route-line .dotB{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.route-line .dash{flex:1;height:1px;background:var(--line-2);min-width:14px}
+
+.truck-card{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--panel);
+  border:1px solid var(--line);transition:border-color var(--t)}
+.truck-card:hover{border-color:var(--line-2)}
+.truck-vis{height:118px;position:relative;display:grid;place-items:center;background:var(--panel-2);
+  border-bottom:1px solid var(--line);overflow:hidden}
+.truck-vis svg.rig{width:74%;max-width:230px}
+.truck-vis .floor{position:absolute;left:0;right:0;bottom:20px;height:1px;background:var(--line)}
+.spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);
+  border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.spec{background:var(--panel-2);padding:10px 12px}
+.spec .k{font-size:10.5px;color:var(--text-3);font-weight:450}
+.spec .v{font-size:13px;font-weight:500;margin-top:1px}
+
+/* ---------- 17. Achievements ---------- */
+.ach{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:16px;
+  border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line);transition:border-color var(--t)}
+.ach:hover{border-color:var(--line-2)}
+.ach-medal{width:36px;height:36px;border-radius:var(--r);display:grid;place-items:center;
+  background:var(--panel-2);border:1px solid var(--line);position:relative;color:var(--text-3)}
+.ach-medal svg{width:17px;height:17px}
+.ach.earned .ach-medal{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.ach.locked{opacity:.6}
+.ach-lock{display:none}
+
+/* ---------- 18. Calendar ---------- */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);font-weight:500;text-align:center;padding:6px 0}
+.cal-day{min-height:84px;border-radius:var(--r);background:var(--panel-2);border:1px solid var(--line);
+  padding:6px;display:flex;flex-direction:column;gap:3px;transition:border-color var(--t-fast);cursor:pointer}
+.cal-day:hover{border-color:var(--line-2)}
+.cal-day.out{opacity:.35}
+.cal-day.today{border-color:var(--accent-line)}
+.cal-day .n{font-size:11px;font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
+.cal-day.today .n{color:var(--accent)}
+.cal-ev{font-size:10px;font-weight:450;padding:2px 5px;border-radius:4px;background:var(--panel-3);
+  color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:2px solid var(--accent)}
+.cal-ev.info{border-left-color:var(--info)}
+.cal-ev.violet{border-left-color:var(--violet)}
+.cal-ev.ok{border-left-color:var(--ok)}
+
+/* ---------- 19. Auth ---------- */
+.auth{min-height:100vh;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(100vh,auto);position:relative;z-index:1}
+.auth-vis{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;
+  padding:40px;border-right:1px solid var(--line);background:var(--panel)}
+.auth-form-wrap{display:grid;place-items:center;padding:40px 24px}
+.auth-card{width:100%;max-width:370px}
+.hero-title{font-size:32px;font-weight:600;letter-spacing:-.025em;line-height:1.2}
+.hero-motto{font-size:10px;letter-spacing:.16em;font-weight:600;color:var(--text-3);text-transform:uppercase}
+.auth-stats{display:flex;gap:32px;flex-wrap:wrap;position:relative}
+.auth-stat .v{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.auth-stat .k{font-size:11px;color:var(--text-3);font-weight:450;margin-top:1px}
+.oauth{display:flex;gap:8px}
+.oauth .btn{flex:1}
+.or{display:flex;align-items:center;gap:12px;color:var(--text-3);font-size:11px;font-weight:450;margin:14px 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ---------- 20. Misc ---------- */
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:44px 20px;text-align:center;color:var(--text-3)}
+.empty-ico{width:40px;height:40px;border-radius:var(--r);background:var(--panel-2);border:1px solid var(--line);display:grid;place-items:center}
+.empty-ico svg{width:19px;height:19px}
+.skel{background:var(--panel-2);border-radius:var(--r-sm)}
+.tip{position:relative}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:var(--panel-3);border:1px solid var(--line-2);color:var(--text);font-size:11.5px;font-weight:450;
+  padding:4px 8px;border-radius:var(--r-sm);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--t-fast);z-index:80}
+.tip:hover::after{opacity:1}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin-bottom:10px;flex-wrap:wrap}
+.breadcrumb svg{width:12px;height:12px}
+.breadcrumb .b-link{cursor:pointer}
+.breadcrumb .b-link:hover{color:var(--text-2)}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--text-3)}
+.kv .v{font-weight:450;text-align:right}
+
+.hero-banner{position:relative;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel);padding:22px}
+.hero-banner .rig-bg{display:none}
+
+/* Motion: one short fade, no stagger. */
+.reveal,.page{animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.d1,.d2,.d3,.d4,.d5,.d6,.d7,.d8{animation-delay:0s}
+.count-up{font-variant-numeric:tabular-nums}
+
+.mobile-only{display:none}
+
+/* ---------- 21. Responsive ---------- */
+@media (max-width:1300px){
+  .g-5{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g-6{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:1100px){
+  .g-main{grid-template-columns:minmax(0,1fr)}
+  .g-cal{grid-template-columns:minmax(0,1fr)}
+  .g-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span-2{grid-column:auto}
+  .auth{grid-template-columns:1fr}
+  .auth-vis{display:none}
+}
+@media (max-width:900px){
+  :root{--sidebar:0px}
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;width:250px;transform:translateX(-100%);transition:transform .2s ease}
+  .sidebar.open{transform:none}
+  .mobile-only{display:inline-flex}
+  .page{padding:18px 14px 72px}
+  .topbar{padding:0 14px;gap:8px}
+  .search{max-width:none}
+  .kbd{display:none}
+  .desktop-only{display:none !important}
+  .g-2,.g-3,.g-4,.g-5,.g-6{grid-template-columns:minmax(0,1fr)}
+  .modal{max-width:none}
+  .cal{gap:3px}
+  .cal-day{min-height:60px;padding:4px}
+  .cal-ev{font-size:9px}
+  .drawer{width:100%}
+  .toasts{left:14px;right:14px;bottom:14px;max-width:none}
+  .card-body,.card-pad{padding:14px}
+  .card-head{padding:13px 14px}
+  .stat{padding:14px}
+  .stat-val{font-size:21px}
+}
+@media (prefers-reduced-motion:reduce){
+  /* delay cleared too: entrance animations use fill-mode:both, so a surviving
+     delay would hold content at its 0% (invisible) keyframe. */
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-delay:0ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+  .reveal,.page,.card,.stat,.convoy-card,.truck-card{opacity:1 !important}
+}
+@media print{
+  .sidebar,.topbar,.toasts,.btn{display:none !important}
+  body{background:#fff;color:#000}
+}
+
+/* ---------- social links ---------- */
+.social{display:flex;gap:10px;flex-wrap:wrap}
+.social a{
+  display:grid;place-items:center;width:42px;height:42px;
+  border:1px solid var(--line);border-radius:var(--r-lg);
+  background:var(--panel-2);color:var(--text-2);
+  transition:transform .18s cubic-bezier(.22,1,.36,1),
+             color .18s ease, border-color .18s ease, background .18s ease;
+}
+.social .icon{width:19px;height:19px;fill:currentColor;display:block}
+
+.social a:hover{border-color:currentColor;background:var(--panel-3)}
+/* each mark takes its own colour on hover, so the row reads as real brands */
+.social a[data-brand="github"]:hover{color:#e6edf3}
+.social a[data-brand="linkedin"]:hover{color:#0a66c2}
+.social a[data-brand="youtube"]:hover{color:#ff0033}
+.social a[data-brand="tiktok"]:hover{color:#25f4ee}
+.social a[data-brand="facebook"]:hover{color:#1877f2}
+
+.social a:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+  transform:none;   /* keyboard focus should not chase a pointer */
+}
+
+/* the magnetic pull is decorative; a still row is the honest fallback */
+@media (prefers-reduced-motion:reduce){
+  .social a{transition:color .18s ease,border-color .18s ease}
+  .social a:hover{transform:none}
+}
+
+
+/* ---------- live map ---------- */
+.hq-map{
+  height:min(68vh,620px);border-radius:var(--r-lg);overflow:hidden;background:#08090b;
+  /* Leaflet numbers its panes 400-700 and its controls to 1000; contain them
+     so they cannot paint over the app's own dialogs */
+  position:relative;z-index:0;isolation:isolate;
+}
+/* The in-game atlas: a near-black ground with a warm cast, so amber roads
+   sit on it the way they do in the cab. */
+.leaflet-container.game-map{
+  background:
+    radial-gradient(120% 90% at 50% 40%, #10141b 0%, #0a0d13 55%, #06080c 100%);
+  font-family:inherit;
+}
+/* the hairline down the middle of a carriageway, only worth seeing close up */
+.game-map .road-centre{opacity:0;transition:opacity .2s var(--ease)}
+.game-map.leaflet-zoom-anim .road-centre{transition:none}
+.game-map:not(.major-labels-only) .road-centre{opacity:.8}
+.game-map .city-label{pointer-events:none}
+.game-map .city-label span{
+  position:absolute;left:9px;top:-8px;white-space:nowrap;
+  font-size:10.5px;font-weight:500;color:#dfe5ec;
+  text-shadow:0 0 4px #08090b,0 0 4px #08090b,0 1px 3px #000;
+}
+.game-map .city-label.major span{font-size:12.5px;font-weight:700;color:#fff}
+.game-map .city-dot{filter:drop-shadow(0 0 4px rgba(0,0,0,.95))}
+.game-map .city-dot.major{filter:drop-shadow(0 0 7px rgba(255,164,43,.5))}
+.hide-city-labels .city-label span{display:none}
+.major-labels-only .city-label:not(.major) span{display:none}
+.leaflet-zoom-anim .city-label span,.leaflet-zoom-anim .region-label span{opacity:0}
+
+.region-label{pointer-events:none;z-index:450}
+.region-label span{
+  position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;
+  font-size:var(--region-fs,16px);font-weight:900;font-style:italic;
+  letter-spacing:.02em;text-transform:uppercase;
+  text-shadow:0 0 10px #08090b,0 0 4px #08090b,0 2px 4px rgba(0,0,0,.9);
+}
+.fleet-dot{filter:drop-shadow(0 0 6px rgba(var(--accent-rgb),.75))}
+.leaflet-tooltip{background:var(--panel-3);border:1px solid var(--line-2);color:var(--text);
+  font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.leaflet-tooltip::before{display:none}
+.leaflet-bar,.leaflet-bar a{background:var(--panel);color:var(--text-2);border-color:var(--line) !important}
+.leaflet-bar a:hover{background:var(--panel-3);color:var(--text)}
+
+@media (max-width:720px){ .hq-map{height:min(56vh,440px)} }
+
+
+/* ---------- medals ---------- */
+.medal{display:inline-flex;align-items:center;justify-content:center;line-height:0}
+.medal svg{overflow:visible}
+.medal.gold  {filter:drop-shadow(0 2px 6px rgba(246,207,92,.38))}
+.medal.silver{filter:drop-shadow(0 2px 6px rgba(223,230,239,.28))}
+.medal.bronze{filter:drop-shadow(0 2px 6px rgba(227,165,107,.30))}
+.podium-medal{position:absolute;bottom:-14px;right:-10px}
+.tbl .medal{margin:-6px 0}
+
+/* ============================================================
+   BOOT SPLASH
+   ------------------------------------------------------------
+   Covers the app while it starts. The mark draws itself, the bar
+   fills, and the whole thing fades out once the app has painted.
+   ============================================================ */
+/* ---------- 12. The splash ----------
+   What somebody sees for the second or two before the platform is ready.
+
+   It was a cartoon lorry driving along a road. This is the same idea said
+   quietly: a route, and a light travelling it. No illustration, nothing
+   bouncing — a thin line, a moving highlight, and the name.
+
+   Every class the markup already uses is kept, so index.html, admin.html
+   and tracker.html need no changes, and the JS that adds .gone and writes
+   into #splashNote still works. */
+.splash{
+  position:fixed;inset:0;z-index:3000;
+  display:grid;place-items:center;
+  background:
+    radial-gradient(900px 520px at 50% 28%, rgba(var(--accent-rgb),.13), transparent 64%),
+    radial-gradient(700px 420px at 78% 82%, rgba(74,163,240,.07), transparent 66%),
+    #06080b;
+  /* the whole thing lifts away rather than merely fading */
+  transition:opacity .5s var(--ease-out), visibility .5s var(--ease-out),
+             transform .5s var(--ease-out);
+}
+.splash.gone{opacity:0;visibility:hidden;pointer-events:none;transform:scale(1.015)}
+
+.splash-inner{
+  position:relative;
+  width:min(88vw,440px);text-align:center;padding:0 20px;
+  animation:splashRise .7s var(--ease-out);
+}
+@keyframes splashRise{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:none}
+}
+
+/* ---- the mark ----
+   A ring drawn with a conic gradient and masked hollow: one element, no
+   image, and it stays sharp at any size. The gap in the sweep is what
+   reads as motion once it turns. */
+.splash-inner::before{
+  content:'';display:block;
+  width:58px;height:58px;margin:0 auto 20px;
+  border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(var(--accent-rgb),0) 0deg,
+    rgba(var(--accent-rgb),.15) 130deg,
+    #4f7fff 300deg,
+    #a8c0ff 360deg);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
+  box-shadow:0 0 22px rgba(var(--accent-rgb),.28);
+  animation:splashSpin 1.1s linear infinite;
+}
+@keyframes splashSpin{to{transform:rotate(1turn)}}
+
+/* The company's own artwork, sitting inside the ring that turns around it.
+   ::after rather than a second element, because the splash markup is
+   repeated across three pages and this way none of them had to change. */
+.splash-inner::after{
+  content:'';position:absolute;
+  top:11px;left:50%;transform:translateX(-50%);
+  width:36px;height:36px;border-radius:50%;
+  background:url('hll.jpg') center/cover no-repeat;
+  box-shadow:0 0 0 1px rgba(255,255,255,.10), 0 2px 12px rgba(0,0,0,.6);
+}
+
+/* The drawn truck on the client's splash stays — it is that product's
+   mark — but it settles rather than jitters. */
+.splash-truck{
+  display:block;width:100%;height:auto;color:#f2f5f9;
+  filter:drop-shadow(0 6px 26px rgba(0,0,0,.6));
+}
+/* pathLength="1" on every shape, so one dash value drives them all.
+   The resting state is the finished one: drawn, and fully opaque. The
+   animation runs FROM invisible rather than holding there, so if it never
+   runs the splash still shows a truck instead of an empty screen. */
+.splash-truck path,.splash-truck circle{
+  stroke-dasharray:1;stroke-dashoffset:0;
+  animation:splashDraw 1.5s var(--ease-out);
+}
+.splash-truck circle{animation-duration:.85s}
+@keyframes splashDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+
+/* ---- the name ----
+   The letters settle inward as it arrives. Tracking is animated rather
+   than position, so nothing reflows and the word stays centred. */
+.splash-word{
+  margin-top:0;font-size:29px;font-weight:800;letter-spacing:.22em;
+  background:linear-gradient(180deg,#ffffff 0%,#c8d0dc 100%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;
+  animation:splashWord 1s var(--ease-out);
+}
+@keyframes splashWord{
+  from{opacity:0;letter-spacing:.46em}
+  to{opacity:1;letter-spacing:.22em}
+}
+.splash-sub{
+  margin-top:6px;font-size:10.5px;font-weight:700;letter-spacing:.44em;
+  color:#8fb0ff;
+  animation:splashIn 1.15s var(--ease-out);
+}
+@keyframes splashIn{from{opacity:0}to{opacity:1}}
+
+/* ---- the route ----
+   A track, and a light running it. .splash-road holds the markup for the
+   old lorry; the lorry is retired and the road becomes the whole loader. */
+.splash-road{
+  position:relative;margin:26px auto 0;width:min(78%,300px);height:2px;
+  border-radius:99px;
+  background:rgba(255,255,255,.08);
+  overflow:hidden;
+}
+.splash-road::after{content:none}
+
+/* the travelling light: a short segment, not a filling bar, because an
+   indeterminate wait should not pretend to know how far along it is */
+.splash-fill{
+  position:absolute;inset:0;width:38%;left:0;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,
+    rgba(var(--accent-rgb),0), #4f7fff 45%, #a8c0ff 62%, rgba(var(--accent-rgb),0));
+  box-shadow:0 0 12px rgba(var(--accent-rgb),.55);
+  animation:splashSweep 1.5s var(--ease) infinite;
+}
+@keyframes splashSweep{
+  from{transform:translateX(-105%)}
+  to{transform:translateX(365%)}
+}
+
+/* a still, faint underglow so the track reads as lit rather than painted */
+.splash-lane{
+  position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);
+  width:60%;height:14px;border-radius:99px;
+  background:radial-gradient(50% 100% at 50% 50%, rgba(var(--accent-rgb),.22), transparent 70%);
+  animation:none;
+}
+
+/* the illustration goes; the loader is the line now */
+.splash-lorry{display:none}
+
+.splash-note{
+  margin-top:22px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:#6f7c8d;
+  animation:splashNote 2.4s var(--ease) infinite;
+}
+@keyframes splashNote{0%,100%{opacity:.55}50%{opacity:1}}
+
+/* Nothing here should keep somebody waiting on an animation they asked
+   not to see: the resting state is already the finished one. */
+@media (prefers-reduced-motion:reduce){
+  .splash-inner,.splash-truck path,.splash-truck circle,
+  .splash-word,.splash-sub,.splash-note{animation:none}
+  .splash-word{letter-spacing:.22em;opacity:1}
+  .splash-inner::before{animation:none}
+  .splash-fill{animation:none;width:55%;transform:none}
+}
+
+/* ============================================================
+   22. Two sites, one application
+
+   The drivers' website keeps the Heavyline ember. The management
+   console runs on a cooler azure, so a glance tells you which of
+   the two you are in — surfaces, spacing and type stay identical,
+   only the accent moves.
+   ============================================================ */
+.site-admin{
+  --accent:#4d8df6;
+  --accent-hover:#6ba1ff;
+  --accent-soft:rgba(77,141,246,.12);
+  --accent-line:rgba(77,141,246,.32);
+}
+.brand-mark{position:relative}
+.brand-mark.admin{box-shadow:0 0 0 1px var(--accent-line)}
+.brand-mark.admin::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(135deg,transparent 55%,var(--accent-soft));
+  pointer-events:none;
+}
+
+/* the way across to the other site */
+.site-switch{gap:7px;white-space:nowrap}
+.site-switch.admin{border-color:var(--accent-line);background:var(--accent-soft)}
+.site-switch.admin:hover{border-color:var(--accent)}
+
+/* ---------- 23. The console inbox ---------- */
+.inbox{border-color:var(--accent-line)}
+.inbox-row{
+  padding:12px 14px;border-radius:var(--r);
+  background:var(--panel-2);border:1px solid var(--line);
+  transition:border-color var(--t),background var(--t);
+}
+.inbox-row:hover{border-color:var(--line-2);background:var(--panel-3)}
+.stat-ico.brand{color:var(--accent)}
+.stat-ico.info{color:var(--info)}
+.stat-ico.warn{color:var(--warn)}
+.stat-ico.ok{color:var(--ok)}
+.badge.brand{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+/* ---------- 24. Explanatory states ---------- */
+.empty-state{color:var(--text-2)}
+.empty-state .page-title{font-size:22px}
+.empty .b7{color:var(--text)}
+
+/* ---------- 25. Response ----------
+   The surface answers the pointer: a card lifts a little, a row shades, a
+   button presses. No new colours and no stagger — the one short fade above
+   stays the only entrance. Everything here is under 200ms. */
+.card{transition:border-color var(--t),box-shadow var(--t)}
+.card:hover{box-shadow:0 10px 30px -22px rgba(0,0,0,.9)}
+
+.stat{transition:border-color var(--t),transform var(--t),box-shadow var(--t)}
+.stat:hover{
+  border-color:var(--line-2);transform:translateY(-2px);
+  box-shadow:0 12px 26px -20px rgba(0,0,0,.95);
+}
+
+.btn{transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast),transform var(--t-fast)}
+.btn:active{transform:translateY(1px)}
+.btn-primary{box-shadow:0 6px 18px -12px var(--accent)}
+
+.tbl tbody tr{transition:background var(--t-fast)}
+.tbl tbody tr:hover{background:var(--panel-2)}
+
+/* a keyboard user has to be able to see where they are */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+
+@media (prefers-reduced-motion:reduce){
+  .stat:hover{transform:none}
+}
+
+/* ---------- 26. Status pills ----------
+   A rounded status chip, used through the client and on the websites for
+   things like Assigned / Accepted / connected / Offline. These were being
+   written into the markup with no rule behind them at all, so every one of
+   them rendered as bare text. */
+.pill{
+  display:inline-flex;align-items:center;gap:5px;
+  height:21px;padding:0 9px;border-radius:99px;
+  font-size:11px;font-weight:500;white-space:nowrap;
+  background:var(--panel-2);color:var(--text-2);border:1px solid var(--line);
+}
+.pill svg{width:11px;height:11px}
+.pill.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
+.pill.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
+.pill.err,
+.pill.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
+.pill.info{color:var(--info);border-color:rgba(74,163,240,.28);background:rgba(74,163,240,.09)}
+.pill.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.pill.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
+
+/* ---------- 27. Spacing utilities that were being asked for ----------
+   The markup uses these steps; without a rule the element simply got no
+   spacing at all, which is invisible in review and wrong on screen. */
+.gap-10{gap:10px}
+.gap-14{gap:14px}
+.gap-18{gap:18px}
+.mt-6{margin-top:6px}
+.mt-10{margin-top:10px}
+.mb-4{margin-bottom:4px}
+
+
+/* ============================================================
+   LIVE — the fleet, as it is right now
+   ------------------------------------------------------------
+   The console used to ask the service where everyone was every
+   eight seconds and draw the answer in a table. It is now told,
+   the moment a truck moves, and this is what draws it: a row per
+   driver with the run they are on and how far through it they
+   are.
+
+   The house rules hold — one accent, colour only ever means
+   status — with one addition: anything genuinely live carries a
+   slow pulse, and nothing else on the site does, so "live" is
+   something you can see rather than a word.
+   ============================================================ */
+
+@keyframes hllPulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.35;transform:scale(.8)}
+}
+@keyframes hllSweep{
+  from{transform:translateX(-100%)}
+  to{transform:translateX(320%)}
+}
+@keyframes hllRise{
+  from{opacity:0;transform:translateY(5px)}
+  to{opacity:1;transform:none}
+}
+
+/* ---------- the live indicator ---------- */
+.livedot{
+  display:inline-flex;align-items:center;gap:6px;
+  height:22px;padding:0 10px 0 9px;border-radius:99px;
+  font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--line-2);color:var(--text-3);background:var(--panel-2);
+  white-space:nowrap;
+}
+.livedot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.livedot.on{color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.09)}
+.livedot.on::before{animation:hllPulse 1.9s ease-in-out infinite}
+.livedot.wait{color:var(--warn);border-color:rgba(217,155,43,.32);background:rgba(217,155,43,.09)}
+.livedot.wait::before{animation:hllPulse 1.1s ease-in-out infinite}
+.livedot.off{color:var(--text-3)}
+
+/* ---------- the fleet board ---------- */
+.fleetlist{display:flex;flex-direction:column;gap:7px}
+
+.fleetrow{
+  display:grid;grid-template-columns:auto minmax(130px,1.05fr) minmax(0,2fr) auto;
+  align-items:center;gap:14px;
+  padding:11px 14px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--panel-2);
+  transition:border-color var(--t),background var(--t),transform var(--t);
+  animation:hllRise .22s ease;
+}
+.fleetrow:hover{border-color:var(--line-2);background:var(--panel-3)}
+
+/* a truck actually rolling gets a live edge; a parked one does not */
+.fleetrow.rolling{border-left:2px solid var(--ok)}
+.fleetrow.moving{border-left:2px solid var(--info)}
+.fleetrow.held{border-left:2px solid var(--warn)}
+.fleetrow.idle{border-left:2px solid var(--line-2)}
+
+.fr-who{min-width:0}
+.fr-name{
+  font-weight:600;font-size:13px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fr-truck{
+  font-size:11px;color:var(--text-3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+.fr-run{min-width:0}
+.fr-route{
+  display:flex;align-items:center;gap:7px;
+  font-size:12.5px;color:var(--text-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fr-route .to{color:var(--text);font-weight:600}
+.fr-arrow{color:var(--text-3);display:inline-flex}
+.fr-arrow .ic{width:13px;height:13px}
+.fr-cargo{
+  margin-left:2px;padding:1px 8px;border-radius:99px;
+  background:var(--panel-3);border:1px solid var(--line);
+  font-size:10px;color:var(--text-3);
+  overflow:hidden;text-overflow:ellipsis;
+}
+.fr-noload{font-size:12.5px;color:var(--text-3)}
+
+/* The width comes from telemetry, so the transition is what makes the bar
+   glide between updates rather than snap. */
+.fr-bar{
+  position:relative;height:4px;margin-top:7px;
+  border-radius:99px;background:var(--panel-3);overflow:hidden;
+}
+.fr-bar i{
+  display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),var(--accent-hover));
+  transition:width .9s cubic-bezier(.4,0,.2,1);
+}
+.fleetrow.rolling .fr-bar::after{
+  content:"";position:absolute;inset:0;width:28%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  animation:hllSweep 2.4s ease-in-out infinite;
+}
+.fr-sub{
+  display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+  margin-top:6px;font-size:11px;color:var(--text-3);
+}
+.fr-sub b{color:var(--accent);font-weight:700;font-family:var(--mono)}
+
+.fr-state{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.fr-word{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);
+  white-space:nowrap;
+}
+.fr-word .beat{width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.fleetrow.rolling .fr-word{color:var(--ok)}
+.fleetrow.rolling .fr-word .beat{animation:hllPulse 1.5s ease-in-out infinite}
+.fleetrow.moving .fr-word{color:var(--info)}
+.fleetrow.moving .fr-word .beat{animation:hllPulse 1.5s ease-in-out infinite}
+.fleetrow.held .fr-word{color:var(--warn)}
+.fr-speed{font-family:var(--mono);font-size:15px;font-weight:600;white-space:nowrap}
+.fr-speed em{font-style:normal;font-size:10px;color:var(--text-3);margin-left:3px}
+
+/* ---------- what the fleet has just done ---------- */
+.hqfeed{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.hqfeed-empty{font-size:12px;color:var(--text-3)}
+.hqfeed-row{
+  display:flex;align-items:baseline;gap:12px;
+  padding:6px 9px;border-radius:var(--r-sm);
+  font-size:12px;color:var(--text-2);
+  animation:hllRise .25s ease;
+}
+.hqfeed-row:hover{background:var(--panel-2)}
+.hqfeed-time{font-family:var(--mono);font-size:10.5px;color:var(--text-3);flex:none}
+.hqfeed-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hqfeed-row.ok .hqfeed-text{color:var(--ok)}
+.hqfeed-row.warn .hqfeed-text{color:var(--warn)}
+.hqfeed-row.err .hqfeed-text{color:var(--danger)}
+
+/* ---------- narrow ---------- */
+@media (max-width:760px){
+  .fleetrow{
+    grid-template-columns:auto 1fr auto;
+    grid-template-areas:"av who state" ". run run";
+    row-gap:9px;
+  }
+  .fleetrow>.avatar{grid-area:av}
+  .fr-who{grid-area:who}
+  .fr-run{grid-area:run}
+  .fr-state{grid-area:state}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .livedot::before,
+  .fleetrow .fr-word .beat,
+  .fleetrow.rolling .fr-bar::after{animation:none}
+  .fleetrow,.hqfeed-row{animation:none}
+  .fr-bar i{transition:none}
+}
+
+
+/* ============================================================
+   LIVE OPERATIONS
+   ------------------------------------------------------------
+   The console's duty screen. It reuses the fleet row from the
+   live board above rather than inventing a second one — a driver
+   on a run should look the same wherever they are shown — and
+   adds the counters along the top and the two columns beneath.
+   ============================================================ */
+
+.ops-tiles{
+  display:grid;gap:12px;margin-bottom:16px;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+}
+.ops-tile{
+  position:relative;overflow:hidden;
+  padding:14px 16px;border:1px solid var(--line);border-radius:var(--r-lg);
+  background:var(--panel);
+  transition:border-color var(--t),transform var(--t);
+}
+.ops-tile:hover{border-color:var(--line-2)}
+.ops-ico{
+  position:absolute;top:12px;right:12px;
+  display:inline-flex;color:var(--text-3);opacity:.5;
+}
+.ops-ico .ic{width:17px;height:17px}
+.ops-val{
+  font-family:var(--mono);font-size:26px;font-weight:700;line-height:1.1;
+  letter-spacing:-.02em;
+}
+.ops-lab{
+  margin-top:3px;font-size:11px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--text-2);
+}
+.ops-sub{margin-top:3px;font-size:10.5px;color:var(--text-3)}
+
+/* the tone is the status, and it only ever colours the number */
+.ops-tile.ok    .ops-val{color:var(--ok)}
+.ops-tile.ok    .ops-ico{color:var(--ok);opacity:.75}
+.ops-tile.info  .ops-val{color:var(--info)}
+.ops-tile.info  .ops-ico{color:var(--info);opacity:.75}
+.ops-tile.warn  .ops-val{color:var(--warn)}
+.ops-tile.warn  .ops-ico{color:var(--warn);opacity:.75}
+.ops-tile.brand .ops-val{color:var(--accent)}
+.ops-tile.brand .ops-ico{color:var(--accent);opacity:.75}
+
+/* a tile that is counting something live gets the same pulse the rest of
+   the live UI uses, so it reads as moving rather than as a total */
+.ops-tile.ok::after,
+.ops-tile.info::after{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:currentColor;color:inherit;opacity:.5;
+}
+.ops-tile.ok::after{background:var(--ok)}
+.ops-tile.info::after{background:var(--info)}
+.ops-tile.warn::after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--warn);opacity:.5}
+.ops-tile.brand::after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent);opacity:.5}
+
+/* board on the left, feed and inbox on the right */
+.ops-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1.55fr) minmax(300px,.85fr);align-items:start}
+
+/* rows on this board open the driver, so they have to look pressable */
+.fleetrow.ops-row{cursor:pointer}
+.fleetrow.ops-row:hover{transform:translateX(1px)}
+
+.ops-ticket{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--panel-2);cursor:pointer;
+  transition:border-color var(--t),background var(--t);
+}
+.ops-ticket:hover{border-color:var(--line-2);background:var(--panel-3)}
+
+@media (max-width:1080px){
+  .ops-grid{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .ops-tiles{grid-template-columns:repeat(2,1fr)}
+  .ops-val{font-size:22px}
+}
+
+
+/* ============================================================
+   RUN VERIFICATION
+   ------------------------------------------------------------
+   The working behind a verdict on a run: one line per check, and
+   the colour is the check's own outcome — green for a test that
+   passed, amber for evidence that is missing, red for numbers that
+   contradict each other. Nothing here decorates; a coloured line
+   always means something failed.
+   ============================================================ */
+
+.verify-list{display:flex;flex-direction:column;gap:1px}
+.verify-row{
+  display:grid;grid-template-columns:26px 1fr;align-items:start;gap:11px;
+  padding:10px 11px;border-radius:var(--r);
+  border:1px solid transparent;
+}
+.verify-row+.verify-row{border-top:1px solid rgba(255,255,255,.04)}
+.verify-ico{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:50%;
+  border:1px solid var(--line-2);background:var(--panel-2);color:var(--text-3);
+}
+.verify-ico .ic{width:13px;height:13px}
+
+.verify-row.ok .verify-ico{
+  color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.09);
+}
+.verify-row.review{background:rgba(217,155,43,.05);border-color:rgba(217,155,43,.20)}
+.verify-row.review .verify-ico{
+  color:var(--warn);border-color:rgba(217,155,43,.34);background:rgba(217,155,43,.10);
+}
+.verify-row.flagged{background:rgba(239,95,95,.06);border-color:rgba(239,95,95,.24)}
+.verify-row.flagged .verify-ico{
+  color:var(--danger);border-color:rgba(239,95,95,.36);background:rgba(239,95,95,.11);
+}
+
+/* a run row in a history table opens its working, so it has to look pressable */
+tr[data-act="verify-job"]{cursor:pointer}
+
+
+/* ============================================================
+   TRUCKS ON THE MAP
+   ------------------------------------------------------------
+   An arrow rather than a dot, because heading is half of what a
+   map is for, and a name beside it so the fleet reads without
+   hovering anything. Colour is state: orange hauling, blue
+   running empty, grey stopped.
+   ============================================================ */
+.fleet-truck{background:none;border:0}
+.fleet-truck .ft-arrow{
+  position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+  display:block;
+  filter:drop-shadow(0 0 2px rgba(0,0,0,.85));
+  transition:transform .9s cubic-bezier(.4,0,.2,1);
+}
+.fleet-truck .ft-arrow svg{width:100%;height:100%;display:block}
+/* The card that rides with a truck. Anchored left of the arrow and pinned
+   to its vertical middle, so it never covers the position it is describing
+   and two trucks close together do not overwrite each other's names. */
+.fleet-truck .ft-card{
+  position:absolute;left:20px;top:50%;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:1px;
+  padding:5px 8px;border-radius:8px;
+  background:rgba(8,11,17,.82);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 2px 10px rgba(0,0,0,.55);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  white-space:nowrap;pointer-events:none;
+  font-size:10.5px;line-height:1.35;
+}
+.fleet-truck .ft-who{display:flex;align-items:center;gap:5px;color:#fff}
+.fleet-truck .ft-who b{font-weight:650;font-size:11px}
+.fleet-truck .ft-mark{
+  width:14px;height:14px;border-radius:3px;object-fit:cover;flex:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.18);
+}
+.fleet-truck .ft-who em{
+  font-style:normal;font-weight:600;color:var(--accent);
+  font-variant-numeric:tabular-nums;margin-left:2px;
+}
+.fleet-truck .ft-who em i{font-style:normal;font-size:8.5px;color:var(--text-3);margin-left:1px}
+.fleet-truck .ft-run{color:#ffc46b;font-weight:500}
+.fleet-truck .ft-run .ft-pct{
+  font-style:normal;color:var(--accent);font-weight:650;margin-left:5px;
+  font-variant-numeric:tabular-nums;
+}
+.fleet-truck .ft-load{color:var(--text-2)}
+.fleet-truck .ft-load.empty{color:var(--text-3);font-style:italic}
+
+/* the card replaces the bare name, kept for the convoy view */
+.fleet-truck .ft-name{
+  position:absolute;left:50%;top:15px;transform:translateX(-50%);
+  padding:1px 6px;border-radius:99px;white-space:nowrap;
+  font-size:9.5px;font-weight:600;letter-spacing:.02em;
+  color:#e7eaef;background:rgba(10,12,15,.82);border:1px solid rgba(255,255,255,.14);
+  pointer-events:none;
+}
+/* a truck on a run gets a halo, so the ones doing the work stand out */
+.fleet-truck.hauling .ft-arrow{filter:drop-shadow(0 0 5px rgba(var(--accent-rgb),.75))}
+.fleet-truck:focus-visible .ft-arrow{outline:2px solid var(--accent);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){
+  .fleet-truck .ft-arrow{transition:none}
+}
+
+/* ============================================================
+   THE DRIVER TABLE
+   ------------------------------------------------------------
+   Driver, status, game, job, earnings — the plain list, for
+   reading down rather than scanning across. The board above it
+   shows the same drivers with their runs drawn out; this is the
+   version you can sort in your head.
+   ============================================================ */
+.dtable td .dstatus{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.dtable td .ddot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--text-3)}
+.dtable td .ddot.on{background:var(--ok)}
+.dtable td .ddot.job{background:var(--ok);animation:hllPulse 1.6s ease-in-out infinite}
+.dtable td .ddot.play{background:var(--info);animation:hllPulse 2.2s ease-in-out infinite}
+.dtable td .ddot.idle{background:var(--warn)}
+.dtable tr{cursor:pointer}
+.dtable .dpay{color:var(--ok);font-family:var(--mono)}
+.dtable .djob{color:var(--text-2)}
+.dtable .djob .t3{color:var(--text-3)}
+
+@media (prefers-reduced-motion:reduce){
+  .dtable td .ddot.job,.dtable td .ddot.play{animation:none}
+}
+
+/* compact tabs, for a switch that sits inside a card header */
+.tabs.sm{border-bottom:0;gap:2px}
+.tabs.sm button{padding:5px 10px;font-size:11.5px;border-radius:var(--r-sm)}
+.tabs.sm button.on{background:var(--panel-3);color:var(--text)}
+
+
+/* ============================================================
+   LIVE CONVOY
+   ------------------------------------------------------------
+   The convoy panel reuses the fleet row, the operations tile and
+   the activity feed rather than inventing its own — a driver on a
+   convoy should look like a driver anywhere else in Heavyline.
+   What is new here is only what convoys actually need: the map,
+   the leader marking, and the chat.
+   ============================================================ */
+
+.convoy-live{border-color:var(--accent-line)}
+.convoy-live .card-head{border-bottom-color:var(--accent-line)}
+
+.convoy-tiles{
+  display:grid;gap:12px;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+}
+
+/* ---------- the map ---------- */
+.convoy-map-wrap{position:relative;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line)}
+.convoy-map{height:min(52vh,420px);width:100%}
+
+.convoy-map-legend{
+  position:absolute;left:10px;bottom:10px;z-index:500;
+  display:flex;flex-wrap:wrap;gap:12px;
+  padding:7px 11px;border-radius:99px;
+  background:rgba(10,12,15,.82);border:1px solid rgba(255,255,255,.12);
+  font-size:10.5px;color:var(--text-2);
+  backdrop-filter:blur(6px);
+  pointer-events:none;
+}
+.convoy-map-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.lg-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--text-3)}
+.lg-dot.lead{background:#ffd166}
+.lg-dot.hauling{background:var(--accent)}
+.lg-dot.moving{background:var(--info)}
+.lg-dot.idle{background:var(--text-3)}
+
+/* the leader's truck is the one everybody else is following */
+.fleet-truck.convoy-truck.leader .ft-arrow{filter:drop-shadow(0 0 6px rgba(255,209,102,.9))}
+.fleet-truck.convoy-truck.leader .ft-name{border-color:rgba(255,209,102,.55);color:#ffd166}
+
+/* ---------- the participant board ---------- */
+.fleetrow.convoy-row{position:relative;grid-template-columns:auto minmax(130px,1fr) minmax(0,2fr) auto auto}
+.fleetrow.convoy-row.leader{
+  border-color:rgba(255,209,102,.42);
+  background:linear-gradient(90deg,rgba(255,209,102,.10),transparent 44%),var(--panel-2);
+}
+.fleetrow.convoy-row.leader .fr-name .badge{border-color:rgba(255,209,102,.5);color:#ffd166;background:rgba(255,209,102,.12)}
+/* a driver with no telemetry is stated plainly rather than dressed up */
+.fleetrow.convoy-row .fr-noload .ic{width:13px;height:13px;margin-right:5px;vertical-align:-.15em;color:var(--warn)}
+
+.convoy-kick{
+  width:28px;height:28px;flex:none;
+  color:var(--text-3);border-radius:var(--r-sm);
+  opacity:0;transition:opacity var(--t),color var(--t),background var(--t);
+}
+.fleetrow.convoy-row:hover .convoy-kick,
+.convoy-kick:focus-visible{opacity:1}
+.convoy-kick:hover{color:var(--danger);background:rgba(239,95,95,.12)}
+.convoy-kick .ic{width:14px;height:14px}
+
+/* ---------- convoy chat ---------- */
+.convoy-chat{
+  display:flex;flex-direction:column;gap:9px;
+  max-height:320px;min-height:120px;overflow-y:auto;
+  padding:4px 2px;
+  scroll-behavior:smooth;
+}
+.convoy-chat-note{
+  display:flex;align-items:center;gap:8px;
+  padding:18px 4px;font-size:12.5px;color:var(--text-3);
+}
+.convoy-chat-note .ic{width:15px;height:15px;flex:none}
+
+.cmsg{
+  max-width:min(560px,88%);
+  padding:8px 12px;border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--panel-2);
+  align-self:flex-start;
+  animation:hllRise .2s ease;
+}
+.cmsg.mine{align-self:flex-end;background:var(--panel-3);border-color:var(--line-2)}
+.cmsg.staff{border-color:rgba(74,163,240,.34);background:rgba(74,163,240,.07)}
+.cmsg.leader{border-color:rgba(255,209,102,.34);background:rgba(255,209,102,.06)}
+
+.cmsg-who{
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  font-size:10.5px;font-weight:600;color:var(--text-2);margin-bottom:3px;
+}
+.cmsg-who .badge{height:16px;padding:0 6px;font-size:9px}
+.cmsg-time{font-family:var(--mono);font-size:9.5px;color:var(--text-3);font-weight:400}
+.cmsg-body{font-size:13px;color:var(--text);line-height:1.5;word-break:break-word}
+
+@media (max-width:760px){
+  .convoy-tiles{grid-template-columns:repeat(2,1fr)}
+  .convoy-map{height:44vh}
+  .fleetrow.convoy-row{grid-template-columns:auto 1fr auto;grid-template-areas:"av who state" ". run run"}
+  .convoy-kick{opacity:1;position:absolute;top:8px;right:8px}
+  .cmsg{max-width:94%}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .cmsg{animation:none}
+  .convoy-chat{scroll-behavior:auto}
+}
+
+
+/* ============================================================
+   THE HEAVYLINE EMBLEM
+   ------------------------------------------------------------
+   hll.jpg is the company artwork every icon in the app is derived
+   from, used here as the company face: the way in, the top of the
+   command centre, and on a convoy.
+
+   The artwork is square, and every size below is a square box with
+   object-fit: cover, so it cannot be stretched however it is
+   placed. It is not used as general decoration — everything else
+   stays on the stroked icon set, which is what keeps the emblem
+   meaning "Heavyline".
+   ============================================================ */
+.hll-emblem{
+  display:inline-flex;flex:none;overflow:hidden;
+  border-radius:var(--r-lg);background:var(--panel-2);
+  line-height:0;
+}
+.hll-emblem img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  /* the artwork is dense; a touch of contrast keeps it from muddying
+     against the near-black surfaces it sits on */
+  filter:saturate(1.05) contrast(1.02);
+}
+.hll-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
+.hll-emblem.md{width:46px;height:46px}
+.hll-emblem.lg{width:64px;height:64px;border-radius:var(--r-xl)}
+.hll-emblem.xl{width:96px;height:96px;border-radius:var(--r-xl)}
+
+/* framed: the treatment used where the emblem is the brand rather than an
+   accessory — a hairline and a lift, so it reads as a plate and not a photo */
+.hll-emblem.framed{
+  border:1px solid var(--accent-line);
+  box-shadow:0 6px 20px rgba(0,0,0,.42);
+}
+
+.brand-strap{
+  margin-top:6px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-3);
+}
+
+/* ---------- convoy chat, continued ---------- */
+.convoy-older{align-self:center;margin-bottom:4px}
+.convoy-chat-start{
+  align-self:center;margin-bottom:6px;
+  font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);
+}
+/* a moderated message leaves a visible hole rather than silently vanishing */
+.cmsg.removed{
+  background:transparent;border-style:dashed;border-color:var(--line-2);
+  align-self:center;max-width:none;
+}
+.cmsg.removed .cmsg-body{
+  display:flex;align-items:center;gap:7px;
+  font-size:11.5px;font-style:italic;color:var(--text-3);
+}
+.cmsg.removed .cmsg-body .ic{width:12px;height:12px}
+
+.cmsg-del{
+  margin-left:auto;width:20px;height:20px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r-sm);color:var(--text-3);
+  opacity:0;transition:opacity var(--t),color var(--t),background var(--t);
+}
+.cmsg:hover .cmsg-del,.cmsg-del:focus-visible{opacity:1}
+.cmsg-del:hover{color:var(--danger);background:rgba(239,95,95,.12)}
+.cmsg-del .ic{width:11px;height:11px}
+
+/* the honest label on a straight-line measurement */
+.fr-sub b .direct{
+  font-style:normal;font-weight:600;font-size:8.5px;
+  letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text-3);margin-left:4px;
+  padding:1px 4px;border:1px solid var(--line-2);border-radius:3px;
+}
+
+@media (max-width:760px){
+  .hll-emblem.lg{width:52px;height:52px}
+  .cmsg-del{opacity:1}
+}
+
+/* ============================================================
+   14. THE MODERN LAYER
+   ------------------------------------------------------------
+   The system above is deliberately flat. This raises it without
+   changing what it is: the same one accent, the same dark
+   surfaces, the same restraint about colour. What it adds is
+   depth, and feedback for the things you can actually touch.
+
+   Three rules held throughout:
+
+     Depth is light, not lines. A surface lifts because it
+     catches a highlight along its top edge and casts a shadow,
+     not because its border got brighter.
+
+     Motion says something. Every transition here is a reaction
+     to an action — a press, a hover, a panel arriving. Nothing
+     moves on its own except a live indicator, which is
+     reporting that something really is live.
+
+     Nothing costs legibility. Contrast goes up, never down;
+     blur sits behind content, never under text; and the whole
+     layer stands down under prefers-reduced-motion.
+
+   It is appended rather than merged so the base system stays
+   readable on its own, and so this can be removed in one piece.
+   ============================================================ */
+
+:root{
+  /* Elevation. Two shadows apiece: a tight one for the contact edge
+     and a wide soft one for the cast, which is what stops a raised
+     panel reading as a sticker. */
+  --sh-1:0 1px 2px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.16);
+  --sh-2:0 2px 4px rgba(0,0,0,.30), 0 6px 16px rgba(0,0,0,.26);
+  --sh-3:0 4px 8px rgba(0,0,0,.32), 0 16px 40px rgba(0,0,0,.40);
+  --sh-accent:0 2px 10px rgba(var(--accent-rgb),.28), 0 8px 26px rgba(var(--accent-rgb),.16);
+
+  /* A highlight along the top edge of a raised surface: the one place
+     a light source is implied, and what makes the panels read as
+     material rather than as flat fills. */
+  --edge:inset 0 1px 0 rgba(255,255,255,.045);
+  --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
+
+  --accent-grad:linear-gradient(180deg,#7397ff 0%,#3a68e6 100%);
+  --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
+
+  /* Easing. The default ease is symmetrical and reads as sluggish on
+     the way out; these settle instead of stopping. */
+  --ease:cubic-bezier(.4,0,.2,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-spring:cubic-bezier(.34,1.4,.64,1);
+  --t-fast:.13s var(--ease);
+  --t:.2s var(--ease);
+  --t-slow:.34s var(--ease-out);
+}
+
+/* ---------- ambient ground ----------
+   The base file keeps .bg-fx in the markup and hides it. A very low
+   contrast wash gives the panels something to sit on, so the page
+   stops reading as one flat sheet. Nothing here is above 3% opacity. */
+.bg-fx{display:block}
+.bg-fx::before{
+  content:'';position:absolute;inset:-30% -10% auto -10%;height:70vh;
+  background:
+    radial-gradient(60% 60% at 22% 0%, rgba(var(--accent-rgb),.055), transparent 70%),
+    radial-gradient(50% 50% at 88% 8%, rgba(74,163,240,.035), transparent 70%);
+  filter:blur(10px);
+}
+.bg-grid{
+  display:block;position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.016) 1px, transparent 1px);
+  background-size:52px 52px;
+  /* faded out towards the bottom so it never competes with content */
+  mask-image:linear-gradient(180deg, rgba(0,0,0,.7), transparent 62%);
+  -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.7), transparent 62%);
+}
+
+/* ---------- chrome ---------- */
+.topbar{
+  background:rgba(10,12,15,.72);
+  backdrop-filter:saturate(1.6) blur(14px);
+  -webkit-backdrop-filter:saturate(1.6) blur(14px);
+  border-bottom-color:rgba(255,255,255,.055);
+}
+.sidebar{
+  background:linear-gradient(180deg,#12161c 0%,#0f1216 100%);
+  border-right-color:rgba(255,255,255,.05);
+}
+
+/* The active page gets a bar on the rail rather than only a fill, so
+   position in the list is readable without reading the labels. */
+.nav-item{
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
+}
+.nav-item::before{
+  content:'';position:absolute;left:0;top:50%;
+  width:2.5px;height:0;border-radius:0 3px 3px 0;
+  background:var(--accent);
+  transform:translateY(-50%);
+  transition:height .22s var(--ease-spring);
+}
+.nav-item.on::before{height:60%}
+.nav-item:hover{transform:translateX(1px)}
+.nav-item:active{transform:translateX(1px) scale(.99)}
+
+/* ---------- surfaces ---------- */
+.card,.stat{
+  background-image:var(--panel-grad);
+  box-shadow:var(--sh-1),var(--edge);
+  transition:box-shadow var(--t),border-color var(--t),transform var(--t);
+}
+.card.hover:hover,.stat:hover{
+  transform:translateY(-2px);
+  box-shadow:var(--sh-2),var(--edge-strong);
+  border-color:var(--line-2);
+}
+
+/* The number is the point of a stat tile, so it gets the optical
+   weight: tighter tracking, and the icon warms up on hover rather
+   than the whole tile changing colour. */
+.stat-val{letter-spacing:-.03em}
+.stat-ico{
+  border-radius:8px;
+  transition:color var(--t),background var(--t);
+}
+.stat:hover .stat-ico{color:var(--accent);background:var(--accent-soft)}
+
+/* ---------- buttons ---------- */
+.btn{
+  transition:background var(--t-fast),border-color var(--t-fast),
+             box-shadow var(--t-fast),transform var(--t-fast);
+  box-shadow:var(--sh-1),var(--edge);
+}
+.btn:hover{transform:translateY(-1px);box-shadow:var(--sh-2),var(--edge-strong)}
+/* Pressed sits BELOW the resting position — a button that only rises
+   never feels clicked. */
+.btn:active{transform:translateY(1px);box-shadow:none;transition-duration:.05s}
+
+.btn-primary{
+  background:var(--accent-grad);
+  box-shadow:var(--sh-1),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.18);
+}
+.btn-primary:hover{
+  background:linear-gradient(180deg,#7397ff 0%,#3a68e6 100%);
+  box-shadow:var(--sh-2),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.22);
+}
+.btn-ghost{box-shadow:none}
+.btn-ghost:hover{box-shadow:var(--sh-1)}
+.btn:disabled{opacity:.38;box-shadow:none;transform:none}
+
+.icon-btn{transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast)}
+.icon-btn:hover{transform:translateY(-1px)}
+.icon-btn:active{transform:translateY(0) scale(.94);transition-duration:.05s}
+
+/* the unread dot should read as new, so it arrives rather than appearing */
+.icon-btn .dot{animation:dotIn .3s var(--ease-spring)}
+@keyframes dotIn{from{transform:scale(0)}to{transform:scale(1)}}
+
+.seg button{transition:background var(--t-fast),color var(--t-fast)}
+.seg button.on{box-shadow:var(--sh-1),var(--edge)}
+
+.tabs button{position:relative}
+/* the underline grows from the middle instead of snapping on */
+.tabs button::after{
+  content:'';position:absolute;left:50%;right:50%;bottom:-1px;height:1.5px;
+  background:var(--accent);border-radius:2px;
+  transition:left var(--t),right var(--t);
+}
+.tabs button.on{border-bottom-color:transparent}
+.tabs button.on::after{left:0;right:0}
+
+/* ---------- chips, badges ---------- */
+.chip{transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast),transform var(--t-fast)}
+.chip:hover{transform:translateY(-1px)}
+.chip.on{box-shadow:0 0 0 1px var(--accent-line), 0 2px 8px rgba(var(--accent-rgb),.14)}
+.badge{box-shadow:var(--edge)}
+
+/* ---------- fields ----------
+   A ring rather than a heavier border, so the field does not change
+   size or shift its neighbours when it takes focus. */
+.input,.select,.textarea{
+  transition:border-color var(--t-fast),box-shadow var(--t-fast),background var(--t-fast);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22);
+}
+.input:hover,.select:hover,.textarea:hover{border-color:var(--line-2)}
+.input:focus,.select:focus,.textarea:focus{
+  border-color:var(--accent-line);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22), 0 0 0 3px var(--accent-soft);
+}
+.input.err:focus,.textarea.err:focus,.select.err:focus{
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22), 0 0 0 3px rgba(239,95,95,.16);
+}
+
+/* ---------- tables ---------- */
+.table-wrap{border-radius:var(--r-lg)}
+table tbody tr{transition:background var(--t-fast)}
+table tbody tr:hover{background:rgba(255,255,255,.022)}
+table thead th{
+  position:sticky;top:0;z-index:1;
+  background:var(--panel);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+}
+
+/* ---------- modal ---------- */
+.modal-back{
+  backdrop-filter:blur(6px) saturate(.9);
+  -webkit-backdrop-filter:blur(6px) saturate(.9);
+  animation:backIn .18s var(--ease);
+}
+@keyframes backIn{from{opacity:0}to{opacity:1}}
+.modal{
+  box-shadow:var(--sh-3),var(--edge-strong);
+  background-image:var(--panel-grad);
+  animation:modalIn .26s var(--ease-out);
+}
+@keyframes modalIn{
+  from{opacity:0;transform:translateY(10px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+
+/* ---------- toasts ---------- */
+.toast{
+  box-shadow:var(--sh-3),var(--edge-strong);
+  background-image:var(--panel-grad);
+  animation:toastIn .32s var(--ease-spring);
+}
+@keyframes toastIn{
+  from{opacity:0;transform:translateX(18px) scale(.97)}
+  to{opacity:1;transform:none}
+}
+.toast.out{transform:translateX(18px);transition:opacity var(--t),transform var(--t)}
+
+/* ---------- entrance ----------
+   .reveal and .d1..d8 already exist and are used seventy-one times,
+   but every delay was set to 0s, so a screen of twelve panels all
+   arrived on the same frame. Staggering them lets the eye follow the
+   page being built instead of being handed it whole.
+
+   Capped at 8 steps and 20ms apart: enough to read as sequence,
+   short enough that the last panel is not perceptibly late. */
+/* backwards, never both. With `both` the finished state of the animation
+   sticks, and these animations start from opacity:0 — so anywhere the
+   animation does not actually run (a backgrounded or hidden window, a
+   screenshot, a browser that has throttled it) the content stays invisible
+   for good. `backwards` covers the delay and then hands the element back
+   to its own styles, which are visible. */
+.reveal,.page{animation:riseIn .34s var(--ease-out) backwards}
+/* Transform only, deliberately. This one keeps a fill mode because the
+   stagger below needs a delay to cover — so it must not be able to hide
+   anything. At worst the panel rests seven pixels low and readable. */
+@keyframes riseIn{
+  from{transform:translateY(7px)}
+  to{transform:none}
+}
+.d1{animation-delay:.02s}
+.d2{animation-delay:.04s}
+.d3{animation-delay:.06s}
+.d4{animation-delay:.08s}
+.d5{animation-delay:.10s}
+.d6{animation-delay:.12s}
+.d7{animation-delay:.14s}
+.d8{animation-delay:.16s}
+
+/* ---------- loading ----------
+   A shimmer that says the shape of what is coming, rather than a
+   spinner that says only "wait". */
+.skeleton{
+  position:relative;overflow:hidden;
+  background:var(--panel-2);border-radius:var(--r);
+  color:transparent!important;user-select:none;
+}
+.skeleton::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.055),transparent);
+  animation:shimmer 1.4s var(--ease) infinite;
+}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* ---------- links and focus ---------- */
+a.link{
+  color:var(--accent);
+  background-image:linear-gradient(var(--accent),var(--accent));
+  background-size:0% 1px;background-repeat:no-repeat;background-position:0 100%;
+  transition:background-size var(--t);
+}
+a.link:hover{background-size:100% 1px}
+
+/* Two-tone, so the ring is visible against both the dark ground and
+   the accent surfaces it may land on. */
+:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16);
+}
+
+/* ---------- scrollbars ---------- */
+*::-webkit-scrollbar-thumb{background:#2b333d;border-radius:99px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:#3b4553;background-clip:content-box}
+*{scrollbar-width:thin;scrollbar-color:#2b333d transparent}
+
+/* ---------- live indicator ----------
+   The one thing allowed to move unprompted, because it is reporting
+   that the link really is open. */
+.livedot.on::before{
+  content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--ok);margin-right:6px;vertical-align:middle;
+  box-shadow:0 0 0 0 rgba(62,207,142,.6);
+  animation:livePulse 2s var(--ease) infinite;
+}
+@keyframes livePulse{
+  0%{box-shadow:0 0 0 0 rgba(62,207,142,.5)}
+  70%{box-shadow:0 0 0 6px rgba(62,207,142,0)}
+  100%{box-shadow:0 0 0 0 rgba(62,207,142,0)}
+}
+
+/* ---------- density ----------
+   Slightly more air between sections. The base spacing was tuned for
+   a flat design; once panels cast shadows they need room to cast them
+   into, or the page reads as cramped. */
+.card-head{padding:15px 18px}
+.card-body,.card-pad{padding:18px}
+.grid{gap:15px}
+
+/* ---------- when motion is not wanted ----------
+   Not "less motion" — none. Everything above is either feedback the
+   layout also communicates, or decoration. */
+@media (prefers-reduced-motion:reduce){
+  .reveal,.page,.modal,.modal-back,.toast{animation:none!important}
+  .d1,.d2,.d3,.d4,.d5,.d6,.d7,.d8{animation-delay:0s!important}
+  .skeleton::after,.livedot.on::before,.icon-btn .dot{animation:none!important}
+  .card.hover:hover,.stat:hover,.btn:hover,.btn:active,
+  .icon-btn:hover,.icon-btn:active,.chip:hover,.nav-item:hover,.nav-item:active{
+    transform:none!important;
+  }
+  .nav-item::before{transition:none}
+}

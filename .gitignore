@@ -1,0 +1,26 @@
+node_modules/
+dist/
+dist-*/
+*.log
+www/
+app-www/
+dist-apk/
+android/local.properties
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+release/
+hll-company.json
+hll-convoy-chat.jsonl
+hll-convoy-chat.jsonl.tmp
+hll-sessions.json
+hll-sessions.json.tmp
+hll-company.json.tmp
+
+# screenshots from tools/shots.js — generated, not source
+.shots/
+
+# state the company service writes beside itself
+hll-chat.json
+hll-outbox.json
