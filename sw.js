@@ -5,7 +5,7 @@
    ============================================================ */
 /* The -r suffix is the cache revision: bump it when the strategy below
    changes, so activate() drops caches written under the old rules. */
-const CACHE = 'heavylinetrucker-v4.8.0-r2';
+const CACHE = 'heavylinetrucker-v4.8.0-r3';
 
 /* the app shell — everything needed to boot with no network */
 const SHELL = [
