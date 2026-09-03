@@ -7685,16 +7685,23 @@ mergeInner(db, remote) {
 
   db.drivers = this.mergeList(db.drivers, remote.drivers, 'lastSeen');
 
-  /*
-   * Applications are NOT merged from the company service.
-   *
-   * Supabase is the source of truth for recruitment applications.
-   * Applications.pull() loads the complete applications collection
-   * immediately after the company service is absorbed.
-   *
-   * This prevents old company-blob applications such as "Boss Jeff"
-   * from being restored into Store.db.applications.
-   */
+  /* Applications travel with the company after all.
+
+     They were taken out of this merge so that Supabase could be the one
+     source of truth and old company-blob rows could not come back. The
+     first half of that is right and Applications.pull() still does it —
+     it runs straight after this and every row Supabase answers with wins.
+
+     But the company service is the only way an application reaches a
+     second machine when Supabase does not have it: filed while the table
+     was unreachable, or filed before the account could be created at all.
+     Dropped here and wiped there, such an application existed on exactly
+     one computer and the recruiter never saw it.
+
+     Bringing it back is safe now because pull() no longer replaces the
+     whole list — a row Supabase owns still overwrites whatever arrives
+     here, so a cleared application does not reappear. */
+  db.applications = this.mergeList(db.applications, remote.applications, 'submitted');
 
   db.assignments = this.mergeList(
     db.assignments,
@@ -8245,40 +8252,41 @@ async pull() {
 
     if (error) throw error;
 
-    /*
-     * Supabase is the source of truth.
-     * Do not merge remote applications into an old local list.
-     *
-     * This prevents deleted/cleared applications from remaining
-     * in Store.db.applications as stale demo or localStorage data.
-     */
+    /* Supabase owns every row it answers with, and those replace whatever
+       was held here — that is what stops a cleared application coming back
+       as stale local data.
+
+       What Supabase does not own is an application that never reached it:
+       filed while the table was unreachable, or filed on another machine
+       and carried across by the company service. Replacing the whole list
+       threw those away, so an application filed on one machine vanished
+       from the console on the next pull and the recruiter never saw a real
+       person's application.
+
+       "Never reached Supabase" means no supabaseId. A row that HAS one and
+       is absent from the answer was deleted there, and stays deleted. */
     const remoteRows = data || [];
     const previous = Store.db.applications || [];
 
+    const matched = new Set();
     const next = remoteRows.map((row) => {
       const local = this.localFor(previous, row);
+      if (local) matched.add(local);
       return this.fromRow(row, local);
     });
 
-    const changed =
-      previous.length !== next.length ||
-      next.some((item, index) => {
-        const old = previous[index];
-        if (!old) return true;
+    const unsent = previous.filter((a) => a && !matched.has(a) && !a.supabaseId);
+    const merged = next.concat(unsent);
 
-        return (
-          old.supabaseId !== item.supabaseId ||
-          old.status !== item.status ||
-          old.reviewedAt !== item.reviewedAt ||
-          old.submitted !== item.submitted
-        );
-      });
+    /* Compared by identity and by the fields Supabase owns, not by
+       position: the old check read previous[index] against next[index],
+       so one insertion at the top made every later row look changed and
+       a reorder looked like a change when nothing had moved. */
+    const shape = (list) => JSON.stringify(list.map((a) => [
+      a.id, a.supabaseId || null, a.status, a.reviewedAt || null, a.submitted || null]));
+    const changed = shape(previous) !== shape(merged);
 
-    /*
-     * Replace the entire application collection.
-     * If Supabase has zero rows, the local collection becomes zero rows.
-     */
-    Store.db.applications = next;
+    Store.db.applications = merged;
 
     this.status = 'ok';
     this.lastError = null;
@@ -8290,7 +8298,8 @@ async pull() {
       console.log('[HLL] Applications pulled from Supabase:', {
         rows: remoteRows.length,
         previous: previous.length,
-        current: next.length
+        current: merged.length,
+        notYetInSupabase: unsent.length
       });
 
       /*
