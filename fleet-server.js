@@ -41,7 +41,7 @@ const flag = (name) => {
 };
 
 const ROOT = __dirname;
-const PORT = Number(flag('--port') || process.env.HLL_PORT || 8787);
+const PORT = Number(flag('--port') || process.env.HLL_PORT || 7040);
 const HOST = args.includes('--lan') ? '0.0.0.0' : '127.0.0.1';
 
 /* The tests point these at a temp directory so a run never touches the
@@ -49,6 +49,18 @@ const HOST = args.includes('--lan') ? '0.0.0.0' : '127.0.0.1';
 const COMPANY_FILE = process.env.HLL_COMPANY_FILE || path.join(ROOT, 'hll-company.json');
 const SESSION_FILE = process.env.HLL_SESSION_FILE || path.join(ROOT, 'hll-sessions.json');
 const CHAT_FILE = process.env.HLL_CHAT_FILE || path.join(ROOT, 'hll-chat.json');
+const DM_FILE = process.env.HLL_DM_FILE || path.join(ROOT, 'hll-dms.json');
+const FILES_FILE = process.env.HLL_FILES_FILE || path.join(ROOT, 'hll-files.json');
+
+/* Attachments are written to disk rather than into the JSON beside the
+   message. A photo of a delivery note base64'd into a message file turns a
+   200 KB conversation into a 2 MB one that has to be parsed in full every
+   time anybody says anything. */
+const FILES_DIR = process.env.HLL_FILES_DIR || path.join(ROOT, 'hll-files');
+
+/* Big enough for a phone photo of a CMR note, small enough that one driver
+   cannot fill the disk by holding the button down. */
+const MAX_UPLOAD = Number(process.env.HLL_MAX_UPLOAD || 25 * 1024 * 1024);
 const SITE_DIR = process.env.HLL_SITE_DIR || ROOT;
 
 /* ---------------- small helpers ---------------- */
@@ -99,6 +111,9 @@ let company = readJSON(COMPANY_FILE, null) || { version: 0, at: Date.now(), data
 let sessions = readJSON(SESSION_FILE, null) || {};      /* token -> { driverId, at } */
 let chat = readJSON(CHAT_FILE, null) || {};             /* convoyId -> [message] */
 
+let dms = readJSON(DM_FILE, null) || {};                /* threadId -> [message] */
+let uploads = readJSON(FILES_FILE, null) || {};         /* fileId -> metadata */
+
 const fleet = new Map();      /* driverId -> last position; memory only */
 let events = [];              /* recent run events, for catch-up */
 let seq = 0;
@@ -114,6 +129,25 @@ function send(res, kind, data) {
 
 function broadcast(kind, data) {
   listeners.forEach((res) => send(res, kind, data));
+}
+
+/* To one driver, on every stream they have open — the desktop client and a
+   browser at the same time is normal, and both should ring. */
+function sendTo(driverId, kind, data) {
+  if (!driverId) return 0;
+  let n = 0;
+  listeners.forEach((res) => {
+    if (res.hllDriverId === String(driverId)) { send(res, kind, data); n++; }
+  });
+  return n;
+}
+
+/* Whether somebody is holding a stream open — what "online" means for a
+   call. Ringing a driver who is not connected would ring nowhere. */
+function isOnline(driverId) {
+  let live = false;
+  listeners.forEach((res) => { if (res.hllDriverId === String(driverId)) live = true; });
+  return live;
 }
 
 const fleetList = () => Array.from(fleet.values());
@@ -293,6 +327,96 @@ function chatPage(id, limit, before) {
     olderCursor: start > 0 && page.length ? page[0].id : null,
   };
 }
+
+/* ---------------- direct messages ---------------- */
+
+/* One thread per pair, named by both ids in a fixed order — so the thread
+   is the same object whichever end opens it. */
+function threadId(a, b) {
+  return [String(a), String(b)].sort().join('~');
+}
+
+const dmFor = (id) => dms[id] || (dms[id] = []);
+
+function dmPage(id, limit, before) {
+  const all = dmFor(id);
+  let end = all.length;
+  if (before) {
+    const i = all.findIndex((m) => m.id === before);
+    if (i > -1) end = i;
+  }
+  const start = Math.max(0, end - limit);
+  const page = all.slice(start, end);
+  return {
+    messages: page,
+    total: all.length,
+    olderCursor: start > 0 && page.length ? page[0].id : null,
+  };
+}
+
+/* Every conversation this driver is part of, most recent first, with the
+   number they have not read yet. */
+function threadsFor(me) {
+  const mine = String(me.id);
+  const out = [];
+
+  Object.keys(dms).forEach((id) => {
+    const parts = id.split('~');
+    if (parts.indexOf(mine) === -1) return;
+
+    const otherId = parts[0] === mine ? parts[1] : parts[0];
+    const list = dms[id] || [];
+    if (!list.length) return;
+
+    const last = list[list.length - 1];
+    const other = driverRecord(otherId);
+
+    out.push({
+      threadId: id,
+      withId: otherId,
+      withName: (other && other.name) || otherId,
+      withRole: (other && other.role) || 'driver',
+      online: isOnline(otherId),
+      last,
+      unread: list.filter((m) => String(m.driverId) !== mine && !m.readAt).length,
+    });
+  });
+
+  out.sort((a, b) => new Date(b.last.at) - new Date(a.last.at));
+  return out;
+}
+
+/* ---------------- attachments ---------------- */
+
+/* The JSON body reader caps at 8 MB and parses what it gets, so an upload
+   cannot go through it. This one collects bytes, stops at the limit, and
+   hands back a buffer. */
+function rawBody(req, limit) {
+  return new Promise((done, fail) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { req.destroy(); fail(new Error('too big')); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => done(Buffer.concat(chunks)));
+    req.on('error', fail);
+  });
+}
+
+/* Only what a browser will render inline or a driver would sensibly send.
+   Anything else is stored as a download rather than served as itself —
+   serving an arbitrary content-type back to a browser from a shared server
+   is how a chat becomes an attack. */
+const UPLOAD_TYPES = {
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+  'image/webp': '.webp', 'application/pdf': '.pdf', 'text/plain': '.txt',
+  'text/csv': '.csv', 'application/zip': '.zip',
+  'video/mp4': '.mp4', 'audio/webm': '.weba', 'audio/mpeg': '.mp3',
+};
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 /* ---------------- the API ---------------- */
 async function api(req, res, url) {
@@ -534,7 +658,248 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true });
   }
 
+  /* ---- direct messages ---- */
+
+  if (p === '/api/dm/threads' && method === 'GET') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+    return json(res, 200, { threads: threadsFor(me) });
+  }
+
+  const dmGet = p.match(/^\/api\/dm\/([^/]+)$/);
+  if (dmGet && method === 'GET') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+
+    const withId = decodeURIComponent(dmGet[1]);
+    if (!driverRecord(withId)) return json(res, 404, { error: 'no such driver' });
+
+    const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+    const page = dmPage(threadId(me.id, withId), limit, url.searchParams.get('before'));
+    return json(res, 200, Object.assign({ withId, online: isOnline(withId) }, page));
+  }
+
+  if (p === '/api/dm/send' && method === 'POST') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+    if (!allowWrite(req)) return json(res, 429, { error: 'slow down' });
+
+    const b = await body(req);
+    const to = String((b && b.to) || '');
+    const other = driverRecord(to);
+    if (!other) return json(res, 404, { error: 'no such driver' });
+    if (String(other.id) === String(me.id)) {
+      return json(res, 400, { error: 'that is your own thread' });
+    }
+
+    const text = String((b && b.text) || '').trim().slice(0, 4000);
+
+    /* An attachment is a message on its own — a photo of a delivery note
+       needs no caption. But something has to be there. */
+    const attachment = (b && b.attachment && uploads[b.attachment.id])
+      ? uploads[b.attachment.id]
+      : null;
+
+    if (!text && !attachment) {
+      return json(res, 400, { error: 'an empty message is not a message' });
+    }
+
+    /* Identity comes from the token, never from the body — otherwise
+       anyone could post as anyone. */
+    const message = {
+      id: 'DM-' + crypto.randomBytes(8).toString('hex'),
+      driverId: me.id,
+      driver: me.name,
+      role: levelOf(me.role) >= CONTROL_LEVEL ? 'staff' : 'driver',
+      to: other.id,
+      text,
+      attachment,
+      at: new Date().toISOString(),
+      readAt: null,
+    };
+
+    const id = threadId(me.id, other.id);
+    dmFor(id).push(message);
+
+    /* A thread nobody will ever scroll back through does not need to grow
+       without limit. */
+    if (dms[id].length > 2000) dms[id] = dms[id].slice(-2000);
+
+    save(DM_FILE, dms);
+
+    /* Both ends: the sender's other windows as well, so a message typed on
+       the desktop appears in the browser they left open. */
+    sendTo(other.id, 'dm', { kind: 'dm.message', threadId: id, message });
+    sendTo(me.id, 'dm', { kind: 'dm.message', threadId: id, message });
+
+    return json(res, 200, { message });
+  }
+
+  if (p === '/api/dm/read' && method === 'POST') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+
+    const b = await body(req);
+    const withId = String((b && b.withId) || '');
+    if (!driverRecord(withId)) return json(res, 404, { error: 'no such driver' });
+
+    const id = threadId(me.id, withId);
+    const now = new Date().toISOString();
+    let n = 0;
+
+    /* Only the other side's messages — marking your own as read is
+       meaningless and would tell them you had read yourself. */
+    dmFor(id).forEach((m) => {
+      if (String(m.driverId) !== String(me.id) && !m.readAt) { m.readAt = now; n++; }
+    });
+
+    if (n) {
+      save(DM_FILE, dms);
+      sendTo(withId, 'dm', { kind: 'dm.read', threadId: id, by: me.id, at: now });
+    }
+    return json(res, 200, { read: n });
+  }
+
+  if (p === '/api/dm/message/delete' && method === 'POST') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+
+    const b = await body(req);
+    const id = String((b && b.id) || '');
+
+    let found = null;
+    let inThread = null;
+    Object.keys(dms).some((tid) => {
+      const hit = dms[tid].find((m) => m.id === id);
+      if (hit) { found = hit; inThread = tid; }
+      return !!hit;
+    });
+    if (!found) return json(res, 404, { error: 'no such message' });
+
+    const mine = String(found.driverId) === String(me.id);
+    if (!mine && levelOf(me.role) < CONTROL_LEVEL) {
+      return json(res, 403, { error: 'not yours to remove' });
+    }
+
+    /* A hole, not a disappearance — the same as convoy chat. */
+    found.deleted = true;
+    found.text = '';
+    found.attachment = null;
+    found.deletedBy = me.id;
+    found.deletedAt = new Date().toISOString();
+
+    save(DM_FILE, dms);
+    inThread.split('~').forEach((who) => {
+      sendTo(who, 'dm', { kind: 'dm.message.deleted', threadId: inThread, message: found });
+    });
+    return json(res, 200, { ok: true });
+  }
+
+  /* ---- attachments ---- */
+
+  if (p === '/api/files' && method === 'POST') {
+    const me = whoami(req);
+    if (!me) return json(res, 401, { error: 'no identity' });
+    if (!allowWrite(req)) return json(res, 429, { error: 'slow down' });
+
+    const type = String(req.headers['content-type'] || '').split(';')[0].trim();
+    const ext = UPLOAD_TYPES[type];
+    if (!ext) {
+      return json(res, 415, {
+        error: 'that kind of file cannot be sent here',
+        accepted: Object.keys(UPLOAD_TYPES),
+      });
+    }
+
+    let buf;
+    try {
+      buf = await rawBody(req, MAX_UPLOAD);
+    } catch (e) {
+      return json(res, 413, {
+        error: 'that file is larger than ' + Math.round(MAX_UPLOAD / 1e6) + ' MB',
+      });
+    }
+    if (!buf.length) return json(res, 400, { error: 'that file was empty' });
+
+    const id = crypto.randomBytes(16).toString('hex');
+
+    /* The name is decoration: it is shown, never used as a path. The file on
+       disk is named by its id, so nothing a client sends can escape the
+       directory or overwrite anything. */
+    const name = String(req.headers['x-hll-filename'] || 'file' + ext)
+      .replace(/[\r\n]/g, '').slice(0, 120);
+
+    try {
+      fs.mkdirSync(FILES_DIR, { recursive: true });
+      fs.writeFileSync(path.join(FILES_DIR, id + ext), buf);
+    } catch (e) {
+      console.warn('[hll] could not store an upload: ' + e.message);
+      return json(res, 500, { error: 'the file could not be stored' });
+    }
+
+    const meta = {
+      id,
+      name,
+      type,
+      ext,
+      size: buf.length,
+      image: IMAGE_TYPES.indexOf(type) > -1,
+      url: '/files/' + id,
+      by: me.id,
+      at: new Date().toISOString(),
+    };
+
+    uploads[id] = meta;
+    save(FILES_FILE, uploads);
+    return json(res, 200, { file: meta });
+  }
+
   return json(res, 404, { error: 'no such endpoint' });
+}
+
+/* ---------------- calls ---------------- */
+
+/* The media never comes through here. Two browsers negotiate a direct
+   connection and the audio and video go between them; all this service does
+   is carry the handshake — the offer, the answer, and the ICE candidates —
+   from one to the other, because they have no other way to reach each other
+   before the connection exists.
+
+   That is why there is no bandwidth cost to a call and no recording of one:
+   the service sees who rang whom, and never a second of it. */
+const CALL_SIGNALS = ['ring', 'offer', 'answer', 'ice', 'accept', 'decline', 'hangup', 'busy'];
+
+async function callSignal(req, res) {
+  const me = whoami(req);
+  if (!me) return json(res, 401, { error: 'no identity' });
+
+  const b = await body(req);
+  const kind = String((b && b.kind) || '');
+  if (CALL_SIGNALS.indexOf(kind) === -1) {
+    return json(res, 400, { error: 'unknown signal' });
+  }
+
+  const to = String((b && b.to) || '');
+  const other = driverRecord(to);
+  if (!other) return json(res, 404, { error: 'no such driver' });
+
+  /* Ringing somebody with nothing open would ring nowhere, and the caller
+     would sit listening to a tone that was never going to be answered. */
+  if (kind === 'ring' && !isOnline(to)) {
+    return json(res, 409, { error: 'that driver is not connected' });
+  }
+
+  const delivered = sendTo(to, 'call', {
+    kind,
+    callId: String((b && b.callId) || ''),
+    from: me.id,
+    fromName: me.name,
+    video: !!(b && b.video),
+    payload: (b && b.payload) || null,
+    at: new Date().toISOString(),
+  });
+
+  return json(res, 200, { delivered });
 }
 
 /* ---------------- the server ---------------- */
@@ -563,7 +928,23 @@ const server = http.createServer((req, res) => {
       'X-Accel-Buffering': 'no',
     });
     res.write('retry: 3000\n\n');
+
+    /* A direct message and a ringing call have to reach one person. The
+       header cannot be set on an EventSource, so the token comes on the
+       query string — it is the same token, over the same connection, and
+       it never leaves this service. */
+    const streamToken = url.searchParams.get('token') || '';
+    const streamSession = streamToken ? sessions[streamToken] : null;
+    res.hllDriverId = streamSession ? String(streamSession.driverId) : null;
+
     listeners.add(res);
+
+    /* Somebody who was ringing while this driver was away has long since
+       given up, so the arrival is announced rather than the backlog
+       replayed: the people talking to them can see they are back. */
+    if (res.hllDriverId) {
+      broadcast('presence', { driverId: res.hllDriverId, online: true });
+    }
 
     /* whoever just arrived gets the picture as it stands, not only what
        happens from now on */
@@ -578,7 +959,15 @@ const server = http.createServer((req, res) => {
       try { res.write(': beat\n\n'); } catch (e) { /* gone */ }
     }, 25000);
 
-    const drop = () => { clearInterval(beat); listeners.delete(res); };
+    const drop = () => {
+      clearInterval(beat);
+      listeners.delete(res);
+      /* Only once the last window closes — a driver moving between the
+         client and a browser has not gone offline. */
+      if (res.hllDriverId && !isOnline(res.hllDriverId)) {
+        broadcast('presence', { driverId: res.hllDriverId, online: false });
+      }
+    };
     req.on('close', drop);
     req.on('error', drop);
     return undefined;
@@ -610,6 +999,40 @@ const server = http.createServer((req, res) => {
     return res.end(text);
   }
 
+  if (url.pathname === '/api/call/signal' && req.method === 'POST') {
+    return callSignal(req, res).catch((e) => {
+      console.warn('[hll] call signal: ' + e.message);
+      try { json(res, 500, { error: 'the service failed on that' }); } catch (x) { /* gone */ }
+    });
+  }
+
+  /* An attachment. Served from the upload directory by id — never by the
+     name the sender gave it, so nothing in that name can reach the disk. */
+  const wantFile = url.pathname.match(/^\/files\/([a-f0-9]{32})$/);
+  if (wantFile) {
+    const meta = uploads[wantFile[1]];
+    if (!meta) return json(res, 404, { error: 'no such file' });
+
+    const onDisk = path.join(FILES_DIR, meta.id + meta.ext);
+    let data;
+    try { data = fs.readFileSync(onDisk); } catch (e) {
+      return json(res, 404, { error: 'that file is no longer held' });
+    }
+
+    return res.writeHead(200, {
+      'Content-Type': meta.type,
+      'Content-Length': data.length,
+      /* Named for the save dialog, and shown inline when it is something a
+         browser can show. Anything else downloads rather than rendering,
+         which is what stops an upload behaving like a page. */
+      'Content-Disposition': (meta.image ? 'inline' : 'attachment')
+        + '; filename="' + meta.name.replace(/"/g, '') + '"',
+      'Cache-Control': 'private, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+      'Access-Control-Allow-Origin': '*',
+    }).end(data);
+  }
+
   if (url.pathname.startsWith('/api/')) {
     return api(req, res, url).catch((e) => {
       console.warn('[hll] ' + url.pathname + ': ' + e.message);
@@ -628,6 +1051,9 @@ server.listen(PORT, HOST, () => {
   console.log('  Website      :  ' + base + '/');
   console.log('  Console      :  ' + base + '/admin.html');
   console.log('  Live channel :  ' + base + '/api/stream');
+  console.log('  Messages     :  ' + base + '/api/dm/threads');
+  console.log('  Attachments  :  ' + base + '/files/<id>');
+  console.log('  Calls        :  ' + base + '/api/call/signal');
   console.log('  Status       :  ' + base + '/status');
   console.log('');
   console.log('  Company file :  ' + COMPANY_FILE);

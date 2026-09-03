@@ -102,6 +102,12 @@ const ICON_PATHS = {
   menu:       '<path d="M4 7h16M4 12h16M4 17h16"/>',
   lock:       '<rect x="4.5" y="10" width="15" height="10.5" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/>',
   mail:       '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>',
+  chat:       '<path d="M20 14.5a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5z"/>',
+  video:      '<rect x="3" y="6" width="12.5" height="12" rx="2.5"/><path d="M15.5 10.5l5-2.6v8.2l-5-2.6z"/>',
+  phoneOff:   '<path d="M10.7 5.6A15.5 15.5 0 0 1 13 5.3"/><path d="M3 3l18 18"/><path d="M8.4 8.4l-2 1.2a1.6 1.6 0 0 0-.6 2l1 2.2a15.6 15.6 0 0 0 4.4 4.4l2.2 1a1.6 1.6 0 0 0 2-.6l1.2-2"/><path d="M18.6 13.8l.8-1.4a1.6 1.6 0 0 0-.6-2l-2-1.2"/>',
+  mic:        '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>',
+  micOff:     '<path d="M3 3l18 18"/><path d="M9.5 4.9A3 3 0 0 1 15 6v4"/><path d="M9 9.4V11a3 3 0 0 0 4.3 2.7"/><path d="M5.5 11.5a6.5 6.5 0 0 0 9.9 5.6"/><path d="M18.4 13.6a6.5 6.5 0 0 0 .1-2.1"/><path d="M12 18v3"/>',
+  paperclip:  '<path d="M20 11.5l-7.6 7.6a4.6 4.6 0 0 1-6.5-6.5l8-8a3.1 3.1 0 0 1 4.4 4.4l-8 8a1.6 1.6 0 0 1-2.2-2.2l7.1-7.1"/>',
   megaphone:  '<path d="M4 10v4a2 2 0 0 0 2 2h1l9 4V4l-9 4H6a2 2 0 0 0-2 2z"/><path d="M19 9.5a3.2 3.2 0 0 1 0 5"/>',
   wrench:     '<path d="M15 3.5a5.5 5.5 0 0 0-5 7.6L3.6 17.5a2 2 0 0 0 2.8 2.8l6.4-6.3A5.5 5.5 0 0 0 20 8.5l-3 1.7-2.5-1.4-.1-2.9z"/>',
   package:    '<path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
@@ -2702,6 +2708,7 @@ const ROUTES = {
   support:      { title: 'Driver Support',   icon: 'lifeBuoy' },
   ticket:       { title: 'Support Ticket',   icon: 'ticket', hidden: true },
   notifications:{ title: 'Notifications',    icon: 'bell' },
+  messages:     { title: 'Messages',         icon: 'chat' },
   livemap:      { title: 'Live map',         icon: 'map' },
   ops:          { title: 'Live Operations',  icon: 'activity', perm: 'admin.view' },
   downloads:    { title: 'Get the client',   icon: 'download' },
@@ -2733,7 +2740,7 @@ function onHashChange() {
    has no use for. */
 const NAV_DRIVERS = [
   { label: 'Operations', items: ['dashboard', 'livemap', 'convoys', 'events', 'fleet'] },
-  { label: 'Crew',       items: ['drivers', 'rankings', 'achievements'] },
+  { label: 'Crew',       items: ['drivers', 'messages', 'rankings', 'achievements'] },
   { label: 'Company',    items: ['recruitment', 'community', 'support', 'downloads'] },
 ];
 const NAV_ADMIN = [
@@ -2741,7 +2748,7 @@ const NAV_ADMIN = [
      with is who is on and what they are doing right now, not what the
      paperwork says. */
   { label: 'Management', items: ['ops', 'admin', 'recruitment', 'support'] },
-  { label: 'Company',    items: ['drivers', 'fleet', 'convoys', 'events', 'community'] },
+  { label: 'Company',    items: ['drivers', 'messages', 'fleet', 'convoys', 'events', 'community'] },
   { label: 'Oversight',  items: ['livemap', 'rankings', 'dashboard'] },
 ];
 const NAV_GROUPS = isAdminSite() ? NAV_ADMIN : NAV_DRIVERS;
@@ -2763,6 +2770,7 @@ function navHTML() {
     recruitment: can('recruitment.manage') ? pendingApps : 0,
     support: openTickets,
     convoys: upcoming,
+    messages: Messages.unread(),
   };
 
   return NAV_GROUPS.map((g) => {
@@ -2775,9 +2783,17 @@ function navHTML() {
           || (k === 'fleet' && state.route.name === 'vehicle') || (k === 'convoys' && state.route.name === 'convoy')
           || (k === 'support' && state.route.name === 'ticket');
         const b = badges[k];
+        /* Messages keeps its badge in the markup whether or not anything is
+           waiting, because a message arriving has to be able to light it
+           without redrawing the sidebar — a redraw mid-sentence would take
+           the caret out of the composer. */
+        const badgeId = k === 'messages' ? ' id="dmBadge"' : '';
+        const badge = k === 'messages'
+          ? `<span class="nav-badge"${badgeId}${b ? '' : ' style="display:none"'}>${b || ''}</span>`
+          : (b ? `<span class="nav-badge ${k === 'convoys' ? 'muted' : ''}">${b}</span>` : '');
         return `<a class="nav-item ${active ? 'active' : ''}" href="#/${k}">
           ${icon(r.icon)}<span class="grow trunc">${esc(r.title)}</span>
-          ${b ? `<span class="nav-badge ${k === 'convoys' ? 'muted' : ''}">${b}</span>` : ''}</a>`;
+          ${badge}</a>`;
       }).join('')}</div>`;
   }).join('') + `
     <div class="nav-group">
@@ -2835,6 +2851,10 @@ function shellHTML() {
       </header>
       <main id="view" role="main"></main>
     </div>
+
+    <!-- A call outlives the page it started on: it sits outside #view so
+         moving between screens does not hang up on somebody. -->
+    <div id="callLayer" aria-live="polite"></div>
   </div>`;
 }
 
@@ -6803,6 +6823,31 @@ function handleAction(act, t, ev) {
     case 'user-menu': userMenu(t); return;
     case 'noop': return;
 
+    /* messages */
+    case 'dm-open':
+      Messages.open(id).then(() => paintMessages());
+      return;
+    case 'dm-attach': {
+      const picker = document.getElementById('dmFile');
+      if (picker) picker.click();
+      return;
+    }
+    case 'dm-delete':
+      Messages.remove(id);
+      return;
+    case 'dm-call':
+      Calls.start(id, dmNameFor(id), false);
+      return;
+    case 'dm-video':
+      Calls.start(id, dmNameFor(id), true);
+      return;
+
+    /* calls */
+    case 'call-accept': Calls.accept(); return;
+    case 'call-decline': Calls.decline(); return;
+    case 'call-hangup': Calls.hangUp(); return;
+    case 'call-mute': Calls.toggleMute(); return;
+
     /* auth */
     case 'auth-mode':
       state.ui.authMode = t.dataset.v;
@@ -7509,6 +7554,56 @@ function defaultServiceUrl() {
   } catch (e) { /* nothing to go on */ }
 
   return '';
+}
+
+/* Ask the machine this page is on whether the service is running, and use
+   it if it is.
+
+   Only for a local page — the desktop client, a file, a dev server. On the
+   published site every visitor would otherwise be pointed at their OWN
+   localhost, which is not the company's service and is usually nothing at
+   all; a https page cannot reach http://localhost in most browsers anyway.
+
+   One request, with a short deadline. If it does not answer, the platform
+   carries on exactly as it did before and says nothing, because there is
+   nothing to say: not running the service is the normal case. */
+async function discoverLocalService() {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (window.HLL_SERVICE) return false;      /* already told where it is */
+    if (!isLocalPage()) return false;
+    if (typeof fetch !== 'function') return false;
+
+    const stop = new AbortController();
+    const bell = setTimeout(() => stop.abort(), 1200);
+
+    let ok = false;
+    try {
+      const res = await fetch(LOCAL_SERVICE + '/status',
+        { cache: 'no-store', signal: stop.signal });
+      ok = res.ok;
+    } catch (e) { ok = false; }
+    clearTimeout(bell);
+
+    if (!ok) return false;
+
+    window.HLL_SERVICE = LOCAL_SERVICE;
+    console.log('[HLL] company service found on ' + LOCAL_SERVICE);
+    return true;
+
+  } catch (e) {
+    return false;
+  }
+}
+
+/* Where the service listens when it is running beside you. */
+const LOCAL_SERVICE = 'http://localhost:7040';
+
+function isLocalPage() {
+  if (typeof location === 'undefined') return false;
+  if (location.protocol === 'file:') return true;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '';
 }
 
 const Sync = {
@@ -9112,7 +9207,8 @@ const HQLive = {
        fell back to an eight-second poll for ever. */
     let es;
     try {
-      es = new EventSource(base + '/api/stream');
+      es = new EventSource(base + '/api/stream'
+        + (ServiceAuth.token ? '?token=' + encodeURIComponent(ServiceAuth.token) : ''));
     } catch (e) {
       this.status = 'retry';
       this.lastError = e.message;
@@ -9168,6 +9264,25 @@ const HQLive = {
       } else if (d.kind === 'convoy.message.deleted' && d.message) {
         ConvoyChat.removed(d.convoyId, d.message);
       }
+    });
+
+    es.addEventListener('dm', (m) => {
+      const d = jsonOrNull(m.data);
+      if (!d) return;
+      if (d.kind === 'dm.message' && d.message) Messages.receive(d.message);
+      else if (d.kind === 'dm.message.deleted' && d.message) Messages.removed(d.message);
+      else if (d.kind === 'dm.read') Messages.markedRead(d.by);
+    });
+
+    es.addEventListener('call', (m) => {
+      const d = jsonOrNull(m.data);
+      if (d) Calls.signal(d);
+    });
+
+    es.addEventListener('presence', (m) => {
+      const d = jsonOrNull(m.data);
+      if (!d) return;
+      Messages.presence(d.driverId, d.online);
     });
 
     es.addEventListener('company', (m) => {
@@ -9533,6 +9648,21 @@ const ServiceAuth = {
     } catch (e) { /* private mode; the token simply will not persist */ }
   },
 
+  /* The live channel is opened at boot, before anybody has signed in, so
+     it is anonymous — and the service cannot deliver a private message or
+     a ringing call to a stream it cannot put a name to. Signing in has to
+     open it again, now that there is a token to open it with. */
+  reopenStream() {
+    try {
+      if (typeof HQLive === 'undefined' || !Sync.url()) return;
+      HQLive.stop();
+      HQLive.start();
+      Messages.pullThreads().then(paintUnreadBadge);
+    } catch (e) {
+      console.warn('[HLL] could not reopen the live channel:', e.message);
+    }
+  },
+
   /* headers for a request that carries an identity */
   headers(extra) {
     const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
@@ -9568,6 +9698,7 @@ const ServiceAuth = {
       this.status = 'signed-in';
       this.lastError = null;
       this.keep();
+      this.reopenStream();
       return true;
     } catch (err) {
       this.status = 'unreachable';
@@ -11100,6 +11231,57 @@ function bindAuth() {
 
 function bindViewForms() {
 
+    /* ---- messages ---- */
+    const dmForm = $('#dmForm');
+
+    if (dmForm) {
+        dmForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const box = $('#dmInput');
+            const text = box ? box.value.trim() : '';
+            if (!text) return;
+
+            /* Cleared first. Waiting for the service to answer before
+               emptying the box means a driver on a slow link types the
+               next sentence into the last one. */
+            box.value = '';
+            const ok = await Messages.send(text, null);
+            if (!ok && box) box.value = text;
+        });
+    }
+
+    const dmFile = $('#dmFile');
+
+    if (dmFile) {
+        dmFile.addEventListener('change', async () => {
+            const file = dmFile.files && dmFile.files[0];
+            /* Reset immediately: without this, choosing the same photo twice
+               in a row fires no change event and looks broken. */
+            dmFile.value = '';
+            if (!file) return;
+
+            toast('Sending ' + file.name, 'info',
+                (file.size / 1e6).toFixed(1) + ' MB');
+
+            const meta = await Messages.upload(file);
+            if (!meta) return;
+
+            const box = $('#dmInput');
+            const caption = box ? box.value.trim() : '';
+            if (box) box.value = '';
+            await Messages.send(caption, { id: meta.id });
+        });
+    }
+
+    /* starting a conversation with somebody not yet in the list */
+    const dmNew = $('#dmNew');
+
+    if (dmNew) {
+        dmNew.addEventListener('change', () => {
+            if (dmNew.value) Messages.open(dmNew.value).then(() => paintMessages());
+        });
+    }
+
     /* driver filters */
     const ds = $('#driverSearch');
 
@@ -11599,6 +11781,812 @@ function tickCountdowns() {
     });
 }
 
+/* ============================================================
+   Driver to driver
+
+   The crew chat that shipped before this read from a local array that
+   nothing ever wrote to, so every driver saw an empty room and no
+   message ever left the machine it was typed on.
+
+   This is the real thing: the conversation lives on the company
+   service, both ends are told the moment something is said, and who
+   said it is decided from the token rather than believed from the
+   body. Attachments go to the service as bytes and come back by id.
+   ============================================================ */
+const Messages = {
+  threads: [],
+  withId: null,        /* the conversation on screen */
+  messages: [],
+  olderCursor: null,
+  loading: false,
+  sending: false,
+  error: null,         /* no-service | no-identity | null */
+  online: {},          /* driverId -> boolean, from presence frames */
+
+  on() { return !!Sync.url() && ServiceAuth.on(); },
+
+  /* Why the screen is empty, in terms somebody can act on. */
+  reason() {
+    if (!Sync.url()) {
+      return 'Messages need the company service. Start it with npm run service, '
+        + 'or set its address in Settings.';
+    }
+    if (!ServiceAuth.on()) {
+      return ServiceAuth.reason && ServiceAuth.reason()
+        ? ServiceAuth.reason()
+        : 'Sign in again to send messages.';
+    }
+    return '';
+  },
+
+  async pullThreads() {
+    const base = Sync.url();
+    if (!base) { this.error = 'no-service'; return false; }
+    if (!ServiceAuth.on()) { this.error = 'no-identity'; return false; }
+
+    try {
+      const res = await fetch(base + '/api/dm/threads',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (res.status === 401) { this.error = 'no-identity'; ServiceAuth.status = 'rejected'; return false; }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      const body = await res.json();
+      this.threads = body.threads || [];
+      this.error = null;
+
+      this.threads.forEach((t) => { this.online[t.withId] = !!t.online; });
+      return true;
+
+    } catch (err) {
+      this.error = null;
+      console.warn('[HLL] could not list conversations:', err.message);
+      return false;
+    }
+  },
+
+  /* The unread total, for the badge in the sidebar. */
+  unread() {
+    return this.threads.reduce((n, t) => n + (t.unread || 0), 0);
+  },
+
+  async open(withId) {
+    this.withId = String(withId);
+    this.messages = [];
+    this.olderCursor = null;
+    this.loading = true;
+    await this.refresh();
+    await this.markRead();
+  },
+
+  async refresh() {
+    const base = Sync.url();
+    if (!base) { this.error = 'no-service'; this.loading = false; return; }
+    if (!ServiceAuth.on()) { this.error = 'no-identity'; this.loading = false; return; }
+    if (!this.withId) { this.loading = false; return; }
+
+    try {
+      const res = await fetch(base + '/api/dm/' + encodeURIComponent(this.withId),
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (res.status === 401) { this.error = 'no-identity'; ServiceAuth.status = 'rejected'; }
+      else if (!res.ok) throw new Error('HTTP ' + res.status);
+      else {
+        const body = await res.json();
+        this.messages = body.messages || [];
+        this.olderCursor = body.olderCursor || null;
+        this.online[this.withId] = !!body.online;
+        this.error = null;
+      }
+    } catch (err) {
+      console.warn('[HLL] could not read the conversation:', err.message);
+    }
+    this.loading = false;
+    paintMessages();
+  },
+
+  /* The id the SERVICE knows this browser by. Every id on a message is
+     stamped by the service from the token, so this is what they have to be
+     compared against — the local driver record can carry a different code
+     and then nothing a driver sends is recognised as their own. */
+  me() {
+    if (ServiceAuth.driver && ServiceAuth.driver.id) return String(ServiceAuth.driver.id);
+    return state.user ? String(state.user.id) : '';
+  },
+
+  /* Arriving live. Only repaints when it belongs to what is on screen —
+     a message in another conversation moves a count, not the view. */
+  receive(msg) {
+    const me = this.me();
+    const mine = !!me && String(msg.driverId) === me;
+    const other = mine ? String(msg.to) : String(msg.driverId);
+
+    if (this.withId && other === this.withId) {
+      if (!this.messages.some((m) => m.id === msg.id)) this.messages.push(msg);
+      paintMessages();
+      /* reading it as it arrives, because it is on screen */
+      if (!mine) this.markRead();
+    } else if (!mine) {
+      toast(msg.driver || 'New message', 'info',
+        msg.text ? String(msg.text).slice(0, 90) : 'Sent an attachment');
+    }
+
+    this.pullThreads().then(() => {
+      if (state.route && state.route.name === 'messages') paintMessages();
+      paintUnreadBadge();
+    });
+  },
+
+  removed(msg) {
+    const i = this.messages.findIndex((m) => m.id === msg.id);
+    if (i > -1) { this.messages[i] = msg; paintMessages(); }
+  },
+
+  markedRead(by) {
+    if (String(by) !== String(this.withId)) return;
+    const me = this.me();
+    const now = new Date().toISOString();
+    this.messages.forEach((m) => {
+      if (me && String(m.driverId) === me && !m.readAt) m.readAt = now;
+    });
+    paintMessages();
+  },
+
+  presence(driverId, online) {
+    this.online[String(driverId)] = !!online;
+    if (state.route && state.route.name === 'messages') paintMessages();
+  },
+
+  async markRead() {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on() || !this.withId) return;
+    try {
+      await fetch(base + '/api/dm/read', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ withId: this.withId }),
+      });
+      const t = this.threads.find((x) => String(x.withId) === this.withId);
+      if (t) t.unread = 0;
+      paintUnreadBadge();
+    } catch (e) { /* it will be marked on the next look */ }
+  },
+
+  async send(text, attachment) {
+    const base = Sync.url();
+    if (!base) { toast('Messages need the company service', 'warn', this.reason()); return false; }
+    if (!ServiceAuth.on()) { toast('Sign in again to send messages', 'warn'); return false; }
+    if (!this.withId) return false;
+    if (!text && !attachment) return false;
+
+    this.sending = true;
+    try {
+      const res = await fetch(base + '/api/dm/send', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to: this.withId, text, attachment }),
+      });
+      if (res.status === 401) {
+        ServiceAuth.status = 'rejected';
+        toast('Your session has expired', 'warn', 'Sign in again to keep talking.');
+        return false;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'HTTP ' + res.status);
+      }
+      return true;
+
+    } catch (err) {
+      toast('Message not sent', 'danger', err.message);
+      return false;
+    } finally {
+      this.sending = false;
+    }
+  },
+
+  /* The bytes go up on their own and come back as an id. The message that
+     carries it is sent separately, so a slow photo does not hold the
+     conversation up and a failed one does not lose what was typed. */
+  async upload(file) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) { toast('Sign in again to send files', 'warn'); return null; }
+
+    try {
+      const res = await fetch(base + '/api/files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-HLL-Filename': file.name.replace(/[^\\x20-\\x7e]/g, '_'),
+          Authorization: 'Bearer ' + ServiceAuth.token,
+        },
+        body: file,
+      });
+
+      if (res.status === 415) {
+        toast('That kind of file cannot be sent', 'warn',
+          'Images, PDFs, text, zip, mp4 and audio.');
+        return null;
+      }
+      if (res.status === 413) {
+        toast('That file is too large', 'warn', 'The limit is 25 MB.');
+        return null;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      const body = await res.json();
+      return body.file;
+
+    } catch (err) {
+      toast('Upload failed', 'danger', err.message);
+      return null;
+    }
+  },
+
+  async remove(id) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return false;
+    try {
+      const res = await fetch(base + '/api/dm/message/delete', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return true;
+    } catch (err) {
+      toast('Could not remove the message', 'danger', err.message);
+      return false;
+    }
+  },
+
+  /* An attachment's address is relative to the service, not to this page —
+     the site is on Cloudflare and the file is on the company's machine. */
+  fileUrl(att) {
+    if (!att || !att.url) return '';
+    return Sync.url() + att.url;
+  },
+};
+
+/* ============================================================
+   Calling
+
+   The audio and video never touch the company service. Two browsers
+   negotiate a direct connection and the media goes between them; the
+   service only carries the handshake, because before that connection
+   exists the two ends have no other way to reach each other.
+
+   So a call costs the company nothing to carry, and there is nothing
+   at the service to record.
+   ============================================================ */
+const Calls = {
+  pc: null,
+  callId: null,
+  withId: null,
+  withName: '',
+  video: false,
+  state: 'idle',       /* idle | ringing | incoming | connecting | live */
+  local: null,
+  remote: null,
+  incoming: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+
+  /* Public STUN only. A relay would need a server the company does not
+     have; without one a call still connects on any normal network and
+     fails on a strict corporate one, which is the honest trade here. */
+  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+
+  can() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia
+      && typeof RTCPeerConnection !== 'undefined');
+  },
+
+  async media(video) {
+    return navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: video ? { width: 640, height: 480 } : false,
+    });
+  },
+
+  async signalOut(kind, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on() || !this.withId) return null;
+    try {
+      const res = await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({
+          to: this.withId, kind, callId: this.callId, video: this.video, payload,
+        }),
+      });
+      return res;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  peer() {
+    const pc = new RTCPeerConnection(this.config);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      this.remote = e.streams[0];
+      const el = document.getElementById('callRemote');
+      if (el) { el.srcObject = this.remote; el.play().catch(() => {}); }
+      if (this.state !== 'live') {
+        this.state = 'live';
+        this.startedAt = Date.now();
+        this.tick();
+      }
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (this.state !== 'idle') {
+          toast('The call ended', 'info',
+            pc.connectionState === 'failed'
+              ? 'The two ends could not reach each other.' : '');
+          this.teardown();
+        }
+      }
+    };
+
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    return pc;
+  },
+
+  async start(driverId, name, video) {
+    if (!this.can()) {
+      toast('This browser cannot make calls', 'warn',
+        'It needs a microphone and a secure connection.');
+      return;
+    }
+    if (this.state !== 'idle') { toast('You are already on a call', 'warn'); return; }
+
+    this.withId = String(driverId);
+    this.withName = name || driverId;
+    this.video = !!video;
+    this.callId = 'CALL-' + Math.random().toString(16).slice(2, 10);
+    this.state = 'ringing';
+    paintCall();
+
+    try {
+      this.local = await this.media(this.video);
+    } catch (e) {
+      toast('No microphone', 'danger',
+        'Heavyline needs permission to use it before it can call.');
+      this.teardown();
+      return;
+    }
+
+    const res = await this.signalOut('ring');
+    if (res && res.status === 409) {
+      toast(this.withName + ' is not connected', 'warn',
+        'They will see the message when they next open Heavyline.');
+      this.teardown();
+      return;
+    }
+    if (!res || !res.ok) {
+      toast('Could not place the call', 'danger');
+      this.teardown();
+      return;
+    }
+    paintCall();
+  },
+
+  /* Answering. The callee makes no offer — it says yes, and the caller
+     starts the negotiation, so only one side is ever the offerer. */
+  async accept() {
+    const inc = this.incoming;
+    if (!inc) return;
+
+    this.incoming = null;
+    this.withId = String(inc.from);
+    this.withName = inc.fromName || inc.from;
+    this.callId = inc.callId;
+    this.video = !!inc.video;
+    this.state = 'connecting';
+    paintCall();
+
+    try {
+      this.local = await this.media(this.video);
+    } catch (e) {
+      toast('No microphone', 'danger', 'The call could not be answered.');
+      this.signalOut('decline');
+      this.teardown();
+      return;
+    }
+
+    this.pc = this.peer();
+    this.showLocal();
+    await this.signalOut('accept');
+  },
+
+  decline() {
+    if (!this.incoming) return;
+
+    /* Tell them first — teardown() clears the address the signal needs. */
+    this.withId = String(this.incoming.from);
+    this.callId = this.incoming.callId;
+    this.signalOut('decline');
+
+    /* Then put everything back to idle. Clearing the incoming call alone
+       left state on 'incoming': the overlay stayed up, and the next caller
+       was told this browser was busy when it was not on a call at all. */
+    this.teardown();
+  },
+
+  hangUp() {
+    if (this.state !== 'idle') this.signalOut('hangup');
+    this.teardown();
+  },
+
+  toggleMute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  showLocal() {
+    const el = document.getElementById('callLocal');
+    if (el && this.local) { el.srcObject = this.local; el.play().catch(() => {}); }
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (this.state !== 'live') return;
+      const el = document.getElementById('callTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  /* Everything arriving from the other end. */
+  async signal(d) {
+    if (!d) return;
+
+    if (d.kind === 'ring') {
+      /* Already busy: tell them so rather than letting it ring unanswered
+         behind whatever is already on screen. */
+      if (this.state !== 'idle' || this.incoming) {
+        const was = { withId: this.withId, callId: this.callId };
+        this.withId = String(d.from);
+        this.callId = d.callId;
+        await this.signalOut('busy');
+        this.withId = was.withId;
+        this.callId = was.callId;
+        return;
+      }
+      this.incoming = d;
+      this.state = 'incoming';
+      paintCall();
+      return;
+    }
+
+    /* Anything else about a call this browser is not on is not ours. */
+    if (!this.callId || d.callId !== this.callId) return;
+
+    if (d.kind === 'accept') {
+      this.state = 'connecting';
+      this.pc = this.peer();
+      this.showLocal();
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+      await this.signalOut('offer', { sdp: this.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'offer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await this.pc.createAnswer();
+      await this.pc.setLocalDescription(answer);
+      await this.signalOut('answer', { sdp: this.pc.localDescription });
+      return;
+    }
+
+    if (d.kind === 'answer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice' && this.pc && d.payload && d.payload.candidate) {
+      try { await this.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+      catch (e) { /* a candidate that arrives too early is not fatal */ }
+      return;
+    }
+
+    if (d.kind === 'decline') {
+      toast(this.withName + ' declined', 'info');
+      this.teardown();
+      return;
+    }
+
+    if (d.kind === 'busy') {
+      toast(this.withName + ' is on another call', 'info');
+      this.teardown();
+      return;
+    }
+
+    if (d.kind === 'hangup') {
+      toast('The call ended', 'info', this.elapsed());
+      this.teardown();
+    }
+  },
+
+  teardown() {
+    clearInterval(this.timer);
+    this.timer = null;
+    try { if (this.pc) this.pc.close(); } catch (e) {}
+    if (this.local) this.local.getTracks().forEach((t) => t.stop());
+    this.pc = null;
+    this.local = null;
+    this.remote = null;
+    this.incoming = null;
+    this.callId = null;
+    this.withId = null;
+    this.withName = '';
+    this.state = 'idle';
+    this.muted = false;
+    this.startedAt = 0;
+    paintCall();
+  },
+};
+
+/* ---------------- the messages screen ---------------- */
+
+/* Repaints the conversation without re-rendering the page, so the caret
+   stays where the driver left it mid-sentence. */
+function paintMessages() {
+  if (!state.route || state.route.name !== 'messages') return;
+  const host = document.getElementById('dmPanes');
+  if (!host) return;
+
+  const box = document.getElementById('dmScroll');
+  const wasAtEnd = !box || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
+  const draft = (document.getElementById('dmInput') || {}).value || '';
+
+  host.innerHTML = messagesPanes();
+
+  const input = document.getElementById('dmInput');
+  if (input) input.value = draft;
+
+  const scroll = document.getElementById('dmScroll');
+  if (scroll && wasAtEnd) scroll.scrollTop = scroll.scrollHeight;
+}
+
+function paintUnreadBadge() {
+  const el = document.getElementById('dmBadge');
+  if (!el) return;
+  const n = Messages.unread();
+  el.textContent = n ? String(n) : '';
+  el.style.display = n ? '' : 'none';
+}
+
+function dmAvatar(name) {
+  return '<span class="dm-avatar">' + esc(initials(name || '?')) + '</span>';
+}
+
+function dmAttachment(att) {
+  if (!att) return '';
+  const url = Messages.fileUrl(att);
+  if (att.image) {
+    return '<a class="dm-image" href="' + esc(url) + '" target="_blank" rel="noopener">'
+      + '<img src="' + esc(url) + '" alt="' + esc(att.name) + '" loading="lazy"></a>';
+  }
+  const kb = att.size > 1e6
+    ? (att.size / 1e6).toFixed(1) + ' MB'
+    : Math.max(1, Math.round(att.size / 1024)) + ' KB';
+  return '<a class="dm-file" href="' + esc(url) + '" target="_blank" rel="noopener" download>'
+    + icon('download') + '<span class="dm-file-name">' + esc(att.name) + '</span>'
+    + '<span class="dm-file-size">' + kb + '</span></a>';
+}
+
+/* The name to put on a call. The roster first, because it is the fuller
+   record; the thread list second, for somebody who has since left it. */
+function dmNameFor(id) {
+  const d = (Store.db.drivers || []).find((x) => x && String(x.id) === String(id));
+  if (d && d.name) return d.name;
+  const t = Messages.threads.find((x) => String(x.withId) === String(id));
+  return (t && t.withName) || String(id);
+}
+
+/* Everyone this driver could talk to: the roster, minus themselves. */
+function dmRoster() {
+  const me = state.user ? String(state.user.id) : '';
+  return (Store.db.drivers || [])
+    .filter((d) => d && String(d.id) !== me && d.accountStatus !== 'suspended')
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+function messagesPanes() {
+  const threads = Messages.threads;
+  const withId = Messages.withId;
+  const roster = dmRoster();
+  const other = roster.find((d) => String(d.id) === String(withId));
+  const otherName = other ? other.name
+    : (threads.find((t) => String(t.withId) === String(withId)) || {}).withName || withId;
+
+  const list = `
+    <div class="dm-list">
+      <div class="dm-list-head">
+        <select class="select sm" id="dmNew" data-act="noop">
+          <option value="">Start a conversation…</option>
+          ${roster.map((d) => `<option value="${esc(String(d.id))}"${
+            String(d.id) === String(withId) ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}
+        </select>
+      </div>
+      ${threads.length ? threads.map((t) => `
+        <button class="dm-thread ${String(t.withId) === String(withId) ? 'on' : ''}"
+          data-act="dm-open" data-id="${esc(String(t.withId))}">
+          ${dmAvatar(t.withName)}
+          <span class="dm-thread-body">
+            <span class="dm-thread-top">
+              <span class="dm-thread-name">${esc(t.withName)}</span>
+              <span class="dm-thread-when">${esc(fmt.rel(t.last.at))}</span>
+            </span>
+            <span class="dm-thread-last">${
+              t.last.deleted ? '<em>message removed</em>'
+                : t.last.text ? esc(String(t.last.text).slice(0, 60))
+                : 'Attachment'}</span>
+          </span>
+          ${Messages.online[t.withId] ? '<span class="dm-dot on" title="Online"></span>' : ''}
+          ${t.unread ? `<span class="dm-unread">${t.unread}</span>` : ''}
+        </button>`).join('')
+      : `<div class="dm-empty t3">No conversations yet.<br>Pick a driver above to start one.</div>`}
+    </div>`;
+
+  if (!withId) {
+    return list + `
+      <div class="dm-pane">
+        <div class="empty">${icon('chat')}
+          <div>Choose a driver</div>
+          <div class="t3 xs">Messages, photos and files go straight to them.</div>
+        </div>
+      </div>`;
+  }
+
+  const me = Messages.me();
+  const online = Messages.online[withId];
+
+  return list + `
+    <div class="dm-pane">
+      <div class="dm-head">
+        ${dmAvatar(otherName)}
+        <div class="grow" style="min-width:0">
+          <div class="b6 trunc">${esc(otherName)}</div>
+          <div class="t3 xs">${online ? 'Online now' : 'Offline'}</div>
+        </div>
+        <button class="icon-btn" data-act="dm-call" data-id="${esc(String(withId))}"
+          title="Voice call" aria-label="Voice call">${icon('phone')}</button>
+        <button class="icon-btn" data-act="dm-video" data-id="${esc(String(withId))}"
+          title="Video call" aria-label="Video call">${icon('video')}</button>
+      </div>
+
+      <div class="dm-scroll" id="dmScroll">
+        ${Messages.loading ? `<div class="t3 xs" style="padding:12px">Loading…</div>` : ''}
+        ${Messages.messages.length ? Messages.messages.map((m) => {
+          const mine = String(m.driverId) === me;
+          return `<div class="dm-msg ${mine ? 'mine' : ''}">
+            <div class="dm-bubble">
+              ${mine ? '' : `<div class="dm-who">${esc(m.driver)}${
+                m.role === 'staff' ? ' <span class="dm-staff">staff</span>' : ''}</div>`}
+              ${m.deleted ? `<em class="t3">message removed</em>` : `
+                ${m.attachment ? dmAttachment(m.attachment) : ''}
+                ${m.text ? `<div class="dm-text">${esc(m.text)}</div>` : ''}`}
+              <div class="dm-meta">${esc(fmt.time(m.at))}${
+                mine && m.readAt ? ' · read' : ''}${
+                mine && !m.deleted ? ` <button class="dm-del" data-act="dm-delete"
+                  data-id="${esc(m.id)}" title="Remove">${icon('trash')}</button>` : ''}</div>
+            </div>
+          </div>`;
+        }).join('')
+        : `<div class="dm-empty t3">Nothing said yet. Say hello.</div>`}
+      </div>
+
+      <form class="dm-composer" id="dmForm">
+        <input type="file" id="dmFile" hidden
+          accept="image/*,application/pdf,text/plain,text/csv,application/zip,video/mp4,audio/*">
+        <button type="button" class="icon-btn" data-act="dm-attach"
+          title="Send a photo or a file" aria-label="Attach">${icon('paperclip')}</button>
+        <input class="input" id="dmInput" autocomplete="off"
+          placeholder="Message ${esc(otherName)}">
+        <button class="btn btn-primary" type="submit">${icon('send')}Send</button>
+      </form>
+    </div>`;
+}
+
+function viewMessages() {
+  if (!Messages.on()) {
+    return `<div class="page">
+      <div class="page-head">
+        <div><div class="eyebrow">Driver to driver</div>
+          <h1 class="page-title">Messages</h1>
+          <p class="page-sub">Talk to any driver in the company</p></div>
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="empty">${icon('chat')}
+          <div>Messages are not connected</div>
+          <div class="t3 xs" style="max-width:38rem">${esc(Messages.reason())}</div>
+        </div>
+      </div></div>
+    </div>`;
+  }
+
+  return `<div class="page">
+    <div class="page-head">
+      <div><div class="eyebrow">Driver to driver</div>
+        <h1 class="page-title">Messages</h1>
+        <p class="page-sub">Photos, files and calls — straight to another driver</p></div>
+    </div>
+    <div class="card"><div class="card-body" style="padding:0">
+      <div class="dm" id="dmPanes">${messagesPanes()}</div>
+    </div></div>
+  </div>`;
+}
+
+/* The call overlay sits above whatever is on screen — a call that only
+   existed on the messages page would be lost the moment somebody looked
+   at the map. */
+function paintCall() {
+  const host = document.getElementById('callLayer');
+  if (!host) return;   /* the sign-in screen has no shell yet */
+
+  if (Calls.state === 'idle' && !Calls.incoming) { host.innerHTML = ''; return; }
+
+  if (Calls.state === 'incoming' && Calls.incoming) {
+    host.innerHTML = `<div class="call-card ring">
+      ${dmAvatar(Calls.incoming.fromName)}
+      <div class="call-who">${esc(Calls.incoming.fromName)}</div>
+      <div class="call-state">Incoming ${Calls.incoming.video ? 'video ' : ''}call</div>
+      <div class="call-actions">
+        <button class="btn btn-danger" data-act="call-decline">${icon('phoneOff')}Decline</button>
+        <button class="btn btn-primary" data-act="call-accept">${icon('phone')}Answer</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const label = Calls.state === 'ringing' ? 'Ringing…'
+    : Calls.state === 'connecting' ? 'Connecting…'
+    : Calls.elapsed();
+
+  host.innerHTML = `<div class="call-card ${Calls.video ? 'video' : ''}">
+    ${Calls.video ? `
+      <div class="call-video">
+        <video id="callRemote" autoplay playsinline></video>
+        <video id="callLocal" autoplay playsinline muted class="call-self"></video>
+      </div>`
+    : `${dmAvatar(Calls.withName)}
+       <audio id="callRemote" autoplay></audio>`}
+    <div class="call-who">${esc(Calls.withName)}</div>
+    <div class="call-state" id="callTimer">${esc(label)}</div>
+    <div class="call-actions">
+      <button class="btn ${Calls.muted ? 'btn-primary' : ''}" data-act="call-mute">
+        ${icon(Calls.muted ? 'micOff' : 'mic')}${Calls.muted ? 'Unmute' : 'Mute'}</button>
+      <button class="btn btn-danger" data-act="call-hangup">${icon('phoneOff')}End</button>
+    </div>
+  </div>`;
+
+  /* the elements are new, so the streams have to be reattached */
+  if (Calls.remote) {
+    const r = document.getElementById('callRemote');
+    if (r) { r.srcObject = Calls.remote; r.play().catch(() => {}); }
+  }
+  Calls.showLocal();
+}
+
 /* ---------------- 36. Render ---------------- */
 function routeView() {
   const { name, params } = state.route;
@@ -11618,6 +12606,13 @@ function routeView() {
     case 'support':       return viewSupport();
     case 'ticket':        return viewTicket(params[0]);
     case 'notifications': return viewNotifications();
+    case 'messages':
+      /* the list is fetched once the screen is up, so the page paints now
+         and fills in rather than waiting on the service */
+      if (!Messages.threads.length && Messages.on()) {
+        Messages.pullThreads().then(() => { paintMessages(); paintUnreadBadge(); });
+      }
+      return viewMessages();
     case 'livemap':       return viewLivemap();
     case 'ops':           return viewOps();
     case 'downloads':
@@ -11731,6 +12726,10 @@ function render() {
     ConvoyChat.convoyId = null;
   }
 
+  /* The call overlay is drawn outside the page, so it survives moving
+     between screens mid-call. */
+  paintCall();
+
   /* a convoy page with no live panel still has chat */
   const chatCard = $('#convoyChatCard');
   if (chatCard && state.route.name === 'convoy') {
@@ -11804,6 +12803,15 @@ function boot() {
   resetToOwner();        /* once per install: clear the company back to its owner */
   ensureOwnerDrives();
   purgeOrphanDrivers();
+  /* Before anything is started: if the service is running on this machine
+     it is the company's service, and everything below should use it. */
+  discoverLocalService().then((found) => {
+    if (!found) return;
+    Sync.start();
+    LiveMap.start();
+    if (ServiceAuth.on()) Messages.pullThreads().then(paintUnreadBadge);
+  });
+
   Sync.start();          /* one company across every machine, when a service is set */
 
   /* The fleet board and the live channel, when a company service is there

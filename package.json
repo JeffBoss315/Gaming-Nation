@@ -35,7 +35,10 @@
     "smoke:sites": "node_modules/electron/dist/electron.exe tools/smoke-sites.js .",
     "smoke:errors": "node_modules/electron/dist/electron.exe tools/smoke-errors.js .",
     "smoke:company": "node_modules/electron/dist/electron.exe tools/smoke-company.js .",
-    "prune": "node tools/prune-builds.js"
+    "prune": "node tools/prune-builds.js",
+    "smoke:messaging": "node tools/smoke-messaging.js",
+    "smoke:dmweb": "node_modules/electron/dist/electron.exe tools/smoke-dm-web.js .",
+    "service": "node fleet-server.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",
