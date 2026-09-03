@@ -3912,13 +3912,15 @@ function viewChats() {
   /* a client with no channels yet has nothing to select into */
   if (!ch) {
     return `
-    ${viewHead('Crew chat', 'Channels come from the Heavyline platform')}
+    ${viewHead('Crew chat', 'Convoy channels; driver to driver is on the platform')}
     <section class="card"><div class="card-body">
       <div class="empty">${icon('chat')}
         <div>No channels yet</div>
-        <div class="t3 xs">Crew channels appear here once Heavyline sets them up.</div>
-        <button class="btn btn-sm mt-16" data-act="open-hll" data-href="index.html#/community">
-          ${icon('link')}Open the community page</button>
+        <div class="t3 xs">Convoy channels appear here when a convoy you are on
+          is running. To message another driver directly &mdash; with photos,
+          files or a call &mdash; open Messages on the platform.</div>
+        <button class="btn btn-sm mt-16" data-act="open-hll" data-href="index.html#/messages">
+          ${icon('link')}Open Messages</button>
       </div>
     </div></section>`;
   }
