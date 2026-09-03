@@ -24,3 +24,12 @@ hll-company.json.tmp
 # state the company service writes beside itself
 hll-chat.json
 hll-outbox.json
+
+# .NET intermediates for the telemetry adapter. obj/ and bin/ are rebuilt by
+# `dotnet build` every time and churn on every compile — two of them were
+# already showing as modified with nobody having touched the source.
+# hll-telemetry-adapter.exe stays tracked on purpose: telemetry-bridge.js
+# spawns it at runtime, so a clone without it cannot read the game.
+telemetry-adapter/obj/
+telemetry-adapter/bin/
+*.pdb

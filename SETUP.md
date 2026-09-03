@@ -180,6 +180,35 @@ Three JSON files beside it hold the state: `hll-company.json`,
 `HLL_COMPANY_FILE`, `HLL_SESSION_FILE` and `HLL_CHAT_FILE`;
 `http://localhost:8787/status` shows what it is doing.
 
+### Builds and old versions
+
+```bash
+npm run dist       # Windows installer + portable, then prunes
+npm run android    # the APK, then prunes
+npm run prune      # tidy up on its own
+npm run prune -- --dry-run
+```
+
+Every build ends by removing the previous version. `release/` used to keep
+one set of installers per release — about 160 MB each — and the downloads
+page named one version while the directory held several, so the first
+question about any file was which one it was. Now the current version is
+whatever `package.json` says, and anything in `release/` or `dist-apk/`
+carrying a different version number is removed once the new build succeeds.
+
+It only touches files whose names carry a version it can read, and only in
+those two directories. Anything it cannot parse is left alone.
+
+**Building on Windows:** electron-builder cannot write into `dist/` while a
+copy of the app is running, and this project lives under OneDrive, which
+holds `app.asar` for a while even after the app closes. If a build fails
+with *"the process cannot access the file"*, close every running Heavyline
+Trucker and build to a directory outside the synced tree:
+
+```bash
+npx electron-builder --win --publish never --config.directories.output=C:/hll-build
+```
+
 ### Test suite
 
 Every suite passes. Run them all:

@@ -11,12 +11,12 @@
     "serve:lan": "node serve.js --lan",
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-brand-icons.ps1",
     "start": "electron .",
-    "dist": "node tools/scan.js && electron-builder --win --publish never",
-    "dist:portable": "node tools/scan.js && electron-builder --win portable --publish never",
-    "dist:linux": "node tools/scan.js && electron-builder --linux AppImage --publish never",
-    "dist:mac": "node tools/scan.js && electron-builder --mac --publish never",
+    "dist": "node tools/scan.js && electron-builder --win --publish never && node tools/prune-builds.js",
+    "dist:portable": "node tools/scan.js && electron-builder --win portable --publish never && node tools/prune-builds.js",
+    "dist:linux": "node tools/scan.js && electron-builder --linux AppImage --publish never && node tools/prune-builds.js",
+    "dist:mac": "node tools/scan.js && electron-builder --mac --publish never && node tools/prune-builds.js",
     "www": "node tools/scan.js && node tools/build-www.js",
-    "android": "node tools/scan.js && node tools/build-apk.js",
+    "android": "node tools/scan.js && node tools/build-apk.js && node tools/prune-builds.js",
     "android:open": "npx cap open android",
     "fleet": "node fleet-server.js",
     "telemetry:build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-telemetry-adapter.ps1",
@@ -34,7 +34,8 @@
     "smoke:recruit": "node_modules/electron/dist/electron.exe tools/smoke-recruitment.js .",
     "smoke:sites": "node_modules/electron/dist/electron.exe tools/smoke-sites.js .",
     "smoke:errors": "node_modules/electron/dist/electron.exe tools/smoke-errors.js .",
-    "smoke:company": "node_modules/electron/dist/electron.exe tools/smoke-company.js ."
+    "smoke:company": "node_modules/electron/dist/electron.exe tools/smoke-company.js .",
+    "prune": "node tools/prune-builds.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",
