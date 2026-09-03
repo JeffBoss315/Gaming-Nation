@@ -10501,16 +10501,16 @@ function saveFleetService() {
    file to decide which builds travel with the site, so after cutting a new
    release change the version and all three filenames together. */
 const CLIENT_RELEASE = {
-  version: '4.8.0',
+  version: '1.0.0',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Heavyline-Trucker-4.8.0-windows-setup.exe',
+      file: 'release/Heavyline-Trucker-1.0.0-windows-setup.exe',
       size: '80.7 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Heavyline-Trucker-4.8.0-windows-portable.exe',
+      file: 'release/Heavyline-Trucker-1.0.0-windows-portable.exe',
       size: '80.3 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Heavyline-Trucker-4.8.0-android.apk',
+      file: 'release/Heavyline-Trucker-1.0.0-android.apk',
       size: '6.6 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };

@@ -110,7 +110,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V4.8.0';
+const APP_VERSION = 'V1.0.0';
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */

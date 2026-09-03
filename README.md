@@ -743,8 +743,8 @@ Produces two files:
 
 | File | What it is |
 |---|---|
-| `Heavyline Trucker 4.8.0 x64.exe` | installer — Start menu, shortcut, uninstall entry |
-| `Heavyline Trucker 4.8.0 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
+| `Heavyline Trucker 1.0.0 x64.exe` | installer — Start menu, shortcut, uninstall entry |
+| `Heavyline Trucker 1.0.0 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
 
 Both are unsigned, so SmartScreen warns on first run — *More info → Run anyway*. To sign
 them, set `CSC_LINK`/`CSC_KEY_PASSWORD` and remove `win.signAndEditExecutable: false` from

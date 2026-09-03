@@ -39,8 +39,8 @@ if (!/^\d+\.\d+\.\d+/.test(CURRENT)) {
 const DIRS = ['release', 'dist-apk'];
 
 /* x.y.z anywhere in the name, which covers every shape this project
-   produces: Heavyline-Trucker-4.8.0-windows-setup.exe, and the
-   "Heavyline Trucker 4.8.0 portable.exe" electron-builder writes. */
+   produces: Heavyline-Trucker-1.0.0-windows-setup.exe, and the
+   "Heavyline Trucker 1.0.0 portable.exe" electron-builder writes. */
 const VERSION = /(\d+\.\d+\.\d+)/;
 
 let removed = 0;
