@@ -37,8 +37,14 @@ jobs:
 
       # No dependencies are needed to build the site — tools/build-www.js is
       # plain node. npm ci would only pull Electron in for no reason.
+      #
+      # tools/scan.js is deliberately NOT run here. It is a release audit, and
+      # part of what it audits is that every installer the downloads page
+      # names is present in release/ — which is gitignored, because a 160 MB
+      # build does not belong in the repository. On a clean checkout it fails
+      # for that reason alone, and it took the whole build down with it.
       - name: Build the site
-        run: node tools/scan.js && node tools/build-www.js
+        run: node tools/build-www.js
 
       - name: Check something was actually built
         run: |
