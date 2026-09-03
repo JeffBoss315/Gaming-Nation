@@ -10549,6 +10549,29 @@ function saveFleetService() {
    from the version because tools/build-www.js reads them straight out of this
    file to decide which builds travel with the site, so after cutting a new
    release change the version and all three filenames together. */
+/* Where the installers are served from.
+
+   Not from the website. Cloudflare Pages refuses any single asset over
+   25 MiB and the Windows builds are eighty megabytes each, so they can
+   never sit beside the site however the build is run — that is a hosting
+   limit, not something a flag can fix. release/ is also gitignored, which
+   is why the page found nothing next to it.
+
+   GitHub Releases has no such limit, and the tag matches the version below
+   so a new release is reachable the moment it is published. Empty falls
+   back to the release/ folder next to the site, which is what a local
+   checkout has and what npm run dist writes. */
+const CLIENT_DOWNLOAD_BASE =
+  'https://github.com/JeffBoss315/heavyline/releases/download/v';
+
+/* the file, wherever it is: a full URL when one is configured, otherwise
+   the relative path this page has always used */
+function clientDownloadUrl(build) {
+  if (!CLIENT_DOWNLOAD_BASE) return build.file;
+  const name = String(build.file).split('/').pop();
+  return CLIENT_DOWNLOAD_BASE + CLIENT_RELEASE.version + '/' + name;
+}
+
 const CLIENT_RELEASE = {
   version: '1.0.0',
   builds: [
@@ -10605,7 +10628,7 @@ function viewDownloads() {
         <p class="page-sub">The client that tracks your runs and puts you on the live map</p></div>
     </div>
 
-    ${allowed && Downloads.state === 'local' ? `
+    ${allowed && !CLIENT_DOWNLOAD_BASE && Downloads.state === 'local' ? `
       <div class="card mb-16" style="border-color:var(--warn-line,rgba(217,155,43,.35))">
         <div class="card-body row gap-14 wrap" style="align-items:flex-start">
           <span class="stat-ico" style="flex:none;color:var(--warn)">${icon('alert')}</span>
@@ -10621,7 +10644,7 @@ function viewDownloads() {
         </div>
       </div>` : ''}
 
-    ${allowed && Downloads.state === 'missing' ? `
+    ${allowed && !CLIENT_DOWNLOAD_BASE && Downloads.state === 'missing' ? `
       <div class="card mb-16" style="border-color:rgba(239,95,95,.35)">
         <div class="card-body row gap-14 wrap" style="align-items:flex-start">
           <span class="stat-ico" style="flex:none;color:var(--danger)">${icon('alert')}</span>
@@ -10648,8 +10671,9 @@ function viewDownloads() {
               <span class="badge">v${esc(CLIENT_RELEASE.version)}</span>
               <span class="badge">${esc(b.size)}</span>
             </div>
-            ${Downloads.state === 'ready' || Downloads.state === 'unknown'
-              ? `<a class="btn btn-primary btn-block mt-16" href="${esc(b.file)}" download>
+            ${CLIENT_DOWNLOAD_BASE || Downloads.state === 'ready' || Downloads.state === 'unknown'
+              ? `<a class="btn btn-primary btn-block mt-16" href="${esc(clientDownloadUrl(b))}"${
+                   CLIENT_DOWNLOAD_BASE ? ' rel="noopener"' : ' download'}>
                    ${icon('download')}Download</a>`
               : `<button class="btn btn-block mt-16" disabled>${icon('download')}Not available here</button>`}
           </div></div>`).join('')}
