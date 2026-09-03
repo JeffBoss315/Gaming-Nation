@@ -9,32 +9,36 @@
   /* brand — a single accent, used sparingly */
   --accent-rgb:79,127,255;
   --accent:#4f7fff;
-  --accent-hover:#ff7d33;
-  --accent-soft:rgba(var(--accent-rgb),.11);
-  --accent-line:rgba(var(--accent-rgb),.30);
+  /* The client and the platform are one product and have to look like it.
+     These are style.css's values, to the digit — the hover colour here was
+     still the old orange, left behind when the accent changed, so a driver
+     hovering a button in the client saw a colour that exists nowhere else. */
+  --accent-hover:#7397ff;
+  --accent-soft:rgba(var(--accent-rgb),.13);
+  --accent-line:rgba(var(--accent-rgb),.34);
 
   /* surfaces */
-  --bg:#0a0c0f;
-  --panel:#111419;
-  --panel-2:#161a20;
-  --panel-3:#1c2128;
-  --line:#212730;
-  --line-2:#2c333d;
+  --bg:#070910;
+  --panel:#0d111a;
+  --panel-2:#141926;
+  --panel-3:#1c2333;
+  --line:#212936;
+  --line-2:#2f3849;
 
   /* text */
-  --text:#e7eaef;
-  --text-2:#98a1ae;
-  --text-3:#69727f;
+  --text:#e9edf5;
+  --text-2:#9fabbf;
+  --text-3:#7f8b9e;
 
   /* semantic — status only, never decoration */
-  --ok:#3ecf8e;
-  --info:#4aa3f0;
-  --warn:#d99b2b;
-  --danger:#ef5f5f;
-  --violet:#8b7cf0;
+  --ok:#2ee0a0;
+  --info:#22d3ee;
+  --warn:#f7b32b;
+  --danger:#fb6a80;
+  --violet:#a78bfa;
 
   /* geometry */
-  --r-sm:6px; --r:9px; --r-lg:12px; --r-xl:16px;
+  --r-sm:7px; --r:10px; --r-lg:14px; --r-xl:18px;
   --sidebar:236px;
   --topbar:60px;
   --maxw:1480px;
@@ -1391,4 +1395,98 @@ body.can-install .install-cta{display:inline-flex}
 .brand-strap{
   margin-top:6px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--text-3);
+}
+
+
+/* ============================================================
+   THE MODERN LAYER — client
+   ------------------------------------------------------------
+   The platform got depth and feedback; this is the same idea,
+   held back a little. A driver reads this while driving, so
+   nothing here draws the eye on its own: surfaces lift, controls
+   answer a press, and that is all.
+
+   Kept at the end and in one piece, the way style.css does it,
+   so it can be lifted out without unpicking anything.
+   ============================================================ */
+
+:root{
+  --sh-1:0 1px 2px rgba(0,0,0,.30), 0 1px 3px rgba(0,0,0,.18);
+  --sh-2:0 2px 4px rgba(0,0,0,.32), 0 6px 16px rgba(0,0,0,.28);
+  --sh-3:0 4px 8px rgba(0,0,0,.34), 0 16px 40px rgba(0,0,0,.42);
+  --edge:inset 0 1px 0 rgba(255,255,255,.045);
+  --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
+  --accent-grad:linear-gradient(180deg,#5f8cff 0%,#3a68e6 100%);
+  --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
+
+  --ease:cubic-bezier(.4,0,.2,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --t-fast:.13s var(--ease);
+  --t:.2s var(--ease);
+}
+
+/* ---- surfaces ---- */
+.card,.panel,.fact,.tile{
+  background-image:var(--panel-grad);
+  box-shadow:var(--sh-1),var(--edge);
+}
+
+/* ---- controls ----
+   A press that sinks. The client is used with a mouse in a hurry and
+   often on a second monitor, so a control has to confirm it was hit. */
+.btn,.btn-primary,.btn-ghost,.btn-ok,.btn-danger,.btn-sm{
+  transition:background var(--t-fast),border-color var(--t-fast),
+             box-shadow var(--t-fast),transform var(--t-fast);
+}
+.btn:hover,.btn-primary:hover,.btn-ok:hover,.btn-danger:hover{
+  transform:translateY(-1px);
+  box-shadow:var(--sh-2),var(--edge-strong);
+}
+.btn:active,.btn-primary:active,.btn-ghost:active,
+.btn-ok:active,.btn-danger:active{
+  transform:translateY(1px);box-shadow:none;transition-duration:.05s;
+}
+.btn-primary{
+  background:var(--accent-grad);
+  box-shadow:var(--sh-1),0 2px 10px rgba(var(--accent-rgb),.28),
+             inset 0 1px 0 rgba(255,255,255,.18);
+}
+.btn:disabled{opacity:.38;transform:none;box-shadow:none}
+
+/* ---- fields ----
+   A ring rather than a heavier border: the field must not change size
+   when it takes focus, or the row it sits in jumps. */
+.input,.select,.textarea{
+  transition:border-color var(--t-fast),box-shadow var(--t-fast);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22);
+}
+.input:focus,.select:focus,.textarea:focus{
+  border-color:var(--accent-line);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22),0 0 0 3px var(--accent-soft);
+}
+
+/* ---- focus, for a keyboard ---- */
+:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16);
+}
+
+/* ---- the status bar, which is the one thing always on screen ---- */
+.appbar,.statusbar{
+  background:rgba(7,9,16,.78);
+  backdrop-filter:saturate(1.5) blur(12px);
+  -webkit-backdrop-filter:saturate(1.5) blur(12px);
+}
+
+/* ---- scrollbars ---- */
+*::-webkit-scrollbar-thumb{background:#2b333d;border-radius:99px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:#3b4553;background-clip:content-box}
+*{scrollbar-width:thin;scrollbar-color:#2b333d transparent}
+
+/* ---- and none of it when motion is not wanted ---- */
+@media (prefers-reduced-motion:reduce){
+  .btn:hover,.btn-primary:hover,.btn-ok:hover,.btn-danger:hover,
+  .btn:active,.btn-primary:active,.btn-ghost:active,
+  .btn-ok:active,.btn-danger:active{transform:none!important}
 }
