@@ -1,0 +1,18 @@
+# Cloudflare Pages — free, and reachable from networks that cannot route to
+# GitHub Pages. Cloudflare answers from whichever of its edges is nearest,
+# on addresses that are almost never blocked; github.io resolves to four
+# fixed IPs (185.199.108-111.153) which some ISPs simply do not carry.
+#
+# Connect the repo at dash.cloudflare.com -> Workers & Pages -> Create ->
+# Pages -> Connect to Git. This file tells it what to publish; the build
+# command goes in the dashboard:
+#
+#   Build command      node tools/build-www.js
+#   Output directory   www
+#
+# Do NOT use `npm run www` there: that runs tools/scan.js first, which is a
+# release audit and fails on a clean checkout because release/ is gitignored.
+# The builder alone needs no dependencies at all.
+
+name = "heavyline"
+pages_build_output_dir = "www"

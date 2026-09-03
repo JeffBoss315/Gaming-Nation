@@ -274,6 +274,47 @@ host you do not own tells Google the real version of your page is over there,
 and it will rank that instead of yours. For a domain parked on a for-sale page
 that is the worst possible outcome. No canonical is far better than a wrong one.
 
+### If the site will not load for you
+
+It is published at `https://jeffboss315.github.io/heavyline/` and it works —
+verified by fetching it from outside this network, which returns the page,
+`robots.txt` and `sitemap.xml` correctly.
+
+If it times out for **you**, the site is not the problem: some networks cannot
+route to GitHub Pages. `*.github.io` resolves to four fixed addresses
+(`185.199.108–111.153`) and a number of ISPs simply do not carry them. The
+symptom is a timeout — "took too long to respond" — never a 404.
+
+Check it in one minute: open it on mobile data instead of wifi. If it loads
+there, it is the network.
+
+**The fix is to publish somewhere reachable.** Cloudflare Pages answers from
+whichever of its edges is nearest, on addresses that are effectively never
+blocked, and it is free:
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
+   Create → Pages → Connect to Git
+2. Pick `JeffBoss315/heavyline`
+3. Build command: `node tools/build-www.js` — **not** `npm run www`, which
+   runs the release audit and fails on a clean checkout
+4. Output directory: `www`
+
+That publishes to `https://heavyline.pages.dev` — free, reachable, and it
+carries the name.
+
+Then change one line in [site.config.json](site.config.json):
+
+```json
+{ "siteUrl": "https://heavyline.pages.dev" }
+```
+
+and push. The canonical, the cards, the sitemap and `robots.txt` are all
+regenerated from it — and on `pages.dev` the site sits at a host root, so
+`robots.txt` is honoured there, which it is not on a GitHub project page.
+
+Both can run at once. Two hosts serving the same site is fine as long as the
+canonical names one of them, which is exactly what that one line decides.
+
 ### Then ask Google to look
 
 1. Publish, and confirm the site loads over HTTPS.

@@ -237,6 +237,12 @@ if (!SITE_URL) {
      platform rather than on GitHub's own error page. Same document, so it
      boots and the hash takes over. */
   site.write('404.html', read('index.html'));
+  /* Cloudflare Pages reads _headers from the site root. Written by the
+     builder so it ships with the payload rather than being remembered. */
+  if (fs.existsSync(path.join(ROOT, 'www_headers_src'))) {
+    site.write('_headers', read('www_headers_src'));
+    site.log.push('_headers          (security headers)');
+  }
   site.log.push('404.html          (so a stray path still opens the app)');
 
   /* GitHub Pages reads its custom domain from a CNAME file. Only for a real
