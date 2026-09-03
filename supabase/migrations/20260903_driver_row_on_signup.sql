@@ -114,3 +114,35 @@ where not exists (select 1 from public.drivers d where d.auth_user_id = u.id);
 --   from auth.users u
 --   left join public.drivers d on d.auth_user_id = u.id
 --  order by u.created_at;
+
+
+-- ============================================================
+-- A way for the sign-up form to know this has been run
+--
+-- Without it the page finds out the hard way: it creates the Auth
+-- user, tries to write the driver row, is refused, and leaves the
+-- person with a sign-in they cannot use and an email address that
+-- now answers "already registered" on the next attempt.
+--
+-- The browser cannot read pg_trigger, so it cannot check for
+-- itself. This answers the one question it needs, and nothing
+-- else: is the trigger there.
+-- ============================================================
+
+create or replace function public.hll_signup_ready()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from pg_trigger
+    where tgname = 'on_auth_user_created'
+      and not tgisinternal
+  );
+$$;
+
+-- The form asks before anybody has signed in, so anon needs it too.
+grant execute on function public.hll_signup_ready() to anon, authenticated;

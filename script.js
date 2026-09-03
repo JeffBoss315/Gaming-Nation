@@ -549,6 +549,21 @@ const Accounts = {
 
       if (authError) {
         console.error('[HLL] Supabase Auth registration failed:', authError);
+
+        /* A sign-up that failed after the Auth user was made leaves that user
+           behind — the browser cannot delete it, that needs the service key.
+           So the second attempt on the same address is refused for a reason
+           that sounds like a mistake and is really the first attempt's
+           remains. Say so, and point at the way through. */
+        if (/already registered|already exists/i.test(authError.message || '')) {
+          throw new Error(
+            'That email address already has a Heavyline sign-in.\n\n'
+            + 'If this is you and an earlier attempt failed part way, the '
+            + 'sign-in survived — use Sign in with the same password, or '
+            + 'reset it from the sign-in tab. There is no need to register '
+            + 'again.');
+        }
+
         throw authError;
       }
 
@@ -631,6 +646,40 @@ const Accounts = {
 
       if (driverError) {
         console.error('[HLL] Failed to create driver row:', driverError);
+
+        /* This failure has exactly one shape and two possible cures, and
+           "new row violates row-level security policy for table drivers"
+           names neither of them. Anyone reading that on a sign-up form can
+           do nothing with it.
+
+           The policy on this table is with check (auth.uid() = auth_user_id),
+           which is correct — it stops anybody creating a driver record for
+           somebody else. But when email confirmation is on, signUp() hands
+           back a user and no session, so there is no auth.uid() yet and the
+           insert is refused for the one person entitled to make it.
+
+           Whether a session came back tells us which cure to name. */
+        const refused = driverError.code === '42501'
+          || /row-level security/i.test(driverError.message || '');
+
+        if (refused) {
+          const noSession = !(authData && authData.session);
+
+          throw new Error(
+            'Your sign-in was created, but your driver record could not be — '
+            + 'the database refused it.\n\n'
+            + (noSession
+              ? 'Email confirmation is on, so there is no session yet and the '
+                + 'browser is not allowed to write that record. The database '
+                + 'has to make it instead: run '
+                + 'supabase/migrations/20260903_driver_row_on_signup.sql in '
+                + 'the Supabase SQL editor. It also creates the record for '
+                + 'anyone already stuck like this, so afterwards just sign in '
+                + 'with the details you have entered here.'
+              : 'A session was returned, so this is a policy problem rather '
+                + 'than a timing one. Run supabase/setup.sql, which creates '
+                + 'the insert policy this needs.'));
+        }
 
         /* The Auth user exists but has nothing to sign in to. Stop here
            rather than filing an application against a driver that is not
