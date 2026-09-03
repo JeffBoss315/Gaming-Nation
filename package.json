@@ -9,7 +9,7 @@
   "scripts": {
     "serve": "node serve.js",
     "serve:lan": "node serve.js --lan",
-    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-brand-icons.ps1",
+    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-brand-icons.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-ico.ps1",
     "start": "electron .",
     "dist": "node tools/scan.js && electron-builder --win --publish never && node tools/prune-builds.js",
     "dist:portable": "node tools/scan.js && electron-builder --win portable --publish never && node tools/prune-builds.js",
