@@ -20,6 +20,7 @@
    ============================================================ */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 /* Both destinations can be redirected, so a test can build somewhere
@@ -83,6 +84,17 @@ site.log.push("index.html        (drivers' website)");
 
 site.write('admin.html', read('admin.html'));
 site.log.push('admin.html        (management console)');
+
+/* The page every password-reset email points at.
+
+   script.js sends Supabase to publicSiteUrl() + '/reset-password.html',
+   and robots.txt below is careful to keep it out of the index — but the
+   file was never copied here, so that link answered 404 on the live site
+   and every driver who forgot their password hit a dead end. The one
+   page in the project that is only ever reached from an email, and so
+   the one page nobody clicks while looking at the site. */
+site.write('reset-password.html', read('reset-password.html'));
+site.log.push('reset-password.html  (from the reset email)');
 
 for (const f of ['style.css', 'script.js', 'supabase-client.js', 'map-data.js']) {
   site.write(f, read(f));
@@ -237,8 +249,16 @@ if (!SITE_URL) {
      is not a file on disk. The app routes on the hash, so a deep link is
      normally a real file anyway — but a stray path should land on the
      platform rather than on GitHub's own error page. Same document, so it
-     boots and the hash takes over. */
-  site.write('404.html', read('index.html'));
+     boots and the hash takes over.
+
+     The INJECTED document, not the source. Reading the file again shipped
+     a 404.html that still had the literal HLL_SEO marker in its head and
+     none of the tags that replace it — so the fallback every deep link
+     lands on was the one page on the site with no canonical. It also
+     contradicted the sentence above: it was not the same document. The
+     canonical here points at the root, which is what a crawler following
+     a stale link should be told. */
+  site.write('404.html', html);
   /* Cloudflare Pages reads _headers from the site root. Written by the
      builder so it ships with the payload rather than being remembered. */
   if (fs.existsSync(path.join(ROOT, 'www_headers_src'))) {
@@ -323,6 +343,60 @@ app.log.push('vendor/           (' + app.copyTree('vendor') + ' files)');
 app.log.push('icons/            (' + app.copyTree('icons') + ' files)');
 /* no release/ — putting 160 MB of installers inside a 6 MB phone app would be
    daft, and the downloads page there says so rather than offering a dead link */
+
+/* ---------------- the service worker's cache name ----------------
+
+   sw.js says "Bump CACHE when you ship a change so clients pick it up",
+   and it had sat at v1.0.0-r1 through every change since it was written.
+   Nobody bumps a constant by hand on the way past.
+
+   It matters for the assets the worker serves cache-first — hll.jpg, the
+   icons, Leaflet. Code is network-first and lands on its own, but an
+   installed client kept showing the OLD app icon and the OLD brand mark
+   for as long as the name stayed the same, which is precisely the thing
+   that has been changed most often here.
+
+   So the name is stamped from what actually shipped: the version, plus a
+   hash of every byte in the payload. Change nothing and the name is
+   stable, so clients keep their cache and the install is not thrown away
+   for no reason. Change any shipped file and the name moves, activate()
+   drops the old cache, and the change lands. */
+{
+  const version = (() => {
+    try { return JSON.parse(read('package.json')).version || '0.0.0'; }
+    catch (e) { return '0.0.0'; }
+  })();
+
+  /* Every file in the payload except the worker itself — hashing sw.js
+     while deciding what to write into sw.js cannot settle. */
+  const digest = crypto.createHash('sha256');
+  const walk = (rel) => {
+    for (const f of fs.readdirSync(path.join(APP, rel)).sort()) {
+      const r = rel ? rel + '/' + f : f;
+      if (fs.statSync(path.join(APP, r)).isDirectory()) { walk(r); continue; }
+      if (r === 'sw.js') continue;
+      digest.update(r);                                  /* a rename is a change */
+      digest.update(fs.readFileSync(path.join(APP, r)));
+    }
+  };
+  walk('');
+  const stamp = 'heavylinetrucker-v' + version + '-' + digest.digest('hex').slice(0, 8);
+
+  const swPath = path.join(APP, 'sw.js');
+  const before = fs.readFileSync(swPath, 'utf8');
+  const after = before.replace(
+    /const CACHE = '[^']*';/,
+    "const CACHE = '" + stamp + "';");
+
+  if (after === before) {
+    /* Renaming the constant would silently bring the stale-icon bug back,
+       so say so rather than shipping a worker that was not stamped. */
+    console.log('  WARNING: could not stamp the CACHE name in sw.js — clients may keep stale assets');
+  } else {
+    fs.writeFileSync(swPath, after);
+    app.log.push('sw.js cache name  ' + stamp);
+  }
+}
 
 for (const p of [site, app]) {
   console.log('\n' + path.basename(p.dir) + '/ built:');
