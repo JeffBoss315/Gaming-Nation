@@ -3,6 +3,18 @@
    an application filed on the drivers' side is announced on the console. */
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+
+/* This probe registers a driver, and registration goes through Supabase
+   Auth. Without a stand-in it signed up against the LIVE project on every
+   run — leaving a real Auth user and a real drivers row in the company
+   people are actually using — and then sat waiting on the network until
+   the run was killed, which is why it never finished.
+
+   Every other harness that registers somebody already does this; this one
+   was simply missed. The two windows below get one stand-in each and share
+   nothing through it, which is right: they share a profile, and the company
+   they both read travels through localStorage, not through Supabase. */
+const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
 /* resolved, not taken as given: 'npm run smoke:*' passes '.', and a relative
    root turns require(ROOT + '/desktop-capture') into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
@@ -15,6 +27,8 @@ app.on('window-all-closed', () => {});
 const open = async (page) => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });
   await win.loadFile(path.join(ROOT, page));
+  /* before anything registers anybody */
+  await win.webContents.executeJavaScript(FAKE_SUPABASE);
   await new Promise((r) => setTimeout(r, 1500));
   return win;
 };
@@ -34,8 +48,15 @@ app.whenReady().then(async () => {
       .map(n => n.textContent.trim()).join(' ');
 
     const email = 'sitedriver' + Date.now() + '@example.com';
-    await Accounts.register({ name: 'Site Driver', email, password: 'SiteDriver123',
-      country: 'Netherlands', discord: '' });
+    /* register(account, password, country) — three arguments. Passing one
+       object left password undefined, so the sign-up was refused with
+       "Signup requires a valid password" and the rejection, unhandled,
+       hung the run instead of failing it. */
+    await Accounts.register(
+      { name: 'Site Driver', email, discord: '' },
+      'SiteDriver123',
+      'Netherlands'
+    );
     const acc = Accounts.all().find(x => x.email === email);
     out.applicantId = acc.driverId;
 
