@@ -38,7 +38,8 @@
     "prune": "node tools/prune-builds.js",
     "smoke:messaging": "node tools/smoke-messaging.js",
     "smoke:dmweb": "node tools/run-electron.js tools/smoke-dm-web.js .",
-    "service": "node fleet-server.js"
+    "service": "node fleet-server.js",
+    "deploy:cf": "node tools/build-www.js && node tools/deploy-cloudflare.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",
