@@ -26,13 +26,29 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'There is no such build.' }, 404);
   }
 
-  const secret = env.HLL_DOWNLOAD_SECRET;
+  /* Can this deployment actually gate anything?
 
-  if (!secret) {
-    /* Without it every link would be forgeable, so refuse rather than
-       fall back to something weaker. */
-    return json({ error: 'The download service is not configured.' }, 500);
+     A Function that is deployed but has no signing secret, or no bucket
+     to read from, cannot release a build to anybody — and if it answers
+     "refused" then NOBODY gets a download, approved or not. That is
+     worse than the ungated state it was meant to improve on.
+
+     So it says so plainly instead, and the page falls back to the public
+     URL exactly as it does where no Function is deployed at all. The
+     staff banner on the downloads page still reports the gate as off,
+     which is the honest description of a half-finished setup. */
+  const ready = !!env.HLL_DOWNLOAD_SECRET && !!env.RELEASES;
+
+  if (!ready) {
+    return json({
+      gate: 'off',
+      reason: !env.HLL_DOWNLOAD_SECRET
+        ? 'HLL_DOWNLOAD_SECRET is not set on this project.'
+        : 'No R2 bucket is bound to this project as RELEASES.',
+    }, 200);
   }
+
+  const secret = env.HLL_DOWNLOAD_SECRET;
 
   const who = await approvedDriver(env, request.headers.get('Authorization'));
 
@@ -49,7 +65,12 @@ export async function onRequestPost({ request, env }) {
   });
 }
 
-/* A GET here is somebody following a stale link or poking about. Say what
-   the endpoint is for rather than returning the framework's 405. */
-export const onRequestGet = () =>
-  json({ error: 'POST here with a build and your session to get a download link.' }, 405);
+/* A GET is how the page asks whether there is a gate here at all, before
+   anybody presses anything. It answers as JSON either way — that is what
+   tells the page a Function is present rather than a rewritten 404 — and
+   reports whether this deployment is actually able to gate. */
+export const onRequestGet = ({ env }) =>
+  json({
+    gate: (env.HLL_DOWNLOAD_SECRET && env.RELEASES) ? 'on' : 'off',
+    hint: 'POST here with a build and your session to get a download link.',
+  }, 200);

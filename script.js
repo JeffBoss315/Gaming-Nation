@@ -11388,7 +11388,12 @@ const Downloads = {
          with a 200, so the status alone cannot tell the two apart and
          the content type has to. */
       if (/json/i.test(res.headers.get('Content-Type') || '')) {
-        this.gated = 'on';
+        /* Present is not the same as working: a deployed Function with no
+           secret and no bucket reports gate: 'off' about itself. */
+        let body = null;
+        try { body = await res.json(); } catch (e) { body = null; }
+
+        this.gated = (body && body.gate === 'off') ? 'off' : 'on';
         this.state = 'ready';
         this.missing = [];
         return;
@@ -11471,6 +11476,14 @@ const Downloads = {
     if (/json/i.test(kind)) { try { body = await res.json(); } catch (e) { body = null; } }
 
     if (!body) return fallback();              /* not the API — nothing is gating this */
+
+    /* The gate is there but cannot do its job — no signing secret, or no
+       bucket bound. It says so rather than refusing, because a Function
+       that refuses everybody is worse than no Function at all. */
+    if (body.gate === 'off') {
+      Downloads.gated = 'off';
+      return fallback();
+    }
 
     Downloads.gated = 'on';
 

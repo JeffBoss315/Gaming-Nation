@@ -56,6 +56,15 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/download-link')) {
     if (mode === '404') { res.writeHead(404); return res.end('nope'); }
 
+    /* The readiness probe the page sends before anything is pressed —
+       but ONLY where a Function exists. In 'spa' this path has to keep
+       answering with a page, because that is the whole case it stands
+       for: a host that rewrites a missing endpoint into index.html. */
+    if (req.method === 'GET' && mode !== 'spa') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ gate: mode === 'halfbuilt' ? 'off' : 'on' }));
+    }
+
     const answer = (status, body) => {
       let b = '';
       req.on('data', (c) => { b += c; });
@@ -66,6 +75,9 @@ const server = http.createServer((req, res) => {
     };
 
     if (mode === 'json') return answer(200, { url: '/files/pretend.exe', expiresIn: 300 });
+
+    /* deployed, but with no secret and no bucket: it must step aside */
+    if (mode === 'halfbuilt') return answer(200, { gate: 'off', reason: 'no bucket' });
     if (mode === 'refuse') return answer(403, { error: 'Your application has not been approved yet.' });
 
     /* 'spa' — exactly what the deploy configs do */
@@ -160,6 +172,15 @@ app.whenReady().then(async () => {
     check('and a working gate says nothing at all', ok.banner, 'none');
     check('and the public URL is never touched', ok.asked, 'null');
     check('nothing is refused', ok.toasts.length, 0);
+
+    /* ---- the Function deployed but not able to gate ----
+       The state a half-finished setup is actually in, and the one that
+       must not lock everybody out. */
+    const half = await run(win, 'halfbuilt');
+    check('a gate that cannot gate says so', half.gated, 'off');
+    check('and the download still works',
+      /windows-setup\.exe$/.test(half.asked || ''), 'true');
+    check('without refusing anybody', half.toasts.length, 0);
 
     /* ---- the Function there, and refusing ---- */
     const no = await run(win, 'refuse');
