@@ -5432,6 +5432,57 @@ const Auth = {
     return 'weak-' + h.toString(16);
   },
 
+  /* Make the driver record for somebody who has an Auth user and none.
+
+     The same job Accounts.provision() does on the website, and for the
+     same reason: with email confirmation on, the row cannot be written at
+     sign-up because there is no session yet to satisfy the insert policy.
+     It is written at the first sign-in instead — and a driver may well
+     make that first sign-in here, in the client, rather than on the site.
+
+     Everything it needs was put into the signUp metadata by the website's
+     registration: full_name, driver_code, role and country. */
+  async provision(user) {
+    if (!window.hllSupabase || !user) return { driver: null };
+
+    const meta = user.user_metadata || {};
+    const name = meta.full_name || (user.email || '').split('@')[0] || 'Driver';
+
+    /* driver_code is unique and this end cannot see what is taken, so a
+       clash is a matter of time. Retry with a fresh code rather than
+       stranding somebody whose random number came up twice. */
+    let code = meta.driver_code || ('HLL' + String(Math.floor(1000 + Math.random() * 9000)));
+
+    for (let tries = 0; tries < 6; tries++) {
+      const { data, error } = await window.hllSupabase
+        .from('drivers')
+        .insert({
+          auth_user_id: user.id,
+          driver_code: code,
+          full_name: name,
+          email: user.email || '',
+          role: meta.role || 'driver',
+          /* Not approved. A recruiter decides, and until they do this is
+             what keeps the client download shut. */
+          status: 'pending',
+        })
+        .select()
+        .maybeSingle();
+
+      if (!error) return { driver: data };
+
+      if (error.code === '23505') {            /* the code was taken */
+        code = 'HLL' + String(Math.floor(1000 + Math.random() * 9000));
+        continue;
+      }
+
+      console.warn('[HLL] could not provision a driver record:', error);
+      return { driver: null, error };
+    }
+
+    return { driver: null };
+  },
+
   async verify(handle, password) {
     const email = String(handle || '').trim().toLowerCase();
     const pass = String(password || '');
@@ -5442,14 +5493,47 @@ const Auth = {
     if (window.hllSupabase && email.indexOf('@') > -1) {
       try {
         const result = await window.hllSupabase.auth.signInWithPassword({ email, password: pass });
-        if (result.error) return { error: result.error.message || 'Login failed.' };
+        if (result.error) {
+          /* Supabase says "Invalid login credentials" both for a wrong
+             password and for an address with no account, deliberately —
+             telling them apart tells an attacker which addresses are
+             real. Said in plainer words here, kept just as vague. */
+          const raw = result.error.message || '';
+          return {
+            error: /invalid login/i.test(raw)
+              ? 'That email and password do not match a Heavyline account.'
+              : raw || 'Login failed.',
+          };
+        }
         const user = result.data && result.data.user;
         if (!user) return { error: 'Login failed. No user was returned.' };
-        const lookup = await window.hllSupabase.from('drivers').select('*')
+        let lookup = await window.hllSupabase.from('drivers').select('*')
           .eq('auth_user_id', user.id).maybeSingle();
+
+        /* No driver record, but the password was right.
+
+           This is somebody who registered while email confirmation was on.
+           signUp() hands back a user and NO session, so at that moment
+           there was no auth.uid() and the insert policy —
+           with check (auth.uid() = auth_user_id) — refused the row to the
+           one person entitled to it.
+
+           The website makes the record at first sign-in for exactly this
+           reason. The client did not, so a driver who confirmed their
+           email and opened the app before the website was told their
+           account "is not linked" and given nothing to do about it. There
+           IS a session now, so make it here too. */
+        if (!lookup.error && !lookup.data) {
+          const made = await this.provision(user);
+          if (made.driver) lookup = { data: made.driver, error: null };
+        }
+
         if (lookup.error || !lookup.data) {
           await window.hllSupabase.auth.signOut();
-          return { error: 'Your login is valid, but your Heavyline driver account is not linked.' };
+          return {
+            error: 'Your sign-in works, but no driver record could be made for it. '
+              + 'Sign in on the HLL website once, then come back.',
+          };
         }
         const row = lookup.data;
         if (row.status === 'suspended' || row.account_status === 'suspended') {
