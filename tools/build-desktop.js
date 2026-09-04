@@ -43,15 +43,30 @@ if (!OUT) {
    because this path is outside the synced folder — and if it cannot, say
    so rather than letting electron-builder fail three minutes later with a
    stack trace about app-builder.exe. */
-if (fs.existsSync(OUT)) {
+let out = OUT;
+
+if (fs.existsSync(out)) {
   try {
-    fs.rmSync(OUT, { recursive: true, force: true });
+    fs.rmSync(out, { recursive: true, force: true });
   } catch (e) {
-    console.error('\n  Could not clear ' + OUT);
-    console.error('  ' + e.message);
-    console.error('\n  Something is holding a file in there. Close any running');
-    console.error('  Heavyline Trucker, or set HLL_DIST_DIR to somewhere else.\n');
-    process.exit(1);
+    /* Something has a handle in there and will not let go — an installed
+       copy of the app running, an indexer, a scanner mid-pass. This build
+       stopped dead on exactly that:
+
+         Could not clear ...\hll-dist
+         EPERM, Permission denied
+
+       with four copies of the installed Heavyline Trucker running out of
+       Program Files. Neither killing somebody's running application nor
+       refusing to build is the right answer. The directory is disposable
+       by design, so a locked one is stepped over and the build carries on
+       in a fresh sibling. collect-release.js copies the artefacts into
+       release/ straight afterwards, so nothing downstream cares which
+       directory was used. */
+    out = OUT + '-' + Date.now().toString(36);
+    console.log('\n  ' + OUT + ' is locked (' + e.code + ').');
+    console.log('  Building into ' + out + ' instead.');
+    console.log('  Nothing is wrong; the old one can be deleted once it is free.\n');
   }
 }
 
@@ -61,7 +76,7 @@ const targets = passed.length ? passed : ['--win'];
 
 const args = ['--yes', 'electron-builder']
   .concat(targets)
-  .concat(['--publish', 'never', '--config.directories.output=' + OUT]);
+  .concat(['--publish', 'never', '--config.directories.output=' + out]);
 
 console.log('\nbuilding into ' + OUT);
 console.log('(outside the project, so the sync client cannot lock it)\n');
@@ -84,10 +99,10 @@ if (r.status !== 0) process.exit(r.status);
    where to look. Passing it through the environment keeps the npm script
    readable and means nobody has to repeat the path. */
 console.log('\nbuilt. Collecting from ' + OUT);
-process.env.HLL_DIST_DIR = OUT;
+process.env.HLL_DIST_DIR = out;
 
 const collected = spawnSync(process.execPath,
   [path.join(__dirname, 'collect-release.js')],
-  { cwd: ROOT, stdio: 'inherit', env: Object.assign({}, process.env, { HLL_DIST_DIR: OUT }) });
+  { cwd: ROOT, stdio: 'inherit', env: Object.assign({}, process.env, { HLL_DIST_DIR: out }) });
 
 process.exit(collected.status || 0);
