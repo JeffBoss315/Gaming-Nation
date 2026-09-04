@@ -92,17 +92,90 @@ create trigger on_auth_user_created
 -- nothing else will ever create the row for them.
 -- ------------------------------------------------------------
 
-insert into public.drivers (auth_user_id, driver_code, full_name, email, country, role, status)
-select
-  u.id,
-  'HLL' || lpad(((row_number() over (order by u.created_at)) + 7000)::text, 4, '0'),
-  coalesce(nullif(u.raw_user_meta_data->>'full_name', ''), split_part(u.email, '@', 1)),
-  u.email,
-  coalesce(nullif(u.raw_user_meta_data->>'country', ''), 'Not set'),
-  coalesce(nullif(u.raw_user_meta_data->>'role', ''), 'driver'),
-  'pending'
-from auth.users as u
-where not exists (select 1 from public.drivers d where d.auth_user_id = u.id);
+-- Done one person at a time, on purpose.
+--
+-- The first version of this handed out HLL7001, HLL7002, ... by row
+-- number. driver_code carries a unique constraint (drivers_driver_code_key),
+-- so if any existing driver already held one of those codes the insert
+-- failed — and because the SQL editor runs this file as a single
+-- transaction, that one collision rolled back EVERYTHING, including the
+-- trigger above. The migration would report an error and change nothing,
+-- which is the worst possible outcome for a fix that has to be run by hand.
+--
+-- So: take the code the person was actually given at sign-up when it is
+-- still free, otherwise the first genuinely unused one, and let a row that
+-- cannot be created be skipped with a warning instead of taking the rest
+-- of the migration down with it.
+
+do $backfill$
+declare
+  u          record;
+  final_code text;
+  made       int := 0;
+  skipped    int := 0;
+begin
+  for u in
+    select id, email, created_at, raw_user_meta_data
+      from auth.users
+     order by created_at
+  loop
+    if exists (select 1 from public.drivers where auth_user_id = u.id) then
+      continue;
+    end if;
+
+    -- the code they were issued in the browser, if nobody else has it
+    final_code := nullif(u.raw_user_meta_data->>'driver_code', '');
+
+    if final_code is null
+       or exists (select 1 from public.drivers where driver_code = final_code) then
+      final_code := null;
+      -- checked against the table as it stands on THIS iteration, so two
+      -- users in the same run cannot be handed the same code
+      for n in 1000..9999 loop
+        if not exists (
+          select 1 from public.drivers
+           where driver_code = 'HLL' || lpad(n::text, 4, '0')
+        ) then
+          final_code := 'HLL' || lpad(n::text, 4, '0');
+          exit;
+        end if;
+      end loop;
+    end if;
+
+    if final_code is null then
+      raise warning 'no free driver_code left for %', u.id;
+      skipped := skipped + 1;
+      continue;
+    end if;
+
+    begin
+      insert into public.drivers (
+        auth_user_id, driver_code, full_name, email, country, role, status
+      )
+      values (
+        u.id,
+        final_code,
+        coalesce(
+          nullif(u.raw_user_meta_data->>'full_name', ''),
+          nullif(split_part(coalesce(u.email, ''), '@', 1), ''),
+          'Driver'),
+        u.email,
+        coalesce(nullif(u.raw_user_meta_data->>'country', ''), 'Not set'),
+        coalesce(nullif(u.raw_user_meta_data->>'role', ''), 'driver'),
+        'pending'
+      );
+      made := made + 1;
+    exception
+      when others then
+        -- one unrepairable account must not cost everybody else theirs
+        raise warning 'could not create driver row for % (%): %', u.id, u.email, sqlerrm;
+        skipped := skipped + 1;
+    end;
+  end loop;
+
+  raise notice 'backfill: % driver row(s) created, % skipped', made, skipped;
+end
+$backfill$;
 
 
 -- ------------------------------------------------------------

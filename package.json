@@ -45,7 +45,9 @@
     "smoke:downloads": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-download-gate.mjs",
     "release:collect": "node tools/collect-release.js --strict",
     "release:push": "node tools/push-release.js",
-    "service": "node fleet-server.js"
+    "service": "node fleet-server.js",
+    "deploy:cf": "node tools/build-www.js && node tools/deploy-cloudflare.js",
+    "dev": "node tools/dev.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",
