@@ -1343,7 +1343,7 @@ const TileMap = {
     this.map.on('click', (e) => this.onClick(e));
 
     this.trailLine = L.polyline([], {
-      color: '#4f7fff', weight: 3, opacity: .85, lineJoin: 'round',
+      color: '#d21f4c', weight: 3, opacity: .85, lineJoin: 'round',
     }).addTo(this.map);
     this.fleetLayer = L.layerGroup().addTo(this.map);
     this.cityLayer = L.layerGroup().addTo(this.map);
@@ -1524,7 +1524,7 @@ const TileMap = {
     Object.keys(geo).forEach((name) => {
       const [lat, lon] = geo[name];
       L.circleMarker([lat, lon], {
-        radius: 3, color: '#4f7fff', weight: 1, fillColor: '#4f7fff', fillOpacity: .55,
+        radius: 3, color: '#d21f4c', weight: 1, fillColor: '#d21f4c', fillOpacity: .55,
       }).bindTooltip(cityLabel(name), { direction: 'top' }).addTo(this.cityLayer);
     });
   },
@@ -3329,11 +3329,11 @@ function viewDashboard() {
     : null;
 
   const actions = `
-    <span class="pill ${running ? 'ok' : ''}">${icon(running ? 'truck' : 'search')}${
+    <span class="pill game-only ${running ? 'ok' : ''}">${icon(running ? 'truck' : 'search')}${
       running ? mapFor(db.settings.game).short + ' running' : 'Watching for the game'}</span>
     ${session ? `<span class="pill ok" title="Your session is being recorded on your Heavyline record">
       ${icon('clock')}${esc(fmt.dur(sessionMin))} this session</span>` : ''}
-    <button class="btn btn-sm" data-act="nav" data-view="settings">${icon('settings')}Link games</button>
+    <button class="btn btn-sm game-only" data-act="nav" data-view="settings">${icon('settings')}Link games</button>
     <button class="btn btn-sm install-cta" data-act="install-app">${icon('download')}Install</button>`;
 
   return `
@@ -3403,14 +3403,14 @@ function launchBarHTML() {
   const tmpReady = !!s.tmpExe;
 
   return `<div class="launchbar">
-    <button class="launch-tile game" data-act="launch-game" data-kind="ets2"
+    <button class="launch-tile game game-only" data-act="launch-game" data-kind="ets2"
       title="${ets2Ready ? esc(s.ets2Exe) : 'Set the path in Settings'}">
       <span class="lt-mark">${icon('truck')}</span>
       <span class="lt-text"><span class="lt-1">EURO TRUCK</span><span class="lt-2">Simulator 2</span></span>
       ${ets2Ready ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
 
-    <button class="launch-tile tmp" data-act="launch-game" data-kind="tmp"
+    <button class="launch-tile tmp game-only" data-act="launch-game" data-kind="tmp"
       title="${tmpReady ? esc(s.tmpExe) : 'Set the path in Settings'}">
       <span class="lt-mark">${icon('users')}</span>
       <span class="lt-text"><span class="lt-1">TRUCKERS</span><span class="lt-2">Multiplayer</span></span>
@@ -3671,12 +3671,19 @@ function runCardInner() {
       <div class="run-top">
         <div>
           <div class="eyebrow">Current delivery</div>
-          <div class="run-idle">${db.conn.ets2 === 'running' ? 'No active delivery' : 'Waiting for the game'}</div>
+          <div class="run-idle">${db.conn.ets2 === 'running' ? 'No active delivery'
+            : Launcher.api() || GameWatch.supported ? 'Waiting for the game' : 'No run in progress'}</div>
           <div class="run-meta">${db.conn.ets2 === 'running'
             ? 'The game is running. Take a load in game and it appears here on its own.'
             : GameWatch.supported
               ? 'Start ' + mapFor(db.settings.game).label + ' however you like — the client sees it open and starts tracking by itself.'
-              : 'Waiting for the telemetry link. Tracking starts the moment the game answers.'}</div>
+              : Launcher.api()
+                ? 'Waiting for the telemetry link. Tracking starts the moment the game answers.'
+                /* No game on this device and no way to get one. Saying
+                   "waiting for the telemetry link" on a phone promises
+                   something that is never going to arrive; what a driver
+                   has here is the record of runs made elsewhere. */
+                : 'Runs are recorded on the machine you play on. This shows them, and everything else about your driving, wherever you are.'}</div>
         </div>
         <span class="run-state"><span class="beat"></span>${db.conn.ets2 === 'running' ? 'Idle' : 'Standby'}</span>
       </div>
@@ -3799,8 +3806,8 @@ function gaugeRowInner(job, pct) {
   const dmg = Number.isFinite(+job.damage) ? +job.damage : 0;
   const fuel = Number.isFinite(+job.fuel) ? +job.fuel : 0;
   const dmgColor = dmg > 15 ? '#ef5f5f' : dmg > 5 ? '#d99b2b' : '#3ecf8e';
-  const fuelColor = fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#4aa3f0';
-  return gauge(pct, 'Route', fmt.pct(pct), '#4f7fff')
+  const fuelColor = fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#e0637f';
+  return gauge(pct, 'Route', fmt.pct(pct), '#d21f4c')
     + gauge(fuel, 'Fuel', fmt.pct(fuel), fuelColor)
     + gauge(clamp(dmg, 0, 100), 'Damage', dmg.toFixed(1) + '%', dmgColor);
 }

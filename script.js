@@ -146,11 +146,11 @@ const RANKS = [
   { i: 0, key: 'recruit',      name: 'Recruit',              abbr: 'RCT', km: 0,      convoys: 0,  att: 0,  color: '#8b98ab' },
   { i: 1, key: 'trainee',      name: 'Trainee Driver',       abbr: 'TRN', km: 2500,   convoys: 1,  att: 50, color: '#9fb4cc' },
   { i: 2, key: 'junior',       name: 'Junior Driver',        abbr: 'JNR', km: 10000,  convoys: 4,  att: 60, color: '#5eb0e8' },
-  { i: 3, key: 'driver',       name: 'Driver',               abbr: 'DRV', km: 25000,  convoys: 10, att: 65, color: '#4aa3f0' },
+  { i: 3, key: 'driver',       name: 'Driver',               abbr: 'DRV', km: 25000,  convoys: 10, att: 65, color: '#e0637f' },
   { i: 4, key: 'senior',       name: 'Senior Driver',        abbr: 'SNR', km: 50000,  convoys: 20, att: 70, color: '#3ecf8e' },
   { i: 5, key: 'professional', name: 'Professional Driver',  abbr: 'PRO', km: 100000, convoys: 40, att: 75, color: '#8b7cf0' },
   { i: 6, key: 'elite',        name: 'Elite Driver',         abbr: 'ELT', km: 175000, convoys: 65, att: 80, color: '#d99b2b' },
-  { i: 7, key: 'veteran',      name: 'Veteran Driver',       abbr: 'VET', km: 275000, convoys: 90, att: 85, color: '#4f7fff' },
+  { i: 7, key: 'veteran',      name: 'Veteran Driver',       abbr: 'VET', km: 275000, convoys: 90, att: 85, color: '#d21f4c' },
   { i: 8, key: 'captain',      name: 'HLL Captain',          abbr: 'CPT', km: 400000, convoys: 130, att: 90, color: '#9db8ff' },
 ];
 const rankOf = (d) => RANKS[clamp(d.rankIdx ?? 0, 0, RANKS.length - 1)];
@@ -164,12 +164,12 @@ function earnedRank(d) {
 /* 3.2 Roles & permissions — spec §17 */
 const ROLES = {
   driver:        { name: 'Driver',              level: 1,  color: '#8b98ab' },
-  recruiter:     { name: 'Recruiter',           level: 4,  color: '#4aa3f0' },
+  recruiter:     { name: 'Recruiter',           level: 4,  color: '#e0637f' },
   dispatcher:    { name: 'Dispatcher',          level: 4,  color: '#3ecf8e' },
   event_manager: { name: 'Event Manager',       level: 5,  color: '#8b7cf0' },
   moderator:     { name: 'Moderator',           level: 6,  color: '#d99b2b' },
-  management:    { name: 'Management',          level: 8,  color: '#4f7fff' },
-  admin:         { name: 'Administrator',       level: 9,  color: '#4f7fff' },
+  management:    { name: 'Management',          level: 8,  color: '#d21f4c' },
+  admin:         { name: 'Administrator',       level: 9,  color: '#d21f4c' },
   super_admin:   { name: 'Super Administrator', level: 10, color: '#9db8ff' },
 };
 const PERMS = {
@@ -248,8 +248,8 @@ const TRUCK_MODELS = [
   { make: 'Renault', model: 'T High 520',    hp: 520, cab: 'T High',    gearbox: 'Optidriver 12-spd', chassis: '4x2' },
 ];
 const LIVERIES = [
-  { key: 'heavyline',  name: 'Heavyline Signature', a: '#4f7fff', b: '#141b26' },
-  { key: 'midnight',   name: 'Midnight Steel',      a: '#4aa3f0', b: '#0f1721' },
+  { key: 'heavyline',  name: 'Heavyline Signature', a: '#d21f4c', b: '#141b26' },
+  { key: 'midnight',   name: 'Midnight Steel',      a: '#e0637f', b: '#0f1721' },
   { key: 'gold',       name: 'Gold Standard',       a: '#9db8ff', b: '#1b1508' },
   { key: 'arctic',     name: 'Arctic Haul',         a: '#e6edf6', b: '#1a2230' },
   { key: 'forest',     name: 'Forest Line',         a: '#3ecf8e', b: '#0e1a16' },
@@ -2204,7 +2204,7 @@ function barChart(items, opts = {}) {
     const bh = Math.max(2, (it.value / max) * ih);
     const bx = pad.l + i * step + (step - bw) / 2;
     const by = pad.t + ih - bh;
-    const c = it.color || '#4f7fff';
+    const c = it.color || '#d21f4c';
     return `<g><rect class="bar-r" x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="5" fill="${c}">
         <title>${esc(it.label)}: ${opts.fmtT ? opts.fmtT(it.value) : fmt.n(it.value)}</title></rect>
       <text class="axis-lbl" x="${(bx + bw / 2).toFixed(1)}" y="${H - 9}" text-anchor="middle">${esc(it.short || it.label)}</text></g>`;
@@ -2215,7 +2215,7 @@ function barChart(items, opts = {}) {
 }
 
 /* 7.3 donut */
-const DONUT_FALLBACK = ['#4f7fff', '#4aa3f0', '#3ecf8e', '#8b7cf0', '#d99b2b', '#ef5f5f', '#5b7a99'];
+const DONUT_FALLBACK = ['#d21f4c', '#e0637f', '#3ecf8e', '#8b7cf0', '#d99b2b', '#ef5f5f', '#5b7a99'];
 function donut(segments, opts = {}) {
   const size = opts.size || 190, sw = opts.stroke || 20, r = (size - sw) / 2, c = size / 2;
   const circ = 2 * Math.PI * r;
@@ -2347,7 +2347,7 @@ function routeMap(path, opts = {}) {
     marker = `<g class="truck-marker" transform="translate(${mx.toFixed(1)},${my.toFixed(1)})">
       <circle r="13" fill="rgba(79,127,255,.20)"><animate attributeName="r" values="11;18;11" dur="2.4s" repeatCount="indefinite"/>
         <animate attributeName="opacity" values=".5;0;.5" dur="2.4s" repeatCount="indefinite"/></circle>
-      <circle r="8" fill="#4f7fff" stroke="#06090f" stroke-width="2"/>
+      <circle r="8" fill="#d21f4c" stroke="#06090f" stroke-width="2"/>
       <g transform="translate(-5.5,-5.5) scale(.46)" fill="none" stroke="#150a03" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS.truck}</g>
       <title>Convoy position — ${Math.round(p * 100)}% of route complete</title></g>`;
   }
@@ -3891,7 +3891,7 @@ function viewDashboard() {
             </div>
           </div>
           <div class="card-body" id="mileageChart" data-mine='${JSON.stringify(weeks)}' data-fleet='${JSON.stringify(fleetWeeks)}'>
-            ${areaChart([{ name: 'Your distance', values: weeks, color: '#4f7fff' }], weekLabels,
+            ${areaChart([{ name: 'Your distance', values: weeks, color: '#d21f4c' }], weekLabels,
               { aria: 'Weekly distance driven', fmtY: (v) => Math.round(v / 100) / 10 + 'k', fmtT: fmt.km })}
             <div class="row-b mt-16 wrap gap-12">
               ${[['12-week total', fmt.km(sum(weeks))], ['Weekly average', fmt.km(Math.round(sum(weeks) / 12))],
@@ -3997,7 +3997,7 @@ function viewDashboard() {
               ${ACHIEVEMENTS.slice(0, 8).map((a) => {
                 const got = achEarned(a, u);
                 return `<div class="tip" data-tip="${esc(a.name)}" style="display:grid;place-items:center;aspect-ratio:1;border-radius:14px;
-                  background:${got ? 'linear-gradient(135deg,#4f7fff,#e8913a)' : 'var(--panel-2)'};
+                  background:${got ? 'linear-gradient(135deg,#d21f4c,#e8913a)' : 'var(--panel-2)'};
                   border:1px solid ${got ? 'transparent' : 'var(--line)'};color:${got ? '#170b02' : 'var(--text-3)'};opacity:${got ? 1 : .5}">
                   <span style="width:19px;height:19px">${icon(a.icon)}</span></div>`;
               }).join('')}
@@ -4254,7 +4254,7 @@ function viewDriver(id) {
                   <div><div class="b7">Top of the ladder</div><div class="sm t2">${esc(d.name.split(' ')[0])} holds the highest rank Heavyline awards.</div></div></div>`}
 
               <div class="card"><div class="card-head"><div class="card-title">${icon('activity')}Distance — last 6 months</div></div>
-                <div class="card-body">${areaChart([{ name: 'Distance', values: monthly, color: '#4aa3f0' }], monthLabels,
+                <div class="card-body">${areaChart([{ name: 'Distance', values: monthly, color: '#e0637f' }], monthLabels,
                   { h: 200, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km, aria: 'Monthly distance' })}</div></div>
             </div>
 
@@ -4292,8 +4292,8 @@ function viewDriver(id) {
                 { h: 240, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km })}</div></div>
             <div class="card"><div class="card-head"><div class="card-title">${icon('package')}Cargo mix</div></div>
               <div class="card-body">${donut([
-                { label: 'Curtainsider', value: Math.round(d.deliveries * .34), color: '#4f7fff' },
-                { label: 'Reefer', value: Math.round(d.deliveries * .24), color: '#4aa3f0' },
+                { label: 'Curtainsider', value: Math.round(d.deliveries * .34), color: '#d21f4c' },
+                { label: 'Reefer', value: Math.round(d.deliveries * .24), color: '#e0637f' },
                 { label: 'Flatbed', value: Math.round(d.deliveries * .18), color: '#3ecf8e' },
                 { label: 'Container', value: Math.round(d.deliveries * .14), color: '#8b7cf0' },
                 { label: 'Heavy plant', value: Math.round(d.deliveries * .10), color: '#d99b2b' },
@@ -5067,7 +5067,7 @@ function viewRecruitment() {
           <div class="card-body">
             ${donut(stages.map((s, i) => ({
               label: statusLabel(s), value: Store.db.applications.filter((a) => a.status === s).length,
-              color: ['#8b98ab', '#4aa3f0', '#8b7cf0', '#3ecf8e', '#ef5f5f'][i],
+              color: ['#8b98ab', '#e0637f', '#8b7cf0', '#3ecf8e', '#ef5f5f'][i],
             })), { size: 150, centerValue: fmt.n(Store.db.applications.length), centerLabel: 'Applications' })}
           </div></div>
 
@@ -6021,7 +6021,7 @@ function adminOverview() {
 
     <div class="grid g-2">
       <div class="card"><div class="card-head"><div class="card-title">${icon('activity')}Fleet distance by month</div></div>
-        <div class="card-body">${areaChart([{ name: 'Distance', values: kmSeries, color: '#4f7fff' }], months,
+        <div class="card-body">${areaChart([{ name: 'Distance', values: kmSeries, color: '#d21f4c' }], months,
           { h: 230, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km, aria: 'Fleet distance by month' })}</div></div>
 
       <div class="card"><div class="card-head"><div class="card-title">${icon('userPlus')}New drivers recruited</div></div>
@@ -6544,14 +6544,14 @@ const ConvoyMap = {
     if (pts.length < 2) return;
     L.polyline(pts, { color: '#0b0d10', weight: 9, opacity: .9, interactive: false })
       .addTo(this.routeLayer);
-    L.polyline(pts, { color: '#4f7fff', weight: 3.4, opacity: .95, interactive: false })
+    L.polyline(pts, { color: '#d21f4c', weight: 3.4, opacity: .95, interactive: false })
       .addTo(this.routeLayer);
     (e.path || []).forEach((c, i) => {
       const last = i === (e.path.length - 1);
       L.circleMarker(gameLatLng(cityXY(c)), {
         radius: (i === 0 || last) ? 5.5 : 4,
         color: '#0b0d10', weight: 2,
-        fillColor: (i === 0) ? '#3ecf8e' : last ? '#ef5f5f' : '#4f7fff',
+        fillColor: (i === 0) ? '#3ecf8e' : last ? '#ef5f5f' : '#d21f4c',
         fillOpacity: 1,
       }).bindTooltip((i === 0 ? 'Departure — ' : last ? 'Destination — ' : 'Checkpoint — ')
         + cityLabel(c), { direction: 'top', offset: [0, -8] }).addTo(this.routeLayer);
@@ -6571,7 +6571,7 @@ const ConvoyMap = {
       if (!ll) return;
 
       const moving = (live.speed || 0) >= 5;
-      const colour = p.leader ? '#ffd166' : live.job ? '#4f7fff' : moving ? '#4aa3f0' : '#69727f';
+      const colour = p.leader ? '#ffd166' : live.job ? '#d21f4c' : moving ? '#e0637f' : '#69727f';
       const deg = (1 - (Number(live.heading) || 0)) * 360;
       const gap = Convoy.distanceFromLeader(e, p);
 
@@ -7534,7 +7534,7 @@ function handleAction(act, t, ev) {
         b.classList.toggle('on', showFleet ? i === 1 : i === 0));
       const labels = Array.from({ length: 12 }, (_, i) => 'W' + (i + 1));
       host.querySelector('svg').outerHTML = areaChart(
-        [{ name: showFleet ? 'Fleet distance' : 'Your distance', values: vals, color: showFleet ? '#4aa3f0' : '#4f7fff' }],
+        [{ name: showFleet ? 'Fleet distance' : 'Your distance', values: vals, color: showFleet ? '#e0637f' : '#d21f4c' }],
         labels, { fmtY: (x) => Math.round(x / 100) / 10 + 'k', fmtT: fmt.km });
       return;
     }
@@ -9188,7 +9188,7 @@ const LiveMap = {
       L.polyline(pts, { color: '#04070f', weight: 7, opacity: .85, interactive: false })
         .addTo(this.routeLayer);
       L.polyline(pts, {
-        color: '#4f7fff', weight: 3, opacity: .95, interactive: false,
+        color: '#d21f4c', weight: 3, opacity: .95, interactive: false,
         /* dashed when we had to guess a straight line, solid when it really
            does follow the roads — so the map never overstates what it knows */
         dashArray: path ? null : '6 5',
@@ -9311,7 +9311,7 @@ const LiveMap = {
       if (!ll) return;
 
       const moving = (d.speed || 0) >= 5;
-      const colour = d.job ? '#4f7fff' : moving ? '#4aa3f0' : '#69727f';
+      const colour = d.job ? '#d21f4c' : moving ? '#e0637f' : '#69727f';
       /* the game reports heading as 0..1, 0 = north and increasing westward */
       const deg = (1 - (Number(d.heading) || 0)) * 360;
 

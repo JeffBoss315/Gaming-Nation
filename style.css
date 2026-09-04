@@ -11,9 +11,9 @@
      --accent-rgb carries the channels so every translucent use can go
      through rgba(var(--accent-rgb), a). The accent used to be written out
      by hand in twenty-six places; now it is written once. */
-  --accent-rgb:79,127,255;
-  --accent:#4f7fff;
-  --accent-hover:#7397ff;
+  --accent-rgb:210,31,76;
+  --accent:#d21f4c;
+  --accent-hover:#e85075;
   --accent-soft:rgba(var(--accent-rgb),.13);
   --accent-line:rgba(var(--accent-rgb),.34);
 
@@ -286,7 +286,7 @@ table{border-collapse:collapse;width:100%}
 .badge.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
 .badge.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
 .badge.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.badge.info{color:var(--info);border-color:rgba(74,163,240,.28);background:rgba(74,163,240,.09)}
+.badge.info{color:var(--info);border-color:rgba(224,99,127,.28);background:rgba(224,99,127,.09)}
 .badge.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
 .badge.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
 .badge.solid{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -760,7 +760,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   display:grid;place-items:center;
   background:
     radial-gradient(900px 520px at 50% 28%, rgba(var(--accent-rgb),.13), transparent 64%),
-    radial-gradient(700px 420px at 78% 82%, rgba(74,163,240,.07), transparent 66%),
+    radial-gradient(700px 420px at 78% 82%, rgba(224,99,127,.07), transparent 66%),
     #06080b;
   /* the whole thing lifts away rather than merely fading */
   transition:opacity .5s var(--ease-out), visibility .5s var(--ease-out),
@@ -789,7 +789,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   background:conic-gradient(from 0deg,
     rgba(var(--accent-rgb),0) 0deg,
     rgba(var(--accent-rgb),.15) 130deg,
-    #4f7fff 300deg,
+    #d21f4c 300deg,
     #a8c0ff 360deg);
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
   mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
@@ -863,7 +863,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .splash-fill{
   position:absolute;inset:0;width:38%;left:0;height:100%;border-radius:99px;
   background:linear-gradient(90deg,
-    rgba(var(--accent-rgb),0), #4f7fff 45%, #a8c0ff 62%, rgba(var(--accent-rgb),0));
+    rgba(var(--accent-rgb),0), #d21f4c 45%, #a8c0ff 62%, rgba(var(--accent-rgb),0));
   box-shadow:0 0 12px rgba(var(--accent-rgb),.55);
   animation:splashSweep 1.5s var(--ease) infinite;
 }
@@ -909,10 +909,10 @@ table.tbl tbody tr:last-child td{border-bottom:0}
    only the accent moves.
    ============================================================ */
 .site-admin{
-  --accent:#4d8df6;
-  --accent-hover:#6ba1ff;
-  --accent-soft:rgba(77,141,246,.12);
-  --accent-line:rgba(77,141,246,.32);
+  --accent:#d8365e;
+  --accent-hover:#ef6484;
+  --accent-soft:rgba(216,54,94,.12);
+  --accent-line:rgba(216,54,94,.32);
 }
 .brand-mark{position:relative}
 .brand-mark.admin{box-shadow:0 0 0 1px var(--accent-line)}
@@ -992,7 +992,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .pill.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
 .pill.err,
 .pill.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.pill.info{color:var(--info);border-color:rgba(74,163,240,.28);background:rgba(74,163,240,.09)}
+.pill.info{color:var(--info);border-color:rgba(224,99,127,.28);background:rgba(224,99,127,.09)}
 .pill.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
 .pill.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
 
@@ -1469,7 +1469,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   animation:hllRise .2s ease;
 }
 .cmsg.mine{align-self:flex-end;background:var(--panel-3);border-color:var(--line-2)}
-.cmsg.staff{border-color:rgba(74,163,240,.34);background:rgba(74,163,240,.07)}
+.cmsg.staff{border-color:rgba(224,99,127,.34);background:rgba(224,99,127,.07)}
 .cmsg.leader{border-color:rgba(255,209,102,.34);background:rgba(255,209,102,.06)}
 
 .cmsg-who{
@@ -1617,7 +1617,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   --edge:inset 0 1px 0 rgba(255,255,255,.045);
   --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
 
-  --accent-grad:linear-gradient(180deg,#7397ff 0%,#3a68e6 100%);
+  --accent-grad:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
   --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
 
   /* Easing. The default ease is symmetrical and reads as sluggish on
@@ -1639,7 +1639,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   content:'';position:absolute;inset:-30% -10% auto -10%;height:70vh;
   background:
     radial-gradient(60% 60% at 22% 0%, rgba(var(--accent-rgb),.055), transparent 70%),
-    radial-gradient(50% 50% at 88% 8%, rgba(74,163,240,.035), transparent 70%);
+    radial-gradient(50% 50% at 88% 8%, rgba(224,99,127,.035), transparent 70%);
   filter:blur(10px);
 }
 .bg-grid{
@@ -1719,7 +1719,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   box-shadow:var(--sh-1),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.18);
 }
 .btn-primary:hover{
-  background:linear-gradient(180deg,#7397ff 0%,#3a68e6 100%);
+  background:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
   box-shadow:var(--sh-2),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.22);
 }
 .btn-ghost{box-shadow:none}

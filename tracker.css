@@ -7,13 +7,13 @@
 
 :root{
   /* brand — a single accent, used sparingly */
-  --accent-rgb:79,127,255;
-  --accent:#4f7fff;
+  --accent-rgb:210,31,76;
+  --accent:#d21f4c;
   /* The client and the platform are one product and have to look like it.
      These are style.css's values, to the digit — the hover colour here was
      still the old orange, left behind when the accent changed, so a driver
      hovering a button in the client saw a colour that exists nowhere else. */
-  --accent-hover:#7397ff;
+  --accent-hover:#e85075;
   --accent-soft:rgba(var(--accent-rgb),.13);
   --accent-line:rgba(var(--accent-rgb),.34);
 
@@ -392,20 +392,33 @@ body.can-install .install-cta{display:inline-flex}
      rail is not shown at all */
   .rail,.rail-scrim{display:none}
 
+  /* A solid coloured bar, not a dark one with a hairline.
+
+     On a phone the app bar is the only fixed thing on screen and it is
+     what tells you which app you are in. Painted the brand colour it does
+     that from across a cab; as another shade of near-black it was doing
+     nothing but holding a title. */
   .appbar{
     display:flex;align-items:center;gap:10px;flex:none;height:52px;padding:0 6px 0 4px;
     padding-top:env(safe-area-inset-top);height:calc(52px + env(safe-area-inset-top));
-    background:var(--bg);border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
+    border-bottom:1px solid rgba(0,0,0,.35);
+    box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(0,0,0,.35);
     position:sticky;top:0;z-index:60;
   }
-  .appbar .ab-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:var(--r);color:var(--text-2)}
-  .appbar .ab-btn:active{background:var(--panel-2)}
+  /* White on the bar, not --text-2: the bar is a light-on-dark surface of
+     its own and the page's text tones are mixed for the page ground. */
+  .appbar .ab-btn{width:40px;height:40px;display:grid;place-items:center;
+    border-radius:var(--r);color:rgba(255,255,255,.92)}
+  .appbar .ab-btn:active{background:rgba(0,0,0,.22)}
   .appbar .ab-btn svg{width:20px;height:20px}
-  .appbar .ab-title{font-size:15px;font-weight:600;flex:1;min-width:0;
+  .appbar .ab-title{font-size:15.5px;font-weight:650;letter-spacing:-.01em;
+    color:#fff;flex:1;min-width:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .appbar .ab-dot{width:7px;height:7px;border-radius:50%;background:var(--text-3);flex:none;margin-right:8px}
-  .appbar .ab-dot.ok{background:var(--ok)}
-  .appbar .ab-dot.err{background:var(--danger)}
+  .appbar .ab-dot{width:7px;height:7px;border-radius:50%;
+    background:rgba(255,255,255,.55);flex:none;margin-right:8px}
+  .appbar .ab-dot.ok{background:#5ef0b0}
+  .appbar .ab-dot.err{background:#ff9aa6}
 
   .main{padding:14px 13px 16px}
 
@@ -419,7 +432,8 @@ body.can-install .install-cta{display:inline-flex}
 
   .tabbar{
     display:grid;grid-template-columns:repeat(5,1fr);flex:none;
-    background:var(--rail);border-top:1px solid var(--line);
+    background:linear-gradient(180deg,#171a20 0%,#101319 100%);
+    border-top:1px solid rgba(210,31,76,.28);
     padding-bottom:env(safe-area-inset-bottom);
     position:sticky;bottom:0;z-index:70;
   }
@@ -428,9 +442,25 @@ body.can-install .install-cta{display:inline-flex}
   .tab svg{width:19px;height:19px}
   .tab.active{color:var(--accent)}
   .tab.active svg{color:var(--accent)}
+  /* The active tab gets a bar as well as a colour: on a small screen at
+     arm's length the colour alone is easy to miss. */
+  .tab.active::before{
+    content:'';position:absolute;top:0;left:22%;right:22%;height:2px;
+    border-radius:0 0 2px 2px;background:var(--accent);
+  }
   .tab .tab-count{position:absolute;top:5px;right:calc(50% - 20px);min-width:15px;height:15px;
     padding:0 4px;border-radius:99px;background:var(--accent);color:#fff;font-size:9px;
     font-weight:600;display:grid;place-items:center}
+
+  /* Anything that only means something on a machine the game runs on.
+
+     Launching Euro Truck Simulator 2, pointing the client at
+     eurotrucks2.exe, waiting for a telemetry link — none of that exists
+     on a phone, and there is no path a driver can take to make it exist.
+     Offering it is offering a button that cannot work. The phone keeps
+     the parts that are real there: the logbook, the fleet, messages, the
+     map and the convoy. */
+  .game-only{display:none !important}
 
   /* touch targets */
   .btn{height:34px;padding:0 13px}
@@ -537,11 +567,11 @@ body.can-install .install-cta{display:inline-flex}
 .launch-tile:hover{background:var(--panel-3);border-top-color:var(--accent);transform:translateY(-1px)}
 .launch-tile:active{transform:translateY(0)}
 .launch-tile.game{border-top-color:var(--accent)}
-.launch-tile.tmp{border-top-color:#4aa3f0}
+.launch-tile.tmp{border-top-color:#e0637f}
 .lt-mark{width:26px;height:26px;flex:none;display:grid;place-items:center;
   border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
 .launch-tile.game .lt-mark{color:var(--accent)}
-.launch-tile.tmp .lt-mark{color:#4aa3f0}
+.launch-tile.tmp .lt-mark{color:#e0637f}
 .lt-mark svg{width:15px;height:15px}
 .lt-text{display:flex;flex-direction:column;min-width:0;line-height:1.15}
 .lt-1{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)}
@@ -577,7 +607,7 @@ body.can-install .install-cta{display:inline-flex}
   padding:32px 20px;
   background:
     radial-gradient(900px 420px at 78% -10%, rgba(var(--accent-rgb),.13), transparent 60%),
-    radial-gradient(700px 380px at 8% 108%, rgba(74,163,240,.09), transparent 62%);
+    radial-gradient(700px 380px at 8% 108%, rgba(224,99,127,.09), transparent 62%);
 }
 
 /* The card was a group of controls painted straight onto the window, with
@@ -685,14 +715,15 @@ body.can-install .install-cta{display:inline-flex}
     display:flex;align-items:center;gap:12px;flex:none;
     height:calc(64px + env(safe-area-inset-top));
     padding:0 14px;padding-top:env(safe-area-inset-top);
-    background:var(--rail);border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
+    border-bottom:1px solid rgba(0,0,0,.35);
     position:sticky;top:0;z-index:60;
   }
   .ab-face{position:relative;flex:none;width:46px;height:46px}
   .ab-avatar{
     width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
-    background:linear-gradient(160deg,#25507d,#122a45);
-    border:2px solid #5b8cc4;color:#eaf1fb;
+    background:linear-gradient(160deg,#5c0f26,#3a0a18);
+    border:2px solid rgba(255,255,255,.34);color:#fff;
     font-size:14px;font-weight:700;letter-spacing:.02em;
     box-shadow:0 0 0 2px rgba(10,22,38,.9),0 2px 10px rgba(0,0,0,.45);
   }
@@ -897,7 +928,7 @@ body.can-install .install-cta{display:inline-flex}
 /* what the lorry has already covered */
 .splash-fill{
   position:absolute;left:0;bottom:0;height:3px;width:0;border-radius:99px;
-  background:linear-gradient(90deg,#4f7fff,#f2a05a);z-index:1;
+  background:linear-gradient(90deg,#d21f4c,#f2a05a);z-index:1;
   animation:splashFill 3s linear infinite;
 }
 /* lane markings, sliding past to give it some speed */
@@ -1020,8 +1051,8 @@ body.can-install .install-cta{display:inline-flex}
     --text-2:#a0a7b0;
     --text-3:#6f767f;
     /* Heavyline's ember, unchanged — the brand is the accent */
-    --accent:#4f7fff;
-    --accent-hover:#ff8038;
+    --accent:#d21f4c;
+    --accent-hover:#e85075;
     --accent-soft:rgba(var(--accent-rgb),.13);
     --accent-line:rgba(var(--accent-rgb),.34);
   }
@@ -1033,37 +1064,58 @@ body.can-install .install-cta{display:inline-flex}
   }
 
   /* ---- header ---- */
+  /* The bar every phone screen is under, and the last word on how it
+     looks — two earlier blocks set it and this one wins. Painted solid
+     rather than a dark translucent wash: on a phone it is the only fixed
+     thing on screen, and it is what says which app you are in. */
   .appbar{
     height:calc(66px + env(safe-area-inset-top));
     padding:0 16px;padding-top:env(safe-area-inset-top);
-    background:linear-gradient(180deg, rgba(20,22,25,.96), rgba(11,12,14,.92));
-    backdrop-filter:blur(12px);
-    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
+    backdrop-filter:none;
+    border-bottom:1px solid rgba(0,0,0,.35);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 2px 12px rgba(0,0,0,.4);
   }
+  /* Dark on the crimson, so the face reads as a hole in the bar rather
+     than a second bright thing competing with the title. */
   .ab-avatar{
     width:42px;height:42px;border-radius:13px;
-    background:linear-gradient(155deg, var(--accent), #b8480d);
-    border:0;color:#fff;font-size:14px;font-weight:700;letter-spacing:.02em;
-    box-shadow:0 4px 14px rgba(var(--accent-rgb),.30);
+    background:linear-gradient(155deg,#5c0f26,#3a0a18);
+    border:1px solid rgba(255,255,255,.22);
+    color:#fff;font-size:14px;font-weight:700;letter-spacing:.02em;
+    box-shadow:0 3px 10px rgba(0,0,0,.45);
   }
+  /* The text on the bar is on a coloured surface now, not the page. */
+  .ab-name{color:#fff}
+  .ab-sec{color:rgba(255,255,255,.72)}
+  .ab-rank{color:#fff;background:rgba(0,0,0,.22);border-color:rgba(255,255,255,.22)}
+  .ab-rank svg{color:#fff}
+  .ab-live{border-color:#8d1739}
   .ab-face{width:42px;height:42px}
   .ab-live{
     right:-1px;bottom:-1px;width:12px;height:12px;
     border:2.5px solid var(--rail);background:var(--text-3);
   }
   .ab-live.ok{background:var(--ok);box-shadow:0 0 8px rgba(62,207,142,.6)}
+  /* White, not the page's text tones and NOT --accent.
+
+     The bar is crimson now, so the accent sits on top of itself: the
+     section label under the name was accent-on-accent and effectively
+     invisible. Both lines are set against the bar rather than against
+     the page. */
   .ab-name{
-    font-size:16.5px;font-weight:650;letter-spacing:-.015em;line-height:1.2;color:var(--text);
+    font-size:16.5px;font-weight:650;letter-spacing:-.015em;line-height:1.2;color:#fff;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .ab-sec{
     font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--accent);margin-top:3px;
+    color:rgba(255,255,255,.78);margin-top:3px;
   }
 
   /* the rank mark: a plain Heavyline chevron, no borrowed heraldry */
-  .ab-rank{width:44px;height:44px;border-radius:13px;background:var(--panel-2);
-    border:1px solid var(--line-2);transition:var(--t)}
+  .ab-rank{width:44px;height:44px;border-radius:13px;
+    background:rgba(0,0,0,.24);
+    border:1px solid rgba(255,255,255,.22);transition:var(--t)}
   .ab-rank:active{transform:scale(.94)}
   .ab-rank svg{width:19px;height:19px;fill:none;stroke:var(--text-2);stroke-width:1.8}
   .ab-rank svg .star{fill:var(--text-2);stroke:none}
@@ -1478,7 +1530,7 @@ body.can-install .install-cta{display:inline-flex}
   --sh-3:0 4px 8px rgba(0,0,0,.34), 0 16px 40px rgba(0,0,0,.42);
   --edge:inset 0 1px 0 rgba(255,255,255,.045);
   --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
-  --accent-grad:linear-gradient(180deg,#5f8cff 0%,#3a68e6 100%);
+  --accent-grad:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
   --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
 
   --ease:cubic-bezier(.4,0,.2,1);
@@ -1534,8 +1586,15 @@ body.can-install .install-cta{display:inline-flex}
   box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16);
 }
 
-/* ---- the status bar, which is the one thing always on screen ---- */
-.appbar,.statusbar{
+/* ---- the status bar, which is the one thing always on screen ----
+
+   .appbar used to be in this rule and is deliberately no longer. It only
+   ever shows on a phone — it is display:none above 720px — so the only
+   thing this selector did there was reach past the phone block and
+   repaint the bar dark. Being later in the file with the same
+   specificity, it won, and the phone bar stayed near-black however many
+   times the breakpoint rule was changed. */
+.statusbar{
   background:rgba(7,9,16,.78);
   backdrop-filter:saturate(1.5) blur(12px);
   -webkit-backdrop-filter:saturate(1.5) blur(12px);
