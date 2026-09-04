@@ -85,6 +85,40 @@ const SOURCES = {
   },
 };
 
+/* Copying an 80 MB file into a OneDrive folder loses a race with the sync
+   client often enough to matter: it opens the destination to upload it and
+   the copy comes back EBUSY, or occasionally EPERM. Nothing is wrong with
+   either file — the lock is held for a moment and then released.
+
+   So: write beside the target and rename over it, which is atomic and
+   touches the destination for the shortest possible time, and retry a few
+   times if even that loses. Failing a release build over a sync client
+   holding a handle for half a second is not a real failure. */
+function copyInto(from, to) {
+  const tmp = to + '.part';
+  const waits = [0, 400, 1200, 3000, 6000];
+
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) {
+      const until = Date.now() + waits[i];
+      while (Date.now() < until) { /* deliberately synchronous */ }
+    }
+
+    try {
+      fs.copyFileSync(from, tmp);
+      fs.renameSync(tmp, to);
+      return i;                      /* how many attempts it took */
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch (x) { /* may not exist */ }
+
+      const transient = e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'EACCES';
+      if (!transient || i === waits.length - 1) throw e;
+    }
+  }
+
+  return -1;
+}
+
 const found = [];
 const missing = [];
 
@@ -113,9 +147,15 @@ for (const f of found) {
   const mb = (fs.statSync(f.from).size / 1e6).toFixed(1);
 
   console.log('  ' + f.fromName);
-  console.log('    -> release/' + f.name + '   ' + mb + ' MB');
 
-  if (!DRY) fs.copyFileSync(f.from, to);
+  if (DRY) {
+    console.log('    -> release/' + f.name + '   ' + mb + ' MB');
+    continue;
+  }
+
+  const tries = copyInto(f.from, to);
+  console.log('    -> release/' + f.name + '   ' + mb + ' MB'
+    + (tries > 0 ? '   (took ' + (tries + 1) + ' attempts — the folder is synced)' : ''));
 }
 
 for (const m of missing) {
