@@ -1,5 +1,5 @@
 -- ============================================================
--- HEAVYLINE LOGISTICS — live driver positions
+-- GAMING NATION — live driver positions
 --
 -- Run this in Supabase -> SQL Editor. Idempotent, like setup.sql:
 -- safe on a fresh project and safe to re-run. Nothing here drops

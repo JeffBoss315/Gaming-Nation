@@ -1,5 +1,5 @@
 /* ============================================================
-   Heavyline Trucker — Electron shell
+   Gaming Nation Trucker — Electron shell
 
    Wraps the client in a real desktop window and provides what a web
    page cannot do for itself: file pickers, launching the game,
@@ -25,7 +25,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'Heavyline Trucker',
+    title: 'Gaming Nation Trucker',
     icon: path.join(__dirname, 'icons', 'icon-512.png'),
     backgroundColor: '#0a0c0f',
     frame: false,                 /* the app draws its own title bar */
@@ -65,9 +65,9 @@ function buildTray() {
   let image = nativeImage.createFromPath(path.join(__dirname, 'icons', 'icon-192.png'));
   if (!image.isEmpty()) image = image.resize({ width: 16, height: 16 });
   tray = new Tray(image);
-  tray.setToolTip('Heavyline Trucker');
+  tray.setToolTip('Gaming Nation Trucker');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Heavyline Trucker', click: () => { if (win) { win.show(); win.focus(); } } },
+    { label: 'Open Gaming Nation Trucker', click: () => { if (win) { win.show(); win.focus(); } } },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));

@@ -1,9 +1,9 @@
 {
   "name": "heavyline-trucker",
-  "productName": "Heavyline Trucker",
+  "productName": "Gaming Nation Trucker",
   "version": "1.0.0",
-  "description": "Heavyline Logistics driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
-  "author": "Heavyline Logistics",
+  "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
+  "author": "Gaming Nation",
   "main": "electron-main.js",
   "private": true,
   "scripts": {
@@ -55,7 +55,7 @@
   },
   "build": {
     "appId": "com.heavyline.trucker",
-    "productName": "Heavyline Trucker",
+    "productName": "Gaming Nation Trucker",
     "directories": {
       "output": "dist"
     },
@@ -112,7 +112,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Heavyline Trucker",
+      "shortcutName": "Gaming Nation Trucker",
       "installerIcon": "icons/icon.ico",
       "uninstallerIcon": "icons/icon.ico",
       "installerHeaderIcon": "icons/icon.ico"

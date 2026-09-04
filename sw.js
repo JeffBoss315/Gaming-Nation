@@ -1,5 +1,5 @@
 /* ============================================================
-   Heavyline Trucker — service worker
+   Gaming Nation Trucker — service worker
    Makes the client installable and usable with no connection.
    Bump CACHE when you ship a change so clients pick it up.
    ============================================================ */

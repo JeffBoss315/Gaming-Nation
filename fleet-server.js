@@ -1,5 +1,5 @@
 /* ============================================================
-   HEAVYLINE — the company service
+   GAMING NATION — the company service
 
      npm run fleet                 (or: node fleet-server.js --port 8787)
 
@@ -1161,7 +1161,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/status') {
     const n = listeners.size;
     const lines = [
-      'Heavyline company service',
+      'Gaming Nation company service',
       '',
       'company version  ' + company.version,
       'drivers reporting  ' + fleet.size,
@@ -1239,7 +1239,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, HOST, () => {
   const base = 'http://localhost:' + PORT;
   console.log('');
-  console.log('  Heavyline Logistics — company service');
+  console.log('  Gaming Nation — company service');
   console.log('  --------------------------------------');
   console.log('  Website      :  ' + base + '/');
   console.log('  Console      :  ' + base + '/admin.html');

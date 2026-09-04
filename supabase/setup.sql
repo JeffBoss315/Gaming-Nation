@@ -1,5 +1,5 @@
 -- ============================================================
--- HEAVYLINE LOGISTICS — complete database setup
+-- GAMING NATION — complete database setup
 --
 -- Run this ONCE in Supabase → SQL Editor. It is idempotent: safe
 -- on a fresh project and safe to re-run over the existing one.

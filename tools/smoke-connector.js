@@ -5,7 +5,7 @@
 
    Stands up the real company service and a fake game, then runs
    game-connector.js as a separate process exactly as a driver
-   would, and checks that a whole run reaches Heavyline through
+   would, and checks that a whole run reaches Gaming Nation through
    it: the game being seen, the driver appearing on the board, a
    job being taken and tracked, and the delivery being filed and
    credited through the API.
@@ -79,7 +79,7 @@ const req = (method, p, body) => new Promise((done, fail) => {
 (async () => {
   game.listen(GAME_PORT, '127.0.0.1');
   await wait(300);
-  say('\nHeavyline Game Connector\n');
+  say('\nGaming Nation Game Connector\n');
 
   /* a company for the run to be filed against */
   await req('PUT', '/api/company', {
@@ -111,7 +111,7 @@ const req = (method, p, body) => new Promise((done, fail) => {
     (out.match(/GAME LAUNCHED.*/) || [''])[0].trim());
 
   const ev1 = await req('GET', '/api/events?since=0');
-  check('and tells Heavyline the driver is online',
+  check('and tells Gaming Nation the driver is online',
     (ev1.events || []).some((e) => e.kind === 'session.start'),
     (ev1.events || []).map((e) => e.kind).join(',') || 'none');
 
@@ -127,12 +127,12 @@ const req = (method, p, body) => new Promise((done, fail) => {
 
   check('a job taken in game is picked up', /JOB STARTED/.test(out),
     (out.match(/JOB STARTED.*/) || [''])[0].trim());
-  check('the job number comes from Heavyline, in sequence',
+  check('the job number comes from Gaming Nation, in sequence',
     /HLL-\d{6}/.test(out), (out.match(/HLL-\d{6}/) || ['none'])[0]);
 
   const ev2 = await req('GET', '/api/events?since=0');
   const start = (ev2.events || []).find((e) => e.kind === 'job.start');
-  check('the job start reaches Heavyline', !!start, start ? start.text : 'NOT SENT');
+  check('the job start reaches Gaming Nation', !!start, start ? start.text : 'NOT SENT');
   check('carrying its job number', !!start && /^HLL-/.test(start.jobId || ''),
     start ? start.jobId : '-');
 
@@ -186,7 +186,7 @@ const req = (method, p, body) => new Promise((done, fail) => {
 
   /* ---- nothing is left unsent ----
      Everything that matters goes through an outbox on disk and is only
-     removed once Heavyline has taken it, so an empty outbox is the proof
+     removed once Gaming Nation has taken it, so an empty outbox is the proof
      that the whole run actually landed. */
   const outbox = path.join(__dirname, '..', 'hll-outbox.json');
   let queued = null;
@@ -224,7 +224,7 @@ const req = (method, p, body) => new Promise((done, fail) => {
     /GAME CLOSED/.test(out), (out.match(/GAME CLOSED.*/) || [''])[0].trim() || 'NOT NOTICED');
 
   const ev4 = await req('GET', '/api/events?since=0');
-  check('and Heavyline is told they are offline',
+  check('and Gaming Nation is told they are offline',
     (ev4.events || []).some((e) => e.kind === 'session.end'),
     (ev4.events || []).map((e) => e.kind).join(','));
 

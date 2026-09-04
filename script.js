@@ -1,5 +1,5 @@
 /* ============================================================
-   HEAVYLINE LOGISTICS — HLL Digital Headquarters
+   GAMING NATION — HLL Digital Headquarters
    Part 1/4 — utilities, icons, domain constants, seed data, store
    ============================================================ */
 'use strict';
@@ -146,11 +146,11 @@ const RANKS = [
   { i: 0, key: 'recruit',      name: 'Recruit',              abbr: 'RCT', km: 0,      convoys: 0,  att: 0,  color: '#8b98ab' },
   { i: 1, key: 'trainee',      name: 'Trainee Driver',       abbr: 'TRN', km: 2500,   convoys: 1,  att: 50, color: '#9fb4cc' },
   { i: 2, key: 'junior',       name: 'Junior Driver',        abbr: 'JNR', km: 10000,  convoys: 4,  att: 60, color: '#5eb0e8' },
-  { i: 3, key: 'driver',       name: 'Driver',               abbr: 'DRV', km: 25000,  convoys: 10, att: 65, color: '#e0637f' },
+  { i: 3, key: 'driver',       name: 'Driver',               abbr: 'DRV', km: 25000,  convoys: 10, att: 65, color: '#b9e87a' },
   { i: 4, key: 'senior',       name: 'Senior Driver',        abbr: 'SNR', km: 50000,  convoys: 20, att: 70, color: '#3ecf8e' },
   { i: 5, key: 'professional', name: 'Professional Driver',  abbr: 'PRO', km: 100000, convoys: 40, att: 75, color: '#8b7cf0' },
   { i: 6, key: 'elite',        name: 'Elite Driver',         abbr: 'ELT', km: 175000, convoys: 65, att: 80, color: '#d99b2b' },
-  { i: 7, key: 'veteran',      name: 'Veteran Driver',       abbr: 'VET', km: 275000, convoys: 90, att: 85, color: '#d21f4c' },
+  { i: 7, key: 'veteran',      name: 'Veteran Driver',       abbr: 'VET', km: 275000, convoys: 90, att: 85, color: '#8bd62b' },
   { i: 8, key: 'captain',      name: 'HLL Captain',          abbr: 'CPT', km: 400000, convoys: 130, att: 90, color: '#9db8ff' },
 ];
 const rankOf = (d) => RANKS[clamp(d.rankIdx ?? 0, 0, RANKS.length - 1)];
@@ -164,12 +164,12 @@ function earnedRank(d) {
 /* 3.2 Roles & permissions — spec §17 */
 const ROLES = {
   driver:        { name: 'Driver',              level: 1,  color: '#8b98ab' },
-  recruiter:     { name: 'Recruiter',           level: 4,  color: '#e0637f' },
+  recruiter:     { name: 'Recruiter',           level: 4,  color: '#b9e87a' },
   dispatcher:    { name: 'Dispatcher',          level: 4,  color: '#3ecf8e' },
   event_manager: { name: 'Event Manager',       level: 5,  color: '#8b7cf0' },
   moderator:     { name: 'Moderator',           level: 6,  color: '#d99b2b' },
-  management:    { name: 'Management',          level: 8,  color: '#d21f4c' },
-  admin:         { name: 'Administrator',       level: 9,  color: '#d21f4c' },
+  management:    { name: 'Management',          level: 8,  color: '#8bd62b' },
+  admin:         { name: 'Administrator',       level: 9,  color: '#8bd62b' },
   super_admin:   { name: 'Super Administrator', level: 10, color: '#9db8ff' },
 };
 const PERMS = {
@@ -204,7 +204,7 @@ const ACHIEVEMENTS = [
   { id: 'a-elite',    name: 'Elite Driver',         desc: 'Reach the rank of Elite Driver.',              icon: 'star',     tier: 'gold',   metric: 'rank', goal: 6 },
   { id: 'a-lead',     name: 'Convoy Leader',        desc: 'Lead an official HLL convoy.',                 icon: 'flag',     tier: 'silver', metric: 'manual', goal: 1 },
   { id: 'a-community',name: 'Community Contributor',desc: 'Recognised for outstanding community work.',   icon: 'users',    tier: 'gold',   metric: 'manual', goal: 1 },
-  { id: 'a-founder',  name: 'Founding Member',      desc: 'Joined Heavyline Logistics in its first year.',icon: 'shield',   tier: 'plat',   metric: 'manual', goal: 1 },
+  { id: 'a-founder',  name: 'Founding Member',      desc: 'Joined Gaming Nation in its first year.',icon: 'shield',   tier: 'plat',   metric: 'manual', goal: 1 },
 ];
 const TIER_COLOR = { bronze: '#a8794f', silver: '#9aa3af', gold: '#e8913a', plat: '#6fb6c9' };
 
@@ -248,8 +248,8 @@ const TRUCK_MODELS = [
   { make: 'Renault', model: 'T High 520',    hp: 520, cab: 'T High',    gearbox: 'Optidriver 12-spd', chassis: '4x2' },
 ];
 const LIVERIES = [
-  { key: 'heavyline',  name: 'Heavyline Signature', a: '#d21f4c', b: '#141b26' },
-  { key: 'midnight',   name: 'Midnight Steel',      a: '#e0637f', b: '#0f1721' },
+  { key: 'heavyline',  name: 'Gaming Nation Signature', a: '#8bd62b', b: '#141b26' },
+  { key: 'midnight',   name: 'Midnight Steel',      a: '#b9e87a', b: '#0f1721' },
   { key: 'gold',       name: 'Gold Standard',       a: '#9db8ff', b: '#1b1508' },
   { key: 'arctic',     name: 'Arctic Haul',         a: '#e6edf6', b: '#1a2230' },
   { key: 'forest',     name: 'Forest Line',         a: '#3ecf8e', b: '#0e1a16' },
@@ -563,7 +563,7 @@ const Accounts = {
            remains. Say so, and point at the way through. */
         if (/already registered|already exists/i.test(authError.message || '')) {
           throw new Error(
-            'That email address already has a Heavyline sign-in.\n\n'
+            'That email address already has a Gaming Nation sign-in.\n\n'
             + 'If this is you and an earlier attempt failed part way, the '
             + 'sign-in survived — use Sign in with the same password, or '
             + 'reset it from the sign-in tab. There is no need to register '
@@ -587,7 +587,7 @@ const Accounts = {
 
 
       /* ============================================================
-         2. CREATE HEAVYLINE DRIVER ROW
+         2. CREATE GAMING NATION DRIVER ROW
          ============================================================ */
 
       /* The row is made by a trigger on auth.users — see
@@ -717,7 +717,7 @@ const Accounts = {
         throw driverError;
       }
 
-      console.log('[HLL] Heavyline driver created:', driver);
+      console.log('[HLL] Gaming Nation driver created:', driver);
 
 
       /* ============================================================
@@ -738,7 +738,7 @@ const Accounts = {
           experience: 'Not stated',
           hours: 0,
           previousVtc: 'None',
-          why: 'Registered through the Heavyline platform.',
+          why: 'Registered through the Gaming Nation platform.',
           status: 'pending',
           submitted: account.created || new Date().toISOString(),
           notes: [],
@@ -902,7 +902,7 @@ const Accounts = {
          ============================================================ */
 
       Store.logActivity(driverId, 'join', 'userPlus',
-        isOwner ? account.name + ' opened Heavyline Logistics'
+        isOwner ? account.name + ' opened Gaming Nation'
                 : account.name + ' registered and is waiting to be let in',
         '', !isOwner);   /* the fleet hears about them when they are approved */
 
@@ -914,7 +914,7 @@ const Accounts = {
           icon: 'userPlus',
           title: 'New driver signed up',
           body: account.name + ' has registered and is waiting to be let in. '
-            + 'Approve them to release the Heavyline Trucker download.',
+            + 'Approve them to release the Gaming Nation Trucker download.',
           href: '#/admin'
         };
 
@@ -930,7 +930,7 @@ const Accounts = {
             ...notice,
             title: 'New application for you',
             body: account.name + ' has applied to drive and is waiting on you. '
-              + 'Approve them to release the Heavyline Trucker download.'
+              + 'Approve them to release the Gaming Nation Trucker download.'
           });
         }
 
@@ -1188,7 +1188,7 @@ async verify(handle, password) {
             email: user.email
         });
 
-        // Find the Heavyline driver linked to this Auth user
+        // Find the Gaming Nation driver linked to this Auth user
         let { data: driver, error: driverError } =
             await window.hllSupabase
                 .from('drivers')
@@ -1234,7 +1234,7 @@ async verify(handle, password) {
                     ? 'Your sign-in works, but your driver record could not be created — '
                       + 'the database refused it. Run supabase/setup.sql, which adds the '
                       + 'policy that lets a driver create their own record.'
-                    : 'Your login is valid, but your Heavyline driver account is not linked. Contact management.'
+                    : 'Your login is valid, but your Gaming Nation driver account is not linked. Contact management.'
             };
         }
 
@@ -1247,11 +1247,11 @@ async verify(handle, password) {
 
             return {
                 error:
-                    'This account is suspended. Contact HLL management.'
+                    'This account is suspended. Contact Gaming Nation management.'
             };
         }
 
-        console.log('[HLL] Heavyline driver authenticated:', {
+        console.log('[HLL] Gaming Nation driver authenticated:', {
             driverId: driver.id,
             driverCode: driver.driver_code,
             name: driver.full_name,
@@ -1321,7 +1321,7 @@ async verify(handle, password) {
 /* ============================================================
    THE OWNER ACCOUNT
    ------------------------------------------------------------
-   Heavyline ships with its owner already provisioned, so there is
+   Gaming Nation ships with its owner already provisioned, so there is
    no setup step and no window in which the company has no
    administrator.
 
@@ -1950,21 +1950,21 @@ function notifyStaff(perm, payload, exceptId) {
    ============================================================ */
 
 /* ---------------- 6. Small chrome components ---------------- */
-/* ---------------- the Heavyline emblem ----------------
+/* ---------------- the Gaming Nation emblem ----------------
    hll.jpg is the company's own artwork and the source every icon in the app
    is derived from. It is used as the emblem — the company's face — where a
    company's face belongs: the way in, the top of the command centre, and on
    a convoy, which is the company acting as one.
 
    It is deliberately not used as a general-purpose picture. Everything else
-   stays on the stroked icon set, so the emblem keeps meaning "Heavyline"
+   stays on the stroked icon set, so the emblem keeps meaning "Gaming Nation"
    rather than becoming decoration.
 
    The artwork is square (1410x1414). Every size below is a square box with
    object-fit: cover, so it can never be stretched however it is placed. */
 function hllEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
-    <img src="hll.jpg" alt="Heavyline Logistics" width="1410" height="1414" loading="lazy">
+    <img src="hll.jpg" alt="Gaming Nation" width="1410" height="1414" loading="lazy">
   </span>`;
 }
 
@@ -2204,7 +2204,7 @@ function barChart(items, opts = {}) {
     const bh = Math.max(2, (it.value / max) * ih);
     const bx = pad.l + i * step + (step - bw) / 2;
     const by = pad.t + ih - bh;
-    const c = it.color || '#d21f4c';
+    const c = it.color || '#8bd62b';
     return `<g><rect class="bar-r" x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="5" fill="${c}">
         <title>${esc(it.label)}: ${opts.fmtT ? opts.fmtT(it.value) : fmt.n(it.value)}</title></rect>
       <text class="axis-lbl" x="${(bx + bw / 2).toFixed(1)}" y="${H - 9}" text-anchor="middle">${esc(it.short || it.label)}</text></g>`;
@@ -2215,7 +2215,7 @@ function barChart(items, opts = {}) {
 }
 
 /* 7.3 donut */
-const DONUT_FALLBACK = ['#d21f4c', '#e0637f', '#3ecf8e', '#8b7cf0', '#d99b2b', '#ef5f5f', '#5b7a99'];
+const DONUT_FALLBACK = ['#8bd62b', '#b9e87a', '#3ecf8e', '#8b7cf0', '#d99b2b', '#ef5f5f', '#5b7a99'];
 function donut(segments, opts = {}) {
   const size = opts.size || 190, sw = opts.stroke || 20, r = (size - sw) / 2, c = size / 2;
   const circ = 2 * Math.PI * r;
@@ -2347,7 +2347,7 @@ function routeMap(path, opts = {}) {
     marker = `<g class="truck-marker" transform="translate(${mx.toFixed(1)},${my.toFixed(1)})">
       <circle r="13" fill="rgba(79,127,255,.20)"><animate attributeName="r" values="11;18;11" dur="2.4s" repeatCount="indefinite"/>
         <animate attributeName="opacity" values=".5;0;.5" dur="2.4s" repeatCount="indefinite"/></circle>
-      <circle r="8" fill="#d21f4c" stroke="#06090f" stroke-width="2"/>
+      <circle r="8" fill="#8bd62b" stroke="#06090f" stroke-width="2"/>
       <g transform="translate(-5.5,-5.5) scale(.46)" fill="none" stroke="#150a03" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS.truck}</g>
       <title>Convoy position — ${Math.round(p * 100)}% of route complete</title></g>`;
   }
@@ -2379,7 +2379,7 @@ function rigSvg(liveryKey, opts = {}) {
     <rect x="8" y="26" width="150" height="50" rx="3" fill="#1c2128" stroke="${stroke}"/>
     <rect x="8" y="47" width="150" height="4" fill="${L.a}" opacity=".8"/>
     <text x="83" y="42" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="600"
-      fill="#69727f" letter-spacing="2.5">HEAVYLINE</text>
+      fill="#69727f" letter-spacing="2.5">GAMING NATION</text>
     <!-- chassis -->
     <rect x="8" y="76" width="240" height="4" rx="2" fill="${stroke}"/>
     <!-- cab -->
@@ -2408,7 +2408,7 @@ function toast(title, type = 'info', body = '') {
 }
 
 /* ============================================================
-   HEAVYLINE MODAL SYSTEM
+   GAMING NATION MODAL SYSTEM
    ============================================================ */
 
 let modalStack = [];
@@ -2482,7 +2482,7 @@ function openModal({
 
     if (!layers) {
         console.error(
-            'Heavyline error: #layers element was not found.'
+            'Gaming Nation error: #layers element was not found.'
         );
         return null;
     }
@@ -2660,7 +2660,7 @@ function openDrawer(title, body, onMount) {
 
     if (!layers) {
         console.error(
-            'Heavyline error: #layers element was not found.'
+            'Gaming Nation error: #layers element was not found.'
         );
         return null;
     }
@@ -2685,7 +2685,7 @@ function openDrawer(title, body, onMount) {
    SUPABASE PASSWORD RESET
    ============================================================ */
 
-async function resetHeavylinePassword(email) {
+async function resetGamingNationPassword(email) {
 
     email = email.trim();
 
@@ -2778,7 +2778,7 @@ function openForgotPasswordModal() {
         title: 'Reset Password',
 
         sub:
-            'Enter your Heavyline account email',
+            'Enter your Gaming Nation account email',
 
         size: 'narrow',
 
@@ -2904,7 +2904,7 @@ function openForgotPasswordModal() {
                         'Sending reset link...';
 
                     const success =
-                        await resetHeavylinePassword(
+                        await resetGamingNationPassword(
                             email
                         );
 
@@ -3121,10 +3121,10 @@ function shellHTML() {
   <div class="shell" id="shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <span class="brand-mark ${isAdminSite() ? 'admin' : ''}"><img src="icons/mark.png" alt="Heavyline Logistics"></span>
+        <span class="brand-mark ${isAdminSite() ? 'admin' : ''}"><img src="icons/mark.png" alt="Gaming Nation"></span>
         <div class="grow">
-          <div class="brand-name">HEAVYLINE</div>
-          <div class="brand-sub">${isAdminSite() ? 'Management' : 'Logistics'}</div>
+          <div class="brand-name">GAMING NATION</div>
+          <div class="brand-sub">${isAdminSite() ? 'Management' : 'Community'}</div>
         </div>
         <button class="icon-btn mobile-only" data-act="close-sidebar" aria-label="Close menu">${icon('x')}</button>
       </div>
@@ -3205,7 +3205,7 @@ function viewWrongSite() {
     <div class="empty-state" style="max-width:520px;margin:60px auto;text-align:center">
       <span class="stat-ico" style="margin:0 auto;width:56px;height:56px;color:var(--warn)">${icon('shield')}</span>
       <h1 class="page-title mt-16">This is the management console</h1>
-      <p class="t2 mt-8">Your account drives for Heavyline; it does not run it. Everything you
+      <p class="t2 mt-8">Your account drives for Gaming Nation; it does not run it. Everything you
         need — your runs, convoys, standings and the client download — is on the drivers' site.</p>
       <div class="row gap-10 mt-20" style="justify-content:center">
         <button class="btn btn-primary" data-act="site-drivers">${icon('home')}Go to the drivers' site</button>
@@ -3285,7 +3285,7 @@ function viewAuth() {
     <section class="auth-vis">
       <div class="row gap-16" style="position:relative">
         ${hllEmblem('lg', 'framed')}
-        <div><div class="brand-name" style="font-size:17px">HEAVYLINE LOGISTICS</div>
+        <div><div class="brand-name" style="font-size:17px">GAMING NATION</div>
         <div class="brand-sub">Digital Headquarters</div>
         <div class="brand-strap">Virtual logistics · Real drivers · Real-time operations</div></div>
       </div>
@@ -3294,7 +3294,7 @@ function viewAuth() {
         <div class="hero-motto mb-12">${db.meta.founded
           ? 'Est. ' + new Date(db.meta.founded).getFullYear() + ' · Europe-wide'
           : 'Virtual trucking company · Europe-wide'}</div>
-        <h1 class="hero-title">The digital <span class="grad-text">headquarters</span> of the Heavyline fleet.</h1>
+        <h1 class="hero-title">The digital <span class="grad-text">headquarters</span> of the Gaming Nation fleet.</h1>
         <p class="t2 mt-16" style="font-size:15px;line-height:1.65">
           Convoys, driver records, fleet assignments, rankings and achievements —
           one command centre for every HLL driver, and a full management console for the people running it.</p>
@@ -3304,7 +3304,7 @@ function viewAuth() {
         </div>
 
         <div class="mt-24">
-          <div class="eyebrow mb-12">Follow Heavyline</div>
+          <div class="eyebrow mb-12">Follow Gaming Nation</div>
           ${socialHTML()}
         </div>
       </div>
@@ -3382,7 +3382,7 @@ function setupFormHTML() {
   return `
     <div class="eyebrow">First run</div>
     <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em">Create the owner account</h2>
-    <p class="t2 sm mt-4">Heavyline is empty. This first account owns the company and
+    <p class="t2 sm mt-4">Gaming Nation is empty. This first account owns the company and
       has every administrator permission; everyone else registers as a driver.</p>
 
     <form id="setupForm" class="mt-20" novalidate>
@@ -3431,7 +3431,7 @@ function signInFormHTML() {
 
     <form id="loginForm" class="mt-20" novalidate>
       <div class="field">
-        <label for="li-id">Email or HLL Driver ID</label>
+        <label for="li-id">Email or Driver ID</label>
         <input class="input" id="li-id" name="id" placeholder="you@example.com" autocomplete="username">
         <span class="err-msg hide" data-err="id"></span>
       </div>
@@ -3459,7 +3459,7 @@ function registerFormHTML() {
   return `
     <div class="eyebrow">Join the fleet</div>
     <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em">Create your account</h2>
-    <p class="t2 sm mt-4">This also files your application to drive for Heavyline.</p>
+    <p class="t2 sm mt-4">This also files your application to drive for Gaming Nation.</p>
 
     <form id="registerForm" class="mt-20" novalidate>
       <div class="field">
@@ -3499,7 +3499,7 @@ function registerFormHTML() {
       </div>
       <label class="check ${d.agree ? 'on' : ''}" id="rg-agree-wrap">
         <input type="checkbox" id="rg-agree" ${d.agree ? 'checked' : ''}>
-        <span class="sm t2">I agree to follow the HLL convoy standards and community rules.</span>
+        <span class="sm t2">I agree to follow the Gaming Nation convoy standards and community rules.</span>
       </label>
       <span class="err-msg hide mt-8" data-err="agree"></span>
 
@@ -3666,7 +3666,7 @@ const rejected =
           : 'One step left — apply to drive'}</div>
         <p class="t2 sm mt-8">${waiting
           ? 'Sent ' + esc(fmt.rel(app.submitted)) + ' as <span class="mono">' + esc(app.id) + '</span>. '
-            + 'A recruiter reviews it and you will get a notification here. The Heavyline Trucker '
+            + 'A recruiter reviews it and you will get a notification here. The Gaming Nation Trucker '
             + 'download is released at the same time.'
           : 'You have an account, but you are not on the roster yet. Send a short application — '
             + 'name, email and country is all it asks for — and recruitment picks it up straight away.'}</p>
@@ -3891,7 +3891,7 @@ function viewDashboard() {
             </div>
           </div>
           <div class="card-body" id="mileageChart" data-mine='${JSON.stringify(weeks)}' data-fleet='${JSON.stringify(fleetWeeks)}'>
-            ${areaChart([{ name: 'Your distance', values: weeks, color: '#d21f4c' }], weekLabels,
+            ${areaChart([{ name: 'Your distance', values: weeks, color: '#8bd62b' }], weekLabels,
               { aria: 'Weekly distance driven', fmtY: (v) => Math.round(v / 100) / 10 + 'k', fmtT: fmt.km })}
             <div class="row-b mt-16 wrap gap-12">
               ${[['12-week total', fmt.km(sum(weeks))], ['Weekly average', fmt.km(Math.round(sum(weeks) / 12))],
@@ -3997,7 +3997,7 @@ function viewDashboard() {
               ${ACHIEVEMENTS.slice(0, 8).map((a) => {
                 const got = achEarned(a, u);
                 return `<div class="tip" data-tip="${esc(a.name)}" style="display:grid;place-items:center;aspect-ratio:1;border-radius:14px;
-                  background:${got ? 'linear-gradient(135deg,#d21f4c,#e8913a)' : 'var(--panel-2)'};
+                  background:${got ? 'linear-gradient(135deg,#8bd62b,#e8913a)' : 'var(--panel-2)'};
                   border:1px solid ${got ? 'transparent' : 'var(--line)'};color:${got ? '#170b02' : 'var(--text-3)'};opacity:${got ? 1 : .5}">
                   <span style="width:19px;height:19px">${icon(a.icon)}</span></div>`;
               }).join('')}
@@ -4251,10 +4251,10 @@ function viewDriver(id) {
                   }).join('')}
                 </div></div>` : `<div class="card card-body row gap-12">
                   <span class="stat-ico" style="color:var(--accent)">${icon('star')}</span>
-                  <div><div class="b7">Top of the ladder</div><div class="sm t2">${esc(d.name.split(' ')[0])} holds the highest rank Heavyline awards.</div></div></div>`}
+                  <div><div class="b7">Top of the ladder</div><div class="sm t2">${esc(d.name.split(' ')[0])} holds the highest rank Gaming Nation awards.</div></div></div>`}
 
               <div class="card"><div class="card-head"><div class="card-title">${icon('activity')}Distance — last 6 months</div></div>
-                <div class="card-body">${areaChart([{ name: 'Distance', values: monthly, color: '#e0637f' }], monthLabels,
+                <div class="card-body">${areaChart([{ name: 'Distance', values: monthly, color: '#b9e87a' }], monthLabels,
                   { h: 200, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km, aria: 'Monthly distance' })}</div></div>
             </div>
 
@@ -4267,7 +4267,7 @@ function viewDriver(id) {
                   ${kv('Power', truck.hp + ' hp')}${kv('Gearbox', esc(truck.gearbox))}${kv('Chassis', esc(truck.chassis))}
                   ${kv('Trailer', trailer ? esc(trailer.type + ' · ' + trailer.id) : '—')}
                   <button class="btn btn-block mt-12" data-act="go" data-href="#/vehicle/${truck.id}">${icon('eye')}Vehicle profile</button>
-                </div>` : `<div class="card-body">${emptyState('truck', 'No vehicle assigned', 'This driver has no truck allocated from the HLL fleet.')}</div>`}
+                </div>` : `<div class="card-body">${emptyState('truck', 'No vehicle assigned', 'This driver has no truck allocated from the Gaming Nation fleet.')}</div>`}
               </div>
 
               <div class="card"><div class="card-head"><div class="card-title">${icon('info')}Driver record</div></div>
@@ -4292,8 +4292,8 @@ function viewDriver(id) {
                 { h: 240, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km })}</div></div>
             <div class="card"><div class="card-head"><div class="card-title">${icon('package')}Cargo mix</div></div>
               <div class="card-body">${donut([
-                { label: 'Curtainsider', value: Math.round(d.deliveries * .34), color: '#d21f4c' },
-                { label: 'Reefer', value: Math.round(d.deliveries * .24), color: '#e0637f' },
+                { label: 'Curtainsider', value: Math.round(d.deliveries * .34), color: '#8bd62b' },
+                { label: 'Reefer', value: Math.round(d.deliveries * .24), color: '#b9e87a' },
                 { label: 'Flatbed', value: Math.round(d.deliveries * .18), color: '#3ecf8e' },
                 { label: 'Container', value: Math.round(d.deliveries * .14), color: '#8b7cf0' },
                 { label: 'Heavy plant', value: Math.round(d.deliveries * .10), color: '#d99b2b' },
@@ -4440,7 +4440,7 @@ function truckCard(t, i) {
 
 function viewVehicle(id) {
   const t = Store.truck(id);
-  if (!t) return notFound('Vehicle not found', 'That unit is not in the HLL fleet register.', '#/fleet');
+  if (!t) return notFound('Vehicle not found', 'That unit is not in the Gaming Nation fleet register.', '#/fleet');
   const d = t.assignedTo ? Store.driver(t.assignedTo) : null;
   const trailer = Store.db.trailers.find((x) => x.assignedTruck === t.id);
   const liv = LIVERIES.find((l) => l.key === t.livery) || LIVERIES[0];
@@ -4977,7 +4977,7 @@ function viewAchievements() {
 
     <!-- rank ladder -->
     <div class="card mb-20 reveal">
-      <div class="card-head"><div class="card-title">${icon('medal')}The Heavyline rank ladder</div>
+      <div class="card-head"><div class="card-title">${icon('medal')}The Gaming Nation rank ladder</div>
         <span class="badge" style="color:${r.color};border-color:${r.color}44;background:${r.color}18">Current: ${esc(r.name)}</span></div>
       <div class="card-body">
         <div class="row gap-4" style="overflow-x:auto;padding-bottom:8px">
@@ -5003,7 +5003,7 @@ function viewAchievements() {
                 <span class="mono ${met ? '' : 't2'}" style="${met ? 'color:var(--ok)' : ''}">${f2(cur)} / ${f2(goal)}</span></div>
                 ${bar(clamp(cur / goal * 100, 0, 100), met ? 'ok' : '', 'thin')}</div>`;
             }).join('') : `<div class="span-2 row gap-10"><span style="color:var(--accent);width:20px;height:20px">${icon('star')}</span>
-              <span class="t2">You hold HLL Captain — the highest rank Heavyline awards.</span></div>`}
+              <span class="t2">You hold HLL Captain — the highest rank Gaming Nation awards.</span></div>`}
         </div>
       </div>
     </div>
@@ -5028,7 +5028,7 @@ function viewRecruitment() {
     <div class="page-head">
       <div><div class="eyebrow">Join the fleet</div>
         <h1 class="page-title">Recruitment</h1>
-        <p class="page-sub">Heavyline is recruiting professional drivers for the ${esc(Store.db.meta.season)}</p></div>
+        <p class="page-sub">Gaming Nation is recruiting professional drivers for the ${esc(Store.db.meta.season)}</p></div>
       ${manage ? `<button class="btn" data-act="go" data-href="#/admin">${icon('shield')}Recruitment console</button>` : ''}
     </div>
 
@@ -5040,7 +5040,7 @@ function viewRecruitment() {
               ${[['Application', 'Submit the form with your driving history and Discord details.'],
                  ['Review', 'A recruiter checks your application against the HLL entry standard.'],
                  ['Interview / assessment', 'A short voice chat and a supervised assessment drive.'],
-                 ['Approval', 'Successful applicants receive an HLL Driver ID and Discord roles.'],
+                 ['Approval', 'Successful applicants receive an Driver ID and Discord roles.'],
                  ['Driver onboarding', 'Vehicle assignment, livery, and your first convoy briefing.']]
                 .map(([t, s], i) => `<div class="tl-item ${i === 0 ? 'now' : ''}">
                   <div class="b7">${i + 1}. ${esc(t)}</div><div class="sm t2 mt-4">${esc(s)}</div></div>`).join('')}
@@ -5067,7 +5067,7 @@ function viewRecruitment() {
           <div class="card-body">
             ${donut(stages.map((s, i) => ({
               label: statusLabel(s), value: Store.db.applications.filter((a) => a.status === s).length,
-              color: ['#8b98ab', '#e0637f', '#8b7cf0', '#3ecf8e', '#ef5f5f'][i],
+              color: ['#8b98ab', '#b9e87a', '#8b7cf0', '#3ecf8e', '#ef5f5f'][i],
             })), { size: 150, centerValue: fmt.n(Store.db.applications.length), centerLabel: 'Applications' })}
           </div></div>
 
@@ -5091,7 +5091,7 @@ const APPLICATION_STAGES = [
   ['pending',   'Application received', 'Your application is queued for a recruiter.'],
   ['review',    'Under review',         'A recruiter is checking your details against the HLL entry standard.'],
   ['interview', 'Interview / assessment','You will be invited to a voice chat and an assessment drive.'],
-  ['approved',  'Approved',             'Welcome aboard — your HLL Driver ID has been issued.'],
+  ['approved',  'Approved',             'Welcome aboard — your Driver ID has been issued.'],
 ];
 function applicationTracker(a) {
   const rejected = a.status === 'rejected';
@@ -5181,7 +5181,7 @@ function applyFormHTML() {
       </select><span class="err-msg hide" data-err="country"></span></div>
 
     <div class="field"><label for="ap-discord">Discord username</label>
-      <div class="xs t3 mb-8">Not on the server yet? ${discordLink('Join the Heavyline Discord', 'link')}</div>
+      <div class="xs t3 mb-8">Not on the server yet? ${discordLink('Join the Gaming Nation Discord', 'link')}</div>
       <input class="input" id="ap-discord" name="discord" value="${esc(d.discord || u.discord || '')}"
         placeholder="yourname">
       <span class="hint">Optional — it is how recruitment usually reaches you.</span></div>
@@ -5192,7 +5192,7 @@ function applyFormHTML() {
 
     <label class="check ${d.agree ? 'on' : ''}" id="ap-agree-wrap">
       <input type="checkbox" id="ap-agree" name="agree" ${d.agree ? 'checked' : ''}>
-      <span class="sm t2">I agree to follow the HLL convoy standards and community rules.</span></label>
+      <span class="sm t2">I agree to follow the Gaming Nation convoy standards and community rules.</span></label>
     <span class="err-msg hide mt-8" data-err="agree"></span>
 
     <div class="row-b mt-20 wrap gap-12">
@@ -5355,7 +5355,7 @@ function viewCommunity() {
         <div class="card reveal d1" style="border-color:rgba(88,101,242,.3);background:linear-gradient(160deg,rgba(88,101,242,.12),var(--panel) 60%)">
           <div class="card-body center">
             <span class="stat-ico" style="margin:0 auto;width:52px;height:52px;color:#8b93f8;border-color:rgba(139,147,248,.3)">${icon('discord')}</span>
-            <div class="b8 lg mt-12">Heavyline Discord</div>
+            <div class="b8 lg mt-12">Gaming Nation Discord</div>
             <p class="sm t2 mt-8">Convoy voice channels, announcements, driver chat and support — all in one server.</p>
             <div class="row gap-16 mt-16" style="justify-content:center">
               <div><div class="b8 lg">${online.length}</div><div class="xs t3 cap b7">Online</div></div>
@@ -5365,7 +5365,7 @@ function viewCommunity() {
             <div class="xs t3 mt-8">Role sync · driver verification · event alerts</div>
           </div></div>
 
-        <div class="card reveal d2"><div class="card-head"><div class="card-title">${icon('link')}Follow Heavyline</div></div>
+        <div class="card reveal d2"><div class="card-head"><div class="card-title">${icon('link')}Follow Gaming Nation</div></div>
           <div class="card-body">
             <p class="sm t2">Build notes, convoy footage and everything else the fleet posts.</p>
             ${socialHTML('mt-16')}
@@ -5591,7 +5591,7 @@ function viewSettings() {
                 <div class="xs t3 mt-8">
                   ${u.avatar
                     ? 'Your photo shows on the website, the console and in the client.'
-                    : 'Until you add one, your initials are used across Heavyline.'}
+                    : 'Until you add one, your initials are used across Gaming Nation.'}
                 </div>
               </div>
             </div>
@@ -5642,7 +5642,7 @@ function viewSettings() {
             <div class="divider"></div>
             <div class="row-b gap-16 wrap">
               <div><div class="b6 md">Where you are signed in</div>
-                <div class="xs t3 mt-4">Heavyline keeps your session in this browser only. Signing
+                <div class="xs t3 mt-4">Gaming Nation keeps your session in this browser only. Signing
                   out here does not affect any other machine you have used.</div></div>
               <button class="btn btn-sm" data-act="logout">${icon('logout')}Sign out</button></div>
           </div></div>
@@ -5651,7 +5651,7 @@ function viewSettings() {
       <div class="col gap-20">
         <div class="card reveal d1"><div class="card-head"><div class="card-title">${icon('shield')}Account</div></div>
           <div class="card-body">
-            ${kv('HLL Driver ID', `<span class="mono">${esc(u.id)}</span>`)}
+            ${kv('Driver ID', `<span class="mono">${esc(u.id)}</span>`)}
             ${kv('Rank', `<span style="color:${rankOf(u).color}">${esc(rankOf(u).name)}</span>`)}
             ${kv('Role', esc(ROLES[u.role].name))}
             ${kv('Member since', esc(fmt.date(u.joined)))}
@@ -5679,7 +5679,7 @@ function viewSettings() {
             ${can('roles.manage') ? `<button class="btn btn-block btn-danger" data-act="reset-demo">${icon('refresh')}Erase the whole company</button>
             <div class="xs t3">Erasing removes every driver, vehicle, convoy and login held in this browser,
               including yours, and returns the platform to first-run setup. There is no undo.</div>`
-              : '<div class="xs t3">Only the company owner can erase Heavyline data.</div>'}
+              : '<div class="xs t3">Only the company owner can erase Gaming Nation data.</div>'}
           </div></div>
       </div>
     </div>
@@ -6021,7 +6021,7 @@ function adminOverview() {
 
     <div class="grid g-2">
       <div class="card"><div class="card-head"><div class="card-title">${icon('activity')}Fleet distance by month</div></div>
-        <div class="card-body">${areaChart([{ name: 'Distance', values: kmSeries, color: '#d21f4c' }], months,
+        <div class="card-body">${areaChart([{ name: 'Distance', values: kmSeries, color: '#8bd62b' }], months,
           { h: 230, fmtY: (v) => Math.round(v / 1000) + 'k', fmtT: fmt.km, aria: 'Fleet distance by month' })}</div></div>
 
       <div class="card"><div class="card-head"><div class="card-title">${icon('userPlus')}New drivers recruited</div></div>
@@ -6159,7 +6159,7 @@ function openDriverEditor(id) {
       <div class="field"><label for="dm-status">Account status</label>
         <select class="select" id="dm-status">
           ${['active', 'suspended'].map((s) => `<option value="${s}" ${d.accountStatus === s ? 'selected' : ''}>${esc(statusLabel(s) || s)}</option>`).join('')}</select></div>
-      <div class="field"><label for="dm-client">Heavyline Trucker client</label>
+      <div class="field"><label for="dm-client">Gaming Nation Trucker client</label>
         <select class="select" id="dm-client">
           <option value="yes" ${d.clientAccess ? 'selected' : ''}>Released — they can download it</option>
           <option value="no" ${d.clientAccess ? '' : 'selected'}>Not released yet</option>
@@ -6274,7 +6274,7 @@ function openAddDriver() {
       <div class="field"><label for="nd-name">Driver name *</label><input class="input" id="nd-name" placeholder="Alex Mercer"></div>
       <div class="field"><label for="nd-email">Email address *</label>
         <input class="input" id="nd-email" type="email" placeholder="alex@example.com">
-        <span class="hint">They sign in with this, or with the HLL Driver ID.</span></div>
+        <span class="hint">They sign in with this, or with the Driver ID.</span></div>
       <div class="field"><label for="nd-pw">Temporary password *</label>
         <input class="input" id="nd-pw" value="${esc(tempPassword())}">
         <span class="hint">Pass this on and ask them to change it under Settings.</span></div>
@@ -6297,7 +6297,7 @@ function openAddDriver() {
 
 function openSearch() {
   openModal({
-    title: 'Search Heavyline', size: 'wide',
+    title: 'Search Gaming Nation', size: 'wide',
     body: `<div class="search" style="max-width:none">${icon('search')}
         <input class="input" id="cmdInput" placeholder="Drivers, convoys, vehicles, pages…" style="padding-left:38px;height:48px">
       </div><div id="cmdResults" class="mt-16"></div>`,
@@ -6493,7 +6493,7 @@ function paintConvoyLive() {
 
    Built on the existing map rather than beside it on purpose: a
    truck should look the same and be in the same place wherever
-   Heavyline draws it.
+   Gaming Nation draws it.
    ============================================================ */
 const ConvoyMap = {
   map: null, base: null, routeLayer: null, fleetLayer: null,
@@ -6544,14 +6544,14 @@ const ConvoyMap = {
     if (pts.length < 2) return;
     L.polyline(pts, { color: '#0b0d10', weight: 9, opacity: .9, interactive: false })
       .addTo(this.routeLayer);
-    L.polyline(pts, { color: '#d21f4c', weight: 3.4, opacity: .95, interactive: false })
+    L.polyline(pts, { color: '#8bd62b', weight: 3.4, opacity: .95, interactive: false })
       .addTo(this.routeLayer);
     (e.path || []).forEach((c, i) => {
       const last = i === (e.path.length - 1);
       L.circleMarker(gameLatLng(cityXY(c)), {
         radius: (i === 0 || last) ? 5.5 : 4,
         color: '#0b0d10', weight: 2,
-        fillColor: (i === 0) ? '#3ecf8e' : last ? '#ef5f5f' : '#d21f4c',
+        fillColor: (i === 0) ? '#3ecf8e' : last ? '#ef5f5f' : '#8bd62b',
         fillOpacity: 1,
       }).bindTooltip((i === 0 ? 'Departure — ' : last ? 'Destination — ' : 'Checkpoint — ')
         + cityLabel(c), { direction: 'top', offset: [0, -8] }).addTo(this.routeLayer);
@@ -6571,7 +6571,7 @@ const ConvoyMap = {
       if (!ll) return;
 
       const moving = (live.speed || 0) >= 5;
-      const colour = p.leader ? '#ffd166' : live.job ? '#d21f4c' : moving ? '#e0637f' : '#69727f';
+      const colour = p.leader ? '#ffd166' : live.job ? '#8bd62b' : moving ? '#b9e87a' : '#69727f';
       const deg = (1 - (Number(live.heading) || 0)) * 360;
       const gap = Convoy.distanceFromLeader(e, p);
 
@@ -7400,12 +7400,12 @@ function handleAction(act, t, ev) {
             category: 'Account', priority: 'high', status: 'open', driverId: state.user.id,
             created: now, updated: now,
             messages: [{ from: state.user.id, at: now,
-              body: state.user.name + ' has asked for their Heavyline account to be deleted.' }],
+              body: state.user.name + ' has asked for their Gaming Nation account to be deleted.' }],
           };
           Store.db.tickets.unshift(t);
           notifyStaff('admin.view', {
             type: 'warn', icon: 'alert', title: 'Account deletion requested',
-            body: state.user.name + ' has asked to be removed from Heavyline.',
+            body: state.user.name + ' has asked to be removed from Gaming Nation.',
             href: '#/ticket/' + t.id,
           }, state.user.id);
           Store.save();
@@ -7473,7 +7473,7 @@ function handleAction(act, t, ev) {
     case 'copy-error': {
       const text = t.dataset.detail || '';
       if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-      toast('Copied', 'ok', 'Paste it to whoever maintains Heavyline');
+      toast('Copied', 'ok', 'Paste it to whoever maintains Gaming Nation');
       return;
     }
     case 'map-game':
@@ -7498,7 +7498,7 @@ function handleAction(act, t, ev) {
           state.user = null;
           state.ui.authMode = 'signin';
           closeAllLayers();
-          toast('Heavyline data erased', 'ok', 'Sign back in as the owner');
+          toast('Gaming Nation data erased', 'ok', 'Sign back in as the owner');
           go('#/auth'); render();
         },
         { danger: true, yes: 'Erase everything' });
@@ -7517,7 +7517,7 @@ function handleAction(act, t, ev) {
       const d = Store.driver(id); if (!d) return;
       const susp = d.accountStatus !== 'suspended';
       confirmDialog(susp ? 'Suspend driver?' : 'Reinstate driver?',
-        susp ? `${d.name} will lose access to the HLL platform until reinstated.` : `${d.name} regains full access.`,
+        susp ? `${d.name} will lose access to the Gaming Nation platform until reinstated.` : `${d.name} regains full access.`,
         () => { d.accountStatus = susp ? 'suspended' : 'active'; Store.save();
                 toast(susp ? 'Driver suspended' : 'Driver reinstated', susp ? 'warn' : 'ok', d.name); render(); },
         { danger: susp, yes: susp ? 'Suspend' : 'Reinstate' });
@@ -7534,7 +7534,7 @@ function handleAction(act, t, ev) {
         b.classList.toggle('on', showFleet ? i === 1 : i === 0));
       const labels = Array.from({ length: 12 }, (_, i) => 'W' + (i + 1));
       host.querySelector('svg').outerHTML = areaChart(
-        [{ name: showFleet ? 'Fleet distance' : 'Your distance', values: vals, color: showFleet ? '#e0637f' : '#d21f4c' }],
+        [{ name: showFleet ? 'Fleet distance' : 'Your distance', values: vals, color: showFleet ? '#b9e87a' : '#8bd62b' }],
         labels, { fmtY: (x) => Math.round(x / 100) / 10 + 'k', fmtT: fmt.km });
       return;
     }
@@ -7584,7 +7584,7 @@ function saveEvent(id) {
     server: g('ev-server'), dlc: e.dlc || 'Base map',
     meetPoint: isDrive ? `${start} — Company HQ car park` : 'Discord · Briefing Room',
     departPoint: isDrive ? `${start} — City exit, north gate` : '—',
-    description: g('ev-desc') || `A Heavyline event from ${start} to ${dest}.`,
+    description: g('ev-desc') || `A Gaming Nation event from ${start} to ${dest}.`,
   });
   Convoy.ensureLeader(e);
   Convoy.touch(e);
@@ -7657,7 +7657,7 @@ function saveDriverAdmin(id) {
   d.clientAccess = ($('#dm-client')?.value || (hadClient ? 'yes' : 'no')) === 'yes';
   if (!hadClient && d.clientAccess) {
     Store.notify(d.id, {
-      type: 'ok', icon: 'download', title: 'Heavyline Trucker released',
+      type: 'ok', icon: 'download', title: 'Gaming Nation Trucker released',
       body: 'The client is ready for you to download.', href: '#/downloads',
     });
   }
@@ -7699,7 +7699,7 @@ async function saveNewDriver() {
   if (res.error) return toast(res.error, 'danger');
 
   Store.db.drivers.push(d);
-  Store.logActivity(d.id, 'join', 'userPlus', `${d.name} joined Heavyline Logistics`);
+  Store.logActivity(d.id, 'join', 'userPlus', `${d.name} joined Gaming Nation`);
   Store.save(); closeModal();
   toast('Driver created', 'ok', `${d.name} · ${d.id}`);
   /* the password is hashed on the way in, so this is the only time it can be shown */
@@ -7838,8 +7838,8 @@ function approveApplication(id) {
 
   confirmDialog('Approve application?',
     existing
-      ? `${a.name} joins the roster as ${existing.id}, and the Heavyline Trucker download is released to them.`
-      : `${a.name} will be added to the roster with a new HLL Driver ID, and the Heavyline Trucker download released to them.`,
+      ? `${a.name} joins the roster as ${existing.id}, and the Gaming Nation Trucker download is released to them.`
+      : `${a.name} will be added to the roster with a new Driver ID, and the Gaming Nation Trucker download released to them.`,
     () => {
       a.status = 'approved';
       a.decidedAt = new Date().toISOString();
@@ -7863,13 +7863,13 @@ function approveApplication(id) {
         };
         Store.db.drivers.push(d);
       }
-      Store.logActivity(d.id, 'join', 'userPlus', `${d.name} joined Heavyline Logistics`);
+      Store.logActivity(d.id, 'join', 'userPlus', `${d.name} joined Gaming Nation`);
 
       d.clientAccess = true;
       Store.notify(d.id, {
         type: 'ok', icon: 'download',
-        title: 'Welcome to Heavyline',
-        body: 'Your application is approved. The Heavyline Trucker client is ready to download.',
+        title: 'Welcome to Gaming Nation',
+        body: 'Your application is approved. The Gaming Nation Trucker client is ready to download.',
         href: '#/downloads',
       });
 
@@ -7921,7 +7921,7 @@ const ordinal = (n) => (n % 100 >= 11 && n % 100 <= 13) ? 'th'
    somebody signs up on their laptop and the administrator on theirs
    never sees them, because there is nothing joining the two.
 
-   Point both at the Heavyline service and this keeps them in step.
+   Point both at the Gaming Nation service and this keeps them in step.
    It pulls on load, pushes a moment after any change, and polls for
    what other people have done. Collections are merged by id rather
    than overwritten, so two people adding different things at the
@@ -7956,7 +7956,7 @@ function defaultServiceUrl() {
   /* The service says who it is; the page never guesses.
 
      This used to answer with the page's own origin, on the reasoning that a
-     page served over http was served BY the Heavyline service. That stopped
+     page served over http was served BY the Gaming Nation service. That stopped
      being true — these pages are served by whatever is to hand, a dev server
      on :5173, a static host, a file — and the cost was every legacy endpoint
      firing at that host and 404ing on a loop.
@@ -8618,7 +8618,7 @@ const Applications = {
       experience: (local && local.experience) || 'Not stated',
       hours: (local && local.hours) ?? 0,
       previousVtc: (local && local.previousVtc) || 'None',
-      why: (local && local.why) || 'Registered through the Heavyline platform.',
+      why: (local && local.why) || 'Registered through the Gaming Nation platform.',
       notes: (local && local.notes) || [],
       messages: (local && local.messages) || [],
 
@@ -9034,7 +9034,7 @@ const LiveMap = {
        The two-tone network is the point. On the in-game atlas a road you
        have driven is gold and one you have not is grey, and anybody reading
        this map has that distinction in their head already. Here it means
-       something a dispatcher can use: gold is where Heavyline goes. */
+       something a dispatcher can use: gold is where Gaming Nation goes. */
     const driven = this.drivenRoads();
     const isDriven = (r) => driven.has(r[0] < r[1] ? r[0] + '|' + r[1] : r[1] + '|' + r[0]);
 
@@ -9058,7 +9058,7 @@ const LiveMap = {
         });
         if (pass.tip) {
           line.bindTooltip(cityLabel(r[0]) + ' — ' + cityLabel(r[1])
-            + (isDriven(r) ? ' · run by Heavyline' : ''), { sticky: true });
+            + (isDriven(r) ? ' · run by Gaming Nation' : ''), { sticky: true });
         }
         line.addTo(this.roadLayer);
       });
@@ -9188,7 +9188,7 @@ const LiveMap = {
       L.polyline(pts, { color: '#04070f', weight: 7, opacity: .85, interactive: false })
         .addTo(this.routeLayer);
       L.polyline(pts, {
-        color: '#d21f4c', weight: 3, opacity: .95, interactive: false,
+        color: '#8bd62b', weight: 3, opacity: .95, interactive: false,
         /* dashed when we had to guess a straight line, solid when it really
            does follow the roads — so the map never overstates what it knows */
         dashArray: path ? null : '6 5',
@@ -9311,7 +9311,7 @@ const LiveMap = {
       if (!ll) return;
 
       const moving = (d.speed || 0) >= 5;
-      const colour = d.job ? '#d21f4c' : moving ? '#e0637f' : '#69727f';
+      const colour = d.job ? '#8bd62b' : moving ? '#b9e87a' : '#69727f';
       /* the game reports heading as 0..1, 0 = north and increasing westward */
       const deg = (1 - (Number(d.heading) || 0)) * 360;
 
@@ -9594,7 +9594,7 @@ function viewLivemap() {
     ${configured ? '' : `<div class="card mb-16"><div class="card-body row gap-12">
       <span style="color:var(--warn);width:18px;height:18px;flex:none">${icon('alert')}</span>
       <div class="grow"><div class="b7">No fleet service connected</div>
-        <div class="xs t3 mt-4">The map is drawn, but nobody can appear on it until the Heavyline
+        <div class="xs t3 mt-4">The map is drawn, but nobody can appear on it until the Gaming Nation
           fleet service is running and this platform knows where it is.
           ${can('admin.view') ? 'Use <b>Company service</b> above.' : 'An administrator sets this up.'}</div></div>
     </div></div>`}
@@ -9868,7 +9868,7 @@ const HQLive = {
         if (this.knownApps.has(a.id)) return;
         Store.notify(state.user.id, {
           type: 'info', icon: 'userPlus', title: 'A driver has applied',
-          body: a.name + ' has applied to drive for Heavyline.',
+          body: a.name + ' has applied to drive for Gaming Nation.',
           href: '#/recruitment',
         });
         toast(a.name + ' has applied to drive', 'ok');
@@ -10923,7 +10923,7 @@ function viewOps() {
     <div class="page-head">
       <div class="row gap-14">
         ${hllEmblem('md', 'framed')}
-        <div><div class="eyebrow">Heavyline Command Center</div>
+        <div><div class="eyebrow">Gaming Nation Command Center</div>
           <h1 class="page-title">Live Operations</h1>
           <p class="page-sub">Every driver, every run, as it happens</p></div>
       </div>
@@ -11275,7 +11275,7 @@ function saveFleetService() {
   Store.db.meta.serviceUrl = url;   /* the same service carries the company */
   Store.save();
   closeModal();
-  toast(url ? 'Heavyline service set' : 'Heavyline service cleared', 'ok',
+  toast(url ? 'Gaming Nation service set' : 'Gaming Nation service cleared', 'ok',
     url ? 'Drivers, applications and support now travel between machines' : '');
   LiveMap.start();
   Sync.start();
@@ -11319,13 +11319,13 @@ const CLIENT_RELEASE = {
   version: '1.0.0',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Heavyline-Trucker-1.0.0-windows-setup.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.0-windows-setup.exe',
       size: '80.7 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Heavyline-Trucker-1.0.0-windows-portable.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.0-windows-portable.exe',
       size: '80.3 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Heavyline-Trucker-1.0.0-android.apk',
+      file: 'release/Gaming-Nation-Trucker-1.0.0-android.apk',
       size: '6.6 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
@@ -11508,7 +11508,7 @@ function viewDownloads() {
   <div class="page">
     <div class="page-head">
       <div><div class="eyebrow">Client software</div>
-        <h1 class="page-title">Heavyline Trucker</h1>
+        <h1 class="page-title">Gaming Nation Trucker</h1>
         <p class="page-sub">The client that tracks your runs and puts you on the live map</p></div>
     </div>
 
@@ -11614,7 +11614,7 @@ function viewDownloads() {
         <span class="stat-ico" style="margin:0 auto;width:52px;height:52px">${icon('clock')}</span>
         <div class="b8 lg mt-12">Waiting on your application</div>
         <p class="t2 mt-8" style="max-width:520px;margin-inline:auto">
-          A recruiter releases the Heavyline Trucker client once they have looked at your
+          A recruiter releases the Gaming Nation Trucker client once they have looked at your
           application. ${app ? 'Yours was filed ' + esc(fmt.rel(app.submitted)) + ' and is '
             + esc(app.status === 'rejected' ? 'closed' : 'with them now') + '.'
             : 'Nothing has been filed under your account yet.'}</p>
@@ -11639,7 +11639,7 @@ function openDiscordHandle(key) {
   const c = connection(key) || CONNECTIONS[0];
   openModal({
     title: c.name, size: 'narrow',
-    body: `<p class="t2">${c.note} It is stored on your Heavyline record.</p>
+    body: `<p class="t2">${c.note} It is stored on your Gaming Nation record.</p>
       <div class="field mt-12"><label for="dc-name">Your ${esc(c.name)} ${c.key === 'discord' ? 'username' : 'ID'}</label>
         <input class="input" id="dc-name" data-key="${esc(c.key)}"
           value="${esc(state.user[c.key] || '')}" placeholder="${esc(c.hint)}"></div>`,
@@ -11744,7 +11744,7 @@ function bindAuth() {
 
       /* the platform is keyed on driver_code, and Supabase issued it */
       const driver = Store.driver(res.driver.driver_code);
-      toast('Owner account created', 'ok', 'Heavyline Logistics is yours to run');
+      toast('Owner account created', 'ok', 'Gaming Nation is yours to run');
       Store.notify(driver.id, {
         type: 'ok', icon: 'shield', title: 'You own this company',
         body: 'Add drivers, vehicles and convoys from the admin console.',
@@ -11863,12 +11863,12 @@ function bindAuth() {
       }
 
       const driver = Store.driver(res.driver.driver_code);
-      toast('Account created', 'ok', 'Welcome to Heavyline, ' + name.split(' ')[0]);
+      toast('Account created', 'ok', 'Welcome to Gaming Nation, ' + name.split(' ')[0]);
       Store.notify(driver.id, {
         type: 'info', icon: 'userPlus', title: 'Application received',
         body: 'A recruiter will review your application shortly.',
       });
-      doLogin(driver, 'Welcome to Heavyline');
+      doLogin(driver, 'Welcome to Gaming Nation');
     });
   }
 }
@@ -12171,7 +12171,7 @@ openModal({
                 <span class="mono">${esc(app.id)}</span>
                 has gone straight to recruitment.
                 You will get a notification here as soon as
-                they have looked at it, and the Heavyline Trucker
+                they have looked at it, and the Gaming Nation Trucker
                 download is released with it.
             </p>
 
@@ -12277,7 +12277,7 @@ render();
                     Store.notify(t.driverId, {
                         type: 'info',
                         icon: 'lifeBuoy',
-                        title: 'Heavyline replied',
+                        title: 'Gaming Nation replied',
                         body:
                             (t.subject || 'Your support request') +
                             ' — ' +
@@ -12825,7 +12825,7 @@ const RoomCall = {
       this.local = await Calls.media(false);
     } catch (e) {
       this.joining = false;
-      toast('No microphone', 'err', 'Heavyline needs permission to use it.');
+      toast('No microphone', 'err', 'Gaming Nation needs permission to use it.');
       paintMessages();
       return;
     }
@@ -13095,7 +13095,7 @@ const Calls = {
       this.local = await this.media(this.video);
     } catch (e) {
       toast('No microphone', 'danger',
-        'Heavyline needs permission to use it before it can call.');
+        'Gaming Nation needs permission to use it before it can call.');
       this.teardown();
       return;
     }
@@ -13103,7 +13103,7 @@ const Calls = {
     const res = await this.signalOut('ring');
     if (res && res.status === 409) {
       toast(this.withName + ' is not connected', 'warn',
-        'They will see the message when they next open Heavyline.');
+        'They will see the message when they next open Gaming Nation.');
       this.teardown();
       return;
     }
@@ -13671,7 +13671,7 @@ function pageErrorHTML(route, err) {
           <div class="grow" style="min-width:0">
             <div class="b8 lg">This page could not be drawn</div>
             <p class="t2 sm mt-8">Something in <b>${esc(ROUTES[route] ? ROUTES[route].title : route)}</b>
-              is not what the app expected. The rest of Heavyline still works — use the menu to
+              is not what the app expected. The rest of Gaming Nation still works — use the menu to
               carry on, and send this to whoever maintains it.</p>
             <pre class="mono xs mt-12" style="white-space:pre-wrap;word-break:break-word;
               max-height:220px;overflow:auto;padding:10px 12px;border-radius:8px;
@@ -13746,7 +13746,7 @@ function render() {
     view.innerHTML = pageErrorHTML(state.route.name, err);
   }
 
-  document.title = `${ROUTES[state.route.name]?.title || 'HLL'} · Heavyline Logistics`;
+  document.title = `${ROUTES[state.route.name]?.title || 'HLL'} · Gaming Nation`;
   try {
     enhanceA11y(view);
     animateCounts(view);

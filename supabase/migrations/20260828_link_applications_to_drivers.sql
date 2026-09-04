@@ -16,7 +16,7 @@
 -- 1. applications.driver_id  — ALREADY APPLIED
 --
 -- It was created as text with no foreign key, so it holds the
--- Heavyline driver code (HLL4821) rather than the bigint
+-- Gaming Nation driver code (HLL4821) rather than the bigint
 -- drivers.id. Accounts.register() writes it that way to match.
 --
 -- That is a workable choice — driver_code is what the whole

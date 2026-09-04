@@ -17,15 +17,15 @@
    cannot be downloaded, whatever the request says. */
 export const BUILDS = {
   'win-setup': {
-    object: 'Heavyline-Trucker-1.0.0-windows-setup.exe',
+    object: 'Gaming-Nation-Trucker-1.0.0-windows-setup.exe',
     type: 'application/octet-stream',
   },
   'win-portable': {
-    object: 'Heavyline-Trucker-1.0.0-windows-portable.exe',
+    object: 'Gaming-Nation-Trucker-1.0.0-windows-portable.exe',
     type: 'application/octet-stream',
   },
   android: {
-    object: 'Heavyline-Trucker-1.0.0-android.apk',
+    object: 'Gaming-Nation-Trucker-1.0.0-android.apk',
     type: 'application/vnd.android.package-archive',
   },
 };

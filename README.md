@@ -1,6 +1,6 @@
-# Heavyline Trucker
+# Gaming Nation Trucker
 
-The Heavyline Logistics driver client. It watches Euro Truck Simulator 2 over the
+The Gaming Nation driver client. It watches Euro Truck Simulator 2 over the
 telemetry link, records each run you finish, and syncs the result to your HLL driver
 record. Ships in four forms from the same source:
 
@@ -198,7 +198,7 @@ reachable through the PC's firewall.
 
 ## 2. Running the company
 
-Heavyline is a VTC management platform, not a website with a map on it. Every action a
+Gaming Nation is a VTC management platform, not a website with a map on it. Every action a
 driver takes is captured by their client, written to the shared company record, and pushed
 to the management console as it happens.
 
@@ -323,7 +323,7 @@ button is drawn, so a driver calling it directly gets nowhere.
 
 #### The live board and map
 
-Every registered driver appears with their name, Heavyline ID, truck, game, online status,
+Every registered driver appears with their name, Gaming Nation ID, truck, game, online status,
 speed, current job, nearest city and **distance from the convoy leader**. The leader is
 marked on the board and drawn in gold on the map.
 
@@ -446,7 +446,7 @@ others, because none of them keeps its own truth:
 ```
    Website        Console        Windows app      Android app      Game Connector
        \              \               |                /                /
-        `--------------`------- Heavyline API --------'----------------'
+        `--------------`------- Gaming Nation API --------'----------------'
                        fleet-server.js  ·  :7040
 ```
 
@@ -484,11 +484,11 @@ the run again, and it must not be paid twice for it.
 ## 3. The Game Connector
 
 A small program on the driver's Windows PC that watches the game and reports it to
-Heavyline. No window, no records of its own — it starts with Windows and is never thought
+Gaming Nation. No window, no records of its own — it starts with Windows and is never thought
 about again. The driver never tells anybody they are playing; the system knows.
 
 ```
-GAME LAUNCHED  ->  driver identified  ->  Heavyline = ONLINE  ->  telemetry
+GAME LAUNCHED  ->  driver identified  ->  Gaming Nation = ONLINE  ->  telemetry
                                                                      |
                         JOB STARTED  ->  tracked live  ->  DELIVERY COMPLETED
                                                                      |
@@ -525,7 +525,7 @@ not wait for the network.
 ### Nothing is ever lost
 
 A delivery is worth money, so nothing that matters is sent directly. It is written to an
-outbox on disk first, sent, and removed only once Heavyline has confirmed it has it.
+outbox on disk first, sent, and removed only once Gaming Nation has confirmed it has it.
 
 That means a driver finishing an €8,450 run while the service happens to be restarting
 loses nothing. Neither does one whose network drops, or whose PC is switched off mid-queue
@@ -546,7 +546,7 @@ npm run smoke:outbox    # drives a whole run with the service down, then starts 
 Two different things, reported differently, because they mean different things to whoever
 is watching the board:
 
-| What happened | What Heavyline is told |
+| What happened | What Gaming Nation is told |
 |---|---|
 | the telemetry server stops answering | ⚠️ **CONNECTION LOST** — they may still be driving; we just cannot see them |
 | it answers, and says the game is gone | **GAME CLOSED** — the session ends |
@@ -556,7 +556,7 @@ A lost link that stays lost for 90 seconds is finally treated as a session endin
 nobody sits on the board forever. One dropped read is never reported at all — it takes
 three consecutive misses before the link is believed to be down.
 
-### Job numbers come from Heavyline
+### Job numbers come from Gaming Nation
 
 The number is allocated by the API at the start of a run, so numbers run in one sequence
 across the whole company and two drivers starting at the same moment cannot collide:
@@ -659,7 +659,7 @@ npm run serve          # http://localhost:5173
 
 `localhost` counts as a secure origin, so this is enough to install on this machine:
 
-- **Chrome / Edge** — address-bar install icon, or menu → *Install Heavyline Trucker*.
+- **Chrome / Edge** — address-bar install icon, or menu → *Install Gaming Nation Trucker*.
 - The app then opens in its own window with no browser chrome.
 
 ### On a phone
@@ -689,7 +689,7 @@ opens with no connection.
 npm run android
 ```
 
-Writes `dist-apk/Heavyline-Trucker-<version>.apk`. The whole client is bundled inside the
+Writes `dist-apk/Gaming-Nation-Trucker-<version>.apk`. The whole client is bundled inside the
 package, so it runs with no server and no connection. Rebuild any time you change the web
 files — the script refreshes `www/`, regenerates the launcher icons, syncs the native
 project and assembles the APK (~30 s once warm).
@@ -701,7 +701,7 @@ The app is a [Capacitor](https://capacitorjs.com) shell around `www/`, configure
 
 - **OneDrive / Drive** — this project already syncs, so open `dist-apk/` in the phone's
   OneDrive app, download the APK and tap it.
-- **USB** — `adb install -r dist-apk/Heavyline-Trucker-3.0.1.apk`
+- **USB** — `adb install -r dist-apk/Gaming-Nation-Trucker-3.0.1.apk`
 - **Anything else** — email it to yourself, or a USB cable and File Explorer.
 
 Android will warn about installing outside the Play Store; allow it for the app you are
@@ -743,8 +743,8 @@ Produces two files:
 
 | File | What it is |
 |---|---|
-| `Heavyline Trucker 1.0.0 x64.exe` | installer — Start menu, shortcut, uninstall entry |
-| `Heavyline Trucker 1.0.0 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
+| `Gaming Nation Trucker 1.0.0 x64.exe` | installer — Start menu, shortcut, uninstall entry |
+| `Gaming Nation Trucker 1.0.0 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
 
 Both are unsigned, so SmartScreen warns on first run — *More info → Run anyway*. To sign
 them, set `CSC_LINK`/`CSC_KEY_PASSWORD` and remove `win.signAndEditExecutable: false` from
@@ -789,7 +789,7 @@ touch your own profile or the deployable `www/`.
 ```bash
 npm run smoke:realtime    # the live channel, in plain node — fastest check
 npm run smoke:connector   # the Game Connector: fake game -> connector -> API -> record
-npm run smoke:outbox      # a delivery survives Heavyline being down
+npm run smoke:outbox      # a delivery survives Gaming Nation being down
 npm run smoke:convoy      # Live Convoy Mode: manager, driver, connector, chat
 npm run smoke:convoyauth  # identity, permissions and chat surviving a restart
 npm run smoke:liverun     # a whole run: fake game -> client -> service -> console
@@ -829,7 +829,7 @@ It uses `System.Drawing` via Windows PowerShell, so there is nothing to install.
 | `tools/smoke-*.js` | the probes listed under *Checking it still works* |
 | `tools/android-network.js` | lets the app reach the LAN telemetry server |
 | `capacitor.config.json` | native shell config (app id, name, colours) |
-| `index.html` / `style.css` / `script.js` | the Heavyline web platform |
+| `index.html` / `style.css` / `script.js` | the Gaming Nation web platform |
 
 ### Where the telemetry comes from
 

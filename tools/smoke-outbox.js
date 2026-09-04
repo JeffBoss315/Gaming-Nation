@@ -1,5 +1,5 @@
 /* ============================================================
-   Smoke test — a delivery survives Heavyline being down.
+   Smoke test — a delivery survives Gaming Nation being down.
 
      node tools/smoke-outbox.js
 
@@ -76,7 +76,7 @@ const readQueue = () => {
 (async () => {
   game.listen(GAME_PORT, '127.0.0.1');
   await wait(300);
-  say('\nA delivery survives Heavyline being down\n');
+  say('\nA delivery survives Gaming Nation being down\n');
 
   /* ---- the connector starts with nothing listening at the other end ---- */
   const child = spawn(process.execPath, [
@@ -96,7 +96,7 @@ const readQueue = () => {
   child.stderr.on('data', (c) => { out += c; });
 
   await wait(2500);
-  check('it starts even with Heavyline unreachable', /GAME LAUNCHED/.test(out),
+  check('it starts even with Gaming Nation unreachable', /GAME LAUNCHED/.test(out),
     (out.match(/GAME LAUNCHED.*/) || [''])[0].trim() || 'DID NOT START');
   check('and says so plainly', /unreachable|queued|nothing will be lost/.test(out),
     (out.match(/.*unreachable.*/) || [''])[0].trim() || 'said nothing');
@@ -131,9 +131,9 @@ const readQueue = () => {
   check('an unreachable service does not stop the run getting a number',
     !!job && /^HLL-L/.test(job.body.job.id), job ? job.body.job.id : '-');
 
-  /* ---- Heavyline comes back ---- */
+  /* ---- Gaming Nation comes back ---- */
   say('');
-  say('  (starting Heavyline)');
+  say('  (starting Gaming Nation)');
   const server = spawn(process.execPath, [
     path.join(__dirname, '..', 'fleet-server.js'), '--port', String(PORT),
   ], {
@@ -157,8 +157,8 @@ const readQueue = () => {
 
   /* matched on the whole phrase: "reachable" alone also matches the
      "unreachable" line above it, which would pass without proving anything */
-  check('the connector notices Heavyline is back', /Heavyline reachable/.test(out),
-    (out.match(/.*Heavyline reachable.*/) || [''])[0].trim() || 'DID NOT NOTICE');
+  check('the connector notices Gaming Nation is back', /Gaming Nation reachable/.test(out),
+    (out.match(/.*Gaming Nation reachable.*/) || [''])[0].trim() || 'DID NOT NOTICE');
 
   const after = readQueue();
   check('the queue drains on its own', Array.isArray(after) && after.length === 0,

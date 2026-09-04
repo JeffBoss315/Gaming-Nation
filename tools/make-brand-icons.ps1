@@ -1,5 +1,5 @@
 <#
-    Regenerates every app icon from the Heavyline logo.
+    Regenerates every app icon from the Gaming Nation logo.
 
         npm run icons          (or: powershell -File tools/make-brand-icons.ps1)
 

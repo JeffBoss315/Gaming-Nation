@@ -1,4 +1,4 @@
-# Build a real multi-resolution Windows .ico from the Heavyline artwork.
+# Build a real multi-resolution Windows .ico from the Gaming Nation artwork.
 # electron-builder can convert a PNG, but a hand-built .ico carries every size
 # Windows actually asks for - 16px in the taskbar through 256px in Explorer.
 #

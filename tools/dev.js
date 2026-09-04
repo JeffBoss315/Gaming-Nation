@@ -98,7 +98,7 @@ function waitFor(port, tries, done) {
   attempt(tries);
 }
 
-console.log('\n  Heavyline — starting\n');
+console.log('\n  Gaming Nation — starting\n');
 
 start('service', 'fleet-server.js', ['--port', String(SERVICE_PORT)]);
 

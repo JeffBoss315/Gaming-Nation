@@ -1,5 +1,5 @@
 /* ============================================================
-   HEAVYLINE LOGISTICS — HLL Digital Headquarters
+   GAMING NATION — HLL Digital Headquarters
    Design system: restrained, flat, professional.
    One accent colour. Solid surfaces. Minimal motion.
    ============================================================ */
@@ -11,9 +11,9 @@
      --accent-rgb carries the channels so every translucent use can go
      through rgba(var(--accent-rgb), a). The accent used to be written out
      by hand in twenty-six places; now it is written once. */
-  --accent-rgb:210,31,76;
-  --accent:#d21f4c;
-  --accent-hover:#e85075;
+  --accent-rgb:139,214,43;
+  --accent:#8bd62b;
+  --accent-hover:#a3e84d;
   --accent-soft:rgba(var(--accent-rgb),.13);
   --accent-line:rgba(var(--accent-rgb),.34);
 
@@ -253,7 +253,15 @@ table{border-collapse:collapse;width:100%}
 }
 .btn svg{width:15px;height:15px;color:var(--text-3)}
 .btn:hover{background:var(--panel-3);border-color:var(--line-2)}
-.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* What goes ON the accent.
+
+   The brand green is light: white on #8bd62b is about 1.9:1, which is
+   not readable at any size. The logo does not do it either — the lime is
+   the ink on black, never the ground under white. So every surface
+   filled with the accent takes near-black text instead. */
+.btn-primary{background:var(--accent);color:#0a1403;border-color:var(--accent)}
+.btn-primary svg{color:#0a1403}
 .btn-primary svg{color:#fff}
 .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .btn-ghost{background:transparent}
@@ -286,10 +294,10 @@ table{border-collapse:collapse;width:100%}
 .badge.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
 .badge.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
 .badge.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.badge.info{color:var(--info);border-color:rgba(224,99,127,.28);background:rgba(224,99,127,.09)}
+.badge.info{color:var(--info);border-color:rgba(185,232,122,.28);background:rgba(185,232,122,.09)}
 .badge.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
 .badge.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
-.badge.solid{background:var(--accent);color:#fff;border-color:var(--accent)}
+.badge.solid{background:var(--accent);color:#0a1403;border-color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r);
   background:var(--panel-2);border:1px solid var(--line);font-size:12px;font-weight:450;color:var(--text-2);cursor:pointer;transition:all var(--t-fast)}
 .chip:hover{background:var(--panel-3);color:var(--text)}
@@ -298,7 +306,7 @@ table{border-collapse:collapse;width:100%}
 /* Avatars — one neutral tone. Identity comes from the name, not the colour. */
 .avatar{position:relative;border-radius:50%;flex:none;display:grid;place-items:center;
   font-weight:500;color:var(--text-2);background:var(--panel-3);border:1px solid var(--line);letter-spacing:.01em}
-.avatar.me{background:var(--accent);color:#fff;border-color:var(--accent)}
+.avatar.me{background:var(--accent);color:#0a1403;border-color:var(--accent)}
 /* A driver photo fills the circle. overflow:hidden on .avatar would clip
    the presence dot that sits on its edge, so the image is clipped instead
    and the dot is left alone. */
@@ -760,7 +768,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   display:grid;place-items:center;
   background:
     radial-gradient(900px 520px at 50% 28%, rgba(var(--accent-rgb),.13), transparent 64%),
-    radial-gradient(700px 420px at 78% 82%, rgba(224,99,127,.07), transparent 66%),
+    radial-gradient(700px 420px at 78% 82%, rgba(185,232,122,.07), transparent 66%),
     #06080b;
   /* the whole thing lifts away rather than merely fading */
   transition:opacity .5s var(--ease-out), visibility .5s var(--ease-out),
@@ -789,7 +797,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   background:conic-gradient(from 0deg,
     rgba(var(--accent-rgb),0) 0deg,
     rgba(var(--accent-rgb),.15) 130deg,
-    #d21f4c 300deg,
+    #8bd62b 300deg,
     #a8c0ff 360deg);
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
   mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2.5px));
@@ -863,7 +871,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .splash-fill{
   position:absolute;inset:0;width:38%;left:0;height:100%;border-radius:99px;
   background:linear-gradient(90deg,
-    rgba(var(--accent-rgb),0), #d21f4c 45%, #a8c0ff 62%, rgba(var(--accent-rgb),0));
+    rgba(var(--accent-rgb),0), #8bd62b 45%, #a8c0ff 62%, rgba(var(--accent-rgb),0));
   box-shadow:0 0 12px rgba(var(--accent-rgb),.55);
   animation:splashSweep 1.5s var(--ease) infinite;
 }
@@ -903,16 +911,16 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 /* ============================================================
    22. Two sites, one application
 
-   The drivers' website keeps the Heavyline ember. The management
+   The drivers' website keeps the Gaming Nation ember. The management
    console runs on a cooler azure, so a glance tells you which of
    the two you are in — surfaces, spacing and type stay identical,
    only the accent moves.
    ============================================================ */
 .site-admin{
-  --accent:#d8365e;
-  --accent-hover:#ef6484;
-  --accent-soft:rgba(216,54,94,.12);
-  --accent-line:rgba(216,54,94,.32);
+  --accent:#93dd38;
+  --accent-hover:#aae95c;
+  --accent-soft:rgba(147,221,56,.12);
+  --accent-line:rgba(147,221,56,.32);
 }
 .brand-mark{position:relative}
 .brand-mark.admin{box-shadow:0 0 0 1px var(--accent-line)}
@@ -992,7 +1000,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .pill.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
 .pill.err,
 .pill.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.pill.info{color:var(--info);border-color:rgba(224,99,127,.28);background:rgba(224,99,127,.09)}
+.pill.info{color:var(--info);border-color:rgba(185,232,122,.28);background:rgba(185,232,122,.09)}
 .pill.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
 .pill.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
 
@@ -1391,7 +1399,7 @@ tr[data-act="verify-job"]{cursor:pointer}
    ------------------------------------------------------------
    The convoy panel reuses the fleet row, the operations tile and
    the activity feed rather than inventing its own — a driver on a
-   convoy should look like a driver anywhere else in Heavyline.
+   convoy should look like a driver anywhere else in Gaming Nation.
    What is new here is only what convoys actually need: the map,
    the leader marking, and the chat.
    ============================================================ */
@@ -1469,7 +1477,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   animation:hllRise .2s ease;
 }
 .cmsg.mine{align-self:flex-end;background:var(--panel-3);border-color:var(--line-2)}
-.cmsg.staff{border-color:rgba(224,99,127,.34);background:rgba(224,99,127,.07)}
+.cmsg.staff{border-color:rgba(185,232,122,.34);background:rgba(185,232,122,.07)}
 .cmsg.leader{border-color:rgba(255,209,102,.34);background:rgba(255,209,102,.06)}
 
 .cmsg-who{
@@ -1495,7 +1503,7 @@ tr[data-act="verify-job"]{cursor:pointer}
 
 
 /* ============================================================
-   THE HEAVYLINE EMBLEM
+   THE GAMING NATION EMBLEM
    ------------------------------------------------------------
    hll.jpg is the company artwork every icon in the app is derived
    from, used here as the company face: the way in, the top of the
@@ -1505,7 +1513,7 @@ tr[data-act="verify-job"]{cursor:pointer}
    object-fit: cover, so it cannot be stretched however it is
    placed. It is not used as general decoration — everything else
    stays on the stroked icon set, which is what keeps the emblem
-   meaning "Heavyline".
+   meaning "Gaming Nation".
    ============================================================ */
 .hll-emblem{
   display:inline-flex;flex:none;overflow:hidden;
@@ -1617,7 +1625,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   --edge:inset 0 1px 0 rgba(255,255,255,.045);
   --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
 
-  --accent-grad:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
+  --accent-grad:linear-gradient(180deg,#a3e84d 0%,#6fb01c 100%);
   --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
 
   /* Easing. The default ease is symmetrical and reads as sluggish on
@@ -1639,7 +1647,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   content:'';position:absolute;inset:-30% -10% auto -10%;height:70vh;
   background:
     radial-gradient(60% 60% at 22% 0%, rgba(var(--accent-rgb),.055), transparent 70%),
-    radial-gradient(50% 50% at 88% 8%, rgba(224,99,127,.035), transparent 70%);
+    radial-gradient(50% 50% at 88% 8%, rgba(185,232,122,.035), transparent 70%);
   filter:blur(10px);
 }
 .bg-grid{
@@ -1719,7 +1727,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   box-shadow:var(--sh-1),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.18);
 }
 .btn-primary:hover{
-  background:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
+  background:linear-gradient(180deg,#a3e84d 0%,#6fb01c 100%);
   box-shadow:var(--sh-2),var(--sh-accent),inset 0 1px 0 rgba(255,255,255,.22);
 }
 .btn-ghost{box-shadow:none}
@@ -1969,7 +1977,7 @@ a.link:hover{background-size:100% 1px}
 
 .dm-unread{
   flex:none;min-width:1.25rem;height:1.25rem;padding:0 .35rem;
-  border-radius:999px;background:var(--accent);color:#fff;
+  border-radius:999px;background:var(--accent);color:#0a1403;
   font-size:.68rem;font-weight:700;display:grid;place-items:center;
 }
 
@@ -2079,7 +2087,7 @@ a.link:hover{background-size:100% 1px}
   font-size:12px;font-weight:600;color:var(--text-2);position:relative}
 .room-peer i{position:absolute;top:100%;margin-top:4px;font-style:normal;
   font-size:10px;color:var(--text-3);white-space:nowrap}
-.room-peer.me{background:var(--accent);color:#fff;border-color:var(--accent)}
+.room-peer.me{background:var(--accent);color:#0a1403;border-color:var(--accent)}
 /* A peer whose audio has actually arrived, so a connection that never
    completed is visibly different from one that did. */
 .room-peer.on{border-color:rgba(46,224,160,.5);box-shadow:0 0 0 2px rgba(46,224,160,.14)}

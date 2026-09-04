@@ -1,5 +1,5 @@
 /* ============================================================
-   Stamp the Heavyline icon and version onto the packaged exe.
+   Stamp the Gaming Nation icon and version onto the packaged exe.
 
    electron-builder would normally do this itself, but its
    signAndEditExecutable step first unpacks a signing bundle that
@@ -80,13 +80,13 @@ exports.default = async function afterPack(context) {
   const v = context.packager.appInfo.version;
   execFileSync(rcedit, [exe,
     '--set-icon', icon,
-    '--set-version-string', 'CompanyName', 'Heavyline Logistics',
-    '--set-version-string', 'ProductName', 'Heavyline Trucker',
-    '--set-version-string', 'FileDescription', 'Heavyline Trucker',
-    '--set-version-string', 'LegalCopyright', 'Heavyline Logistics',
+    '--set-version-string', 'CompanyName', 'Gaming Nation',
+    '--set-version-string', 'ProductName', 'Gaming Nation Trucker',
+    '--set-version-string', 'FileDescription', 'Gaming Nation Trucker',
+    '--set-version-string', 'LegalCopyright', 'Gaming Nation',
     '--set-file-version', v,
     '--set-product-version', v,
   ], { stdio: 'inherit', windowsHide: true });
 
-  console.log('[hll] afterPack: Heavyline icon stamped onto ' + path.basename(exe));
+  console.log('[hll] afterPack: Gaming Nation icon stamped onto ' + path.basename(exe));
 };

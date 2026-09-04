@@ -5,8 +5,8 @@
 
    There are two naming schemes in this project and they are not the same:
 
-     electron-builder writes   Heavyline Trucker 1.0.0 x64.exe     (spaces)
-     the site asks for         Heavyline-Trucker-1.0.0-windows-setup.exe
+     electron-builder writes   Gaming Nation Trucker 1.0.0 x64.exe     (spaces)
+     the site asks for         Gaming-Nation-Trucker-1.0.0-windows-setup.exe
 
    Nothing joined them up, so release/ was filled in by hand after every
    build — which is why it still held 4.7.0 files long after 1.0.0 shipped,
@@ -72,7 +72,7 @@ if (!wanted.length) {
 const SOURCES = {
   'win-setup': {
     dir: DIST,
-    /* the NSIS installer — "Heavyline Trucker 1.0.0 x64.exe" */
+    /* the NSIS installer — "Gaming Nation Trucker 1.0.0 x64.exe" */
     match: (f) => /\.exe$/i.test(f) && !/portable/i.test(f) && f.includes(VERSION),
   },
   'win-portable': {

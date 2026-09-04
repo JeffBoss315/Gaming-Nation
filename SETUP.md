@@ -1,4 +1,4 @@
-# Heavyline Logistics — getting it running
+# Gaming Nation — getting it running
 
 Everything needed to take this from a fresh clone to a working platform.
 
@@ -80,7 +80,7 @@ local record             what the platform actually draws with
 
 Existing Auth users need their `drivers` row linked by hand — the row must
 carry the right `auth_user_id`, or sign-in reports *"Your login is valid, but
-your Heavyline driver account is not linked"*:
+your Gaming Nation driver account is not linked"*:
 
 ```sql
 update public.drivers
@@ -99,7 +99,7 @@ recruiter needs `recruiter`, `management`, `admin` or `super_admin` — a plain
 
 ## 6. Releasing the client to approved drivers only
 
-A driver is released the Heavyline Trucker download when you approve their
+A driver is released the Gaming Nation Trucker download when you approve their
 application, and not before. Two things enforce that, and only the second one
 is real:
 
@@ -219,7 +219,7 @@ written but there is no `SELECT` policy letting the new user read it. Step 2.
 
 ### The company service
 
-`fleet-server.js` is the self-hosted half of Heavyline: the live fleet
+`fleet-server.js` is the self-hosted half of Gaming Nation: the live fleet
 channel, convoy chat, run records and the driver identity the client signs in
 with. Supabase holds the company record; this holds everything that has to be
 live.
@@ -262,7 +262,7 @@ those two directories. Anything it cannot parse is left alone.
 **Building on Windows:** electron-builder cannot write into `dist/` while a
 copy of the app is running, and this project lives under OneDrive, which
 holds `app.asar` for a while even after the app closes. If a build fails
-with *"the process cannot access the file"*, close every running Heavyline
+with *"the process cannot access the file"*, close every running Gaming Nation
 Trucker and build to a directory outside the synced tree:
 
 ```bash

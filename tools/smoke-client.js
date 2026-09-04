@@ -1,4 +1,4 @@
-/* Drives the Heavyline Trucker client in a real window and reports what
+/* Drives the Gaming Nation Trucker client in a real window and reports what
    happened: sign in as the owner, walk every screen, credit a delivery to the
    company, and check the dispatch list arrives.
 

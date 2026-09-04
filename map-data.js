@@ -1,5 +1,5 @@
 /* ============================================================
-   HEAVYLINE — THE GAME MAP
+   GAMING NATION — THE GAME MAP
    ------------------------------------------------------------
    The road network of Euro Truck Simulator 2 and American Truck
    Simulator: every city with its real coordinates, the roads between

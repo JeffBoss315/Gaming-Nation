@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#070910">
 
-    <title>Driver sign in — Heavyline Logistics</title>
+    <title>Driver sign in — Gaming Nation</title>
 
-    <meta name="description" content="Sign in to the Heavyline Logistics driver terminal.">
+    <meta name="description" content="Sign in to the Gaming Nation driver terminal.">
 
     <!-- A sign-in page has nothing to offer a search engine and everything
          to lose by being indexed. -->
@@ -28,7 +28,7 @@
     <!-- The platform stylesheet, not a private copy of one. Everything below
          uses .card, .field, .input, .btn and the design tokens, so this page
          inherits the type scale, the focus rings, the elevation and the
-         reduced-motion handling the rest of Heavyline already has. -->
+         reduced-motion handling the rest of Gaming Nation already has. -->
     <link rel="stylesheet" href="style.css">
 
     <style>
@@ -183,8 +183,8 @@
                 </div>
 
                 <div style="text-align:center">
-                    <div class="dt-word">HEAVYLINE</div>
-                    <div class="dt-sub">LOGISTICS</div>
+                    <div class="dt-word">GAMING NATION</div>
+                    <div class="dt-sub">COMMUNITY</div>
                 </div>
 
             </div>
@@ -492,7 +492,7 @@
                     password: password
                 });
             } catch (err) {
-                console.error('Heavyline sign-in: the request failed', err);
+                console.error('Gaming Nation sign-in: the request failed', err);
                 say('Could not reach the account service. Check your connection and try again.', 'err');
                 busy(false);
                 return;
@@ -500,7 +500,7 @@
 
             if (result.error) {
 
-                console.error('Heavyline sign-in:', result.error);
+                console.error('Gaming Nation sign-in:', result.error);
 
                 /* Supabase returns "Invalid login credentials" both for a
                    wrong password and for an address with no account, on

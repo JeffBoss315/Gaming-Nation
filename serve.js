@@ -242,7 +242,7 @@ server.listen(PORT, host, () => {
   const base = 'http://localhost:' + PORT;
   const lines = [
     '',
-    '  Heavyline Logistics — dev server',
+    '  Gaming Nation — dev server',
     '  ----------------------------------',
     '  Website:  ' + base + '/',
     '  Console:  ' + base + '/admin.html',

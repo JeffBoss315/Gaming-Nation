@@ -1,8 +1,8 @@
 /* ============================================================
-   HEAVYLINE GAME CONNECTOR
+   GAMING NATION GAME CONNECTOR
    ------------------------------------------------------------
    A small program that sits on a driver's Windows PC, watches the
-   game, and reports it to Heavyline. No window, no records of its
+   game, and reports it to Gaming Nation. No window, no records of its
    own — it starts with Windows and is never thought about again.
 
      node game-connector.js --service http://hll-host:7040 \
@@ -12,7 +12,7 @@
    run it.
 
    The driver never tells anybody they are playing. The game comes
-   up, the connector sees it, and Heavyline knows:
+   up, the connector sees it, and Gaming Nation knows:
 
      game launched  ->  driver identified  ->  ONLINE  ->  telemetry
                                                              |
@@ -22,7 +22,7 @@
 
    Nothing is lost. A delivery is worth money, so it is written to
    an outbox on disk before anything is sent, and retried until
-   Heavyline accepts it. The service being down, the network
+   Gaming Nation accepts it. The service being down, the network
    dropping or the PC rebooting mid-run costs the driver nothing.
 
    Silence is not the same as leaving. A telemetry server that
@@ -32,7 +32,7 @@
    to whoever is watching the board.
 
    Nothing is trusted. Every run is filed with what the telemetry
-   actually saw, and Heavyline decides whether that story holds
+   actually saw, and Gaming Nation decides whether that story holds
    together. The connector never marks its own work as verified.
    ============================================================ */
 const http = require('http');
@@ -68,13 +68,13 @@ const CFG = {
 
 function usage() {
   console.log(`
-  Heavyline Game Connector
+  Gaming Nation Game Connector
 
     node game-connector.js --service <url> --driver <HLL id>
 
   Options
-    --service <url>          the Heavyline company service, e.g. http://hll:7040
-    --driver <id>            the driver's Heavyline id, e.g. HLL-1001
+    --service <url>          the Gaming Nation company service, e.g. http://hll:7040
+    --driver <id>            the driver's Gaming Nation id, e.g. HLL-1001
     --name <name>            overrides the name on the roster
     --key <key>              the service's API key, if it requires one
     --game ets2|ats          which game to read (default ets2)
@@ -107,7 +107,7 @@ let NAME = CFG.name || CFG.driverId;
 const log = (msg) => console.log('  ' + new Date().toTimeString().slice(0, 8) + '  ' + msg);
 const say = (msg) => { if (!CFG.quiet) log(msg); };
 
-/* ---------------- talking to Heavyline ---------------- */
+/* ---------------- talking to Gaming Nation ---------------- */
 function request(method, pathname, body) {
   return new Promise((resolve) => {
     let url;
@@ -149,7 +149,7 @@ const get = (p) => request('GET', p, null);
    A delivery is worth money. Losing one because the service was
    restarting is not acceptable, so nothing that matters is sent
    directly: it is written to disk first, then sent, and only
-   removed once Heavyline has said it has it.
+   removed once Gaming Nation has said it has it.
 
    That makes every write survive the service being down, the
    network dropping, and the PC being switched off mid-run — the
@@ -219,7 +219,7 @@ const Outbox = {
         /* A refusal is not a network problem: retrying a request the service
            has rejected will be rejected for ever. Drop it, loudly. */
         if (res && res.status >= 400 && res.status < 500 && res.status !== 429) {
-          log('Heavyline refused a ' + item.kind + ' (' + res.status + ') — dropping it'
+          log('Gaming Nation refused a ' + item.kind + ' (' + res.status + ') — dropping it'
             + (res.body && res.body.error ? ': ' + res.body.error : ''));
           this.items.shift();
           this.dirty = true;
@@ -260,7 +260,7 @@ const readGame = () => new Promise((resolve) => {
 });
 
 /* The server's payload in the shape the rest of this file uses. Everything
-   the SCS SDK exposes that Heavyline has a use for — including the trailer,
+   the SCS SDK exposes that Gaming Nation has a use for — including the trailer,
    which is half of what a lorry is. */
 function normalise(raw) {
   const t = raw.truck || {};
@@ -372,7 +372,7 @@ function emit(kind, text, level, extra) {
 async function openJob(frame) {
   const km = frame.job.remainingKm || 0;
 
-  /* the number comes from Heavyline so it runs in one sequence across the
+  /* the number comes from Gaming Nation so it runs in one sequence across the
      whole company; if the service cannot be reached the run still starts,
      under a local number that says so */
   let id = null;
@@ -380,7 +380,7 @@ async function openJob(frame) {
   if (res && res.status === 200 && res.body && res.body.id) id = res.body.id;
   if (!id) {
     id = 'HLL-L' + Date.now().toString(36).toUpperCase().slice(-6);
-    log('could not get a job number from Heavyline — using ' + id + ' for now');
+    log('could not get a job number from Gaming Nation — using ' + id + ' for now');
   }
 
   S.job = {
@@ -543,10 +543,10 @@ async function pushPosition(frame, force) {
   if (S.serviceUp !== up) {
     S.serviceUp = up;
     if (up) {
-      log('Heavyline reachable' + (Outbox.pending() ? ' — sending ' + Outbox.pending() + ' queued item(s)' : ''));
+      log('Gaming Nation reachable' + (Outbox.pending() ? ' — sending ' + Outbox.pending() + ' queued item(s)' : ''));
       Outbox.flush();
     } else {
-      log('Heavyline unreachable — work is being queued, nothing will be lost');
+      log('Gaming Nation unreachable — work is being queued, nothing will be lost');
     }
   }
   if (res && res.status === 401) log('  the service rejected our key — check --key');
@@ -655,12 +655,12 @@ async function tick() {
 async function identify() {
   const res = await get('/api/drivers/' + encodeURIComponent(CFG.driverId));
   if (!res) {
-    log('Heavyline is not answering yet — starting anyway, and will keep trying');
+    log('Gaming Nation is not answering yet — starting anyway, and will keep trying');
     return true;
   }
   if (res.status === 404) {
     console.log('');
-    console.log('  No driver "' + CFG.driverId + '" on the Heavyline roster.');
+    console.log('  No driver "' + CFG.driverId + '" on the Gaming Nation roster.');
     console.log('  Check the id, or ask an administrator to approve the account first.');
     console.log('');
     return false;
@@ -680,10 +680,10 @@ async function identify() {
 /* ---------------- go ---------------- */
 (async () => {
   console.log('');
-  console.log('  Heavyline Game Connector');
+  console.log('  Gaming Nation Game Connector');
   console.log('  ------------------------');
   console.log('  Driver    :  ' + CFG.driverId);
-  console.log('  Heavyline :  ' + BASE + (CFG.key ? '  (keyed)' : ''));
+  console.log('  Gaming Nation :  ' + BASE + (CFG.key ? '  (keyed)' : ''));
   console.log('  Game      :  ' + TELEMETRY);
   console.log('  Reading every ' + POLL + 'ms. Ctrl+C to stop.');
   console.log('');

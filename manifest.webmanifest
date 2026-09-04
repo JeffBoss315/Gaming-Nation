@@ -1,7 +1,7 @@
 {
-  "name": "Heavyline Trucker",
-  "short_name": "Heavyline Trucker",
-  "description": "Heavyline Logistics driver client \u2014 records your ETS2 runs and syncs them to your driver record.",
+  "name": "Gaming Nation Trucker",
+  "short_name": "Gaming Nation Trucker",
+  "description": "Gaming Nation driver client \u2014 records your ETS2 runs and syncs them to your driver record.",
   "id": "/heavyline-trucker",
   "start_url": "./tracker.html",
   "scope": "./",

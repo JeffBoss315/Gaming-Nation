@@ -5,7 +5,7 @@
    pages. The bundle comes off a CDN, so it can simply not be there — a
    packaged desktop build opened offline, or a blocked request. Guard it:
    window.hllSupabase is then left undefined and the callers that need it
-   (resetHeavylinePassword) already say so instead of throwing here and
+   (resetGamingNationPassword) already say so instead of throwing here and
    taking the rest of the page down with it. */
 const SUPABASE_URL = 'https://sfzeauvkguywidrqjntk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_5UTt258m0KUZigLXraZClw_nkXUTcMx';
@@ -17,11 +17,11 @@ if (window.supabase && typeof window.supabase.createClient === 'function') {
         SUPABASE_KEY
     );
 
-    console.log('Heavyline Supabase client created successfully.');
+    console.log('Gaming Nation Supabase client created successfully.');
 
 } else {
 
     console.warn(
-        'Heavyline: the Supabase library did not load — account features are offline.'
+        'Gaming Nation: the Supabase library did not load — account features are offline.'
     );
 }

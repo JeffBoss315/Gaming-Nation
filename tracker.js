@@ -1,6 +1,6 @@
 /* ============================================================
-   HLL WORLD HEAVYLINE TRUCKER — driver client
-   Watches the game, records deliveries, syncs them to Heavyline.
+   HLL WORLD GAMING NATION TRUCKER — driver client
+   Watches the game, records deliveries, syncs them to Gaming Nation.
    Part 1 — utilities, icons, data, store
    ============================================================ */
 'use strict';
@@ -99,22 +99,22 @@ function icon(n, cls = '') {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || P.info}</svg>`;
 }
 
-/* The Heavyline emblem — hll.jpg, the company's own artwork and the source
+/* The Gaming Nation emblem — hll.jpg, the company's own artwork and the source
    every icon in this client is derived from. Used where the company's face
-   belongs and nowhere else, so it keeps meaning "Heavyline" rather than
+   belongs and nowhere else, so it keeps meaning "Gaming Nation" rather than
    becoming decoration. The artwork is square; the box is square and crops
    rather than stretches. */
 function hllEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
-    <img src="hll.jpg" alt="Heavyline Logistics" width="1410" height="1414" loading="lazy">
+    <img src="hll.jpg" alt="Gaming Nation" width="1410" height="1414" loading="lazy">
   </span>`;
 }
 
-/* Heavyline mark used in the sidebar */
+/* Gaming Nation mark used in the sidebar */
 function brandLogo() {
   /* Cropped to the truck: the full lock-up's wordmark is illegible at 30px,
      and the name is already spelled out beside it. */
-  return `<img src="icons/mark.png" alt="Heavyline Logistics" class="brand-img">`;
+  return `<img src="icons/mark.png" alt="Gaming Nation" class="brand-img">`;
 }
 
 /* ---------------- reference data ---------------- */
@@ -827,7 +827,7 @@ const JobTracker = {
 /* ============================================================
    Fleet — where everyone else is
    ------------------------------------------------------------
-   Each client pushes its own position to the HLL fleet service and
+   Each client pushes its own position to the Gaming Nation fleet service and
    pulls back everyone else's. Run fleet-server.js (no dependencies)
    or point it at your own endpoint. With no server configured there
    is nobody to show, and the view says so rather than inventing a crew.
@@ -1343,7 +1343,7 @@ const TileMap = {
     this.map.on('click', (e) => this.onClick(e));
 
     this.trailLine = L.polyline([], {
-      color: '#d21f4c', weight: 3, opacity: .85, lineJoin: 'round',
+      color: '#8bd62b', weight: 3, opacity: .85, lineJoin: 'round',
     }).addTo(this.map);
     this.fleetLayer = L.layerGroup().addTo(this.map);
     this.cityLayer = L.layerGroup().addTo(this.map);
@@ -1524,7 +1524,7 @@ const TileMap = {
     Object.keys(geo).forEach((name) => {
       const [lat, lon] = geo[name];
       L.circleMarker([lat, lon], {
-        radius: 3, color: '#d21f4c', weight: 1, fillColor: '#d21f4c', fillOpacity: .55,
+        radius: 3, color: '#8bd62b', weight: 1, fillColor: '#8bd62b', fillOpacity: .55,
       }).bindTooltip(cityLabel(name), { direction: 'top' }).addTo(this.cityLayer);
     });
   },
@@ -1745,7 +1745,7 @@ const Launcher = {
       title: what + ' needs the desktop app',
       size: 'narrow',
       body: `<p class="t2">A web page is not allowed to browse your drive or start programs.</p>
-        <p class="t2 mt-12">Install <b>Heavyline Trucker</b> for Windows and this works directly.
+        <p class="t2 mt-12">Install <b>Gaming Nation Trucker</b> for Windows and this works directly.
           In the browser you can still paste the full path in by hand.</p>`,
     });
   },
@@ -2066,7 +2066,7 @@ const Sessions = {
    ONE COMPANY, ON THIS DEVICE TOO
    ------------------------------------------------------------
    The client reads the same records the platform writes. Pointed at
-   the Heavyline service it keeps them in step with every other
+   the Gaming Nation service it keeps them in step with every other
    machine, so a phone sees the roster, the applications and the
    support traffic rather than only what was typed into it.
 
@@ -2089,7 +2089,7 @@ function defaultServiceUrl() {
   /* The service says who it is; the page never guesses.
 
      This used to answer with the page's own origin, on the reasoning that a
-     page served over http was served BY the Heavyline service. That stopped
+     page served over http was served BY the Gaming Nation service. That stopped
      being true — these pages are served by whatever is to hand, a dev server
      on :5173, a static host, a file — and the cost was every legacy endpoint
      firing at that host and 404ing on a loop.
@@ -2807,9 +2807,9 @@ const LS = 'hllwjt.v3';
 
 function seed() {
   /* A fresh client holds no identity and no history. The driver signs in with
-     their Heavyline account first; everything below is filled from real runs. */
+     their Gaming Nation account first; everything below is filled from real runs. */
   const db = {
-    driver: null,         /* set by Auth.signIn from the Heavyline driver record */
+    driver: null,         /* set by Auth.signIn from the Gaming Nation driver record */
     conn: { hll: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' },
     live: null,           /* last decoded position frame */
     trail: [],            /* breadcrumb in schematic map units */
@@ -3140,7 +3140,7 @@ function submitDelivery(id, silent) {
   const credited = creditToCompany(rec);
   Store.log(credited ? 'ok' : 'warn', credited
     ? `${rec.id} submitted to HLL — ${fmt.km(rec.km)} credited`
-    : `${rec.id} logged here, but your Heavyline record could not be reached`);
+    : `${rec.id} logged here, but your Gaming Nation record could not be reached`);
   Store.save();
   if (!silent) toast(credited ? 'Delivery submitted to HLL' : 'Logged locally — HLL not reachable',
     credited ? 'ok' : 'warn');
@@ -3255,7 +3255,7 @@ async function toggleServer() {
   Store.log(ok ? 'ok' : 'err',
     ok ? 'Company service answered' : 'Company service did not answer — working offline');
   Store.save();
-  toast(ok ? 'Heavyline online' : 'Heavyline offline', ok ? 'ok' : 'err');
+  toast(ok ? 'Gaming Nation online' : 'Gaming Nation offline', ok ? 'ok' : 'err');
   render();
 }
 
@@ -3331,7 +3331,7 @@ function viewDashboard() {
   const actions = `
     <span class="pill game-only ${running ? 'ok' : ''}">${icon(running ? 'truck' : 'search')}${
       running ? mapFor(db.settings.game).short + ' running' : 'Watching for the game'}</span>
-    ${session ? `<span class="pill ok" title="Your session is being recorded on your Heavyline record">
+    ${session ? `<span class="pill ok" title="Your session is being recorded on your Gaming Nation record">
       ${icon('clock')}${esc(fmt.dur(sessionMin))} this session</span>` : ''}
     <button class="btn btn-sm game-only" data-act="nav" data-view="settings">${icon('settings')}Link games</button>
     <button class="btn btn-sm install-cta" data-act="install-app">${icon('download')}Install</button>`;
@@ -3425,12 +3425,12 @@ function launchBarHTML() {
 
     <button class="launch-tile" data-act="open-hll" data-href="index.html#/dashboard">
       <span class="lt-mark">${icon('grid')}</span>
-      <span class="lt-text"><span class="lt-1">MY HLL</span><span class="lt-2">Dashboard</span></span>
+      <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Dashboard</span></span>
     </button>
 
     <button class="launch-tile" data-act="open-hll" data-href="index.html#/rankings">
       <span class="lt-mark">${icon('trophy')}</span>
-      <span class="lt-text"><span class="lt-1">MY HLL</span><span class="lt-2">Ranking</span></span>
+      <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Ranking</span></span>
     </button>
   </div>`;
 }
@@ -3480,7 +3480,7 @@ function fleetRows() {
 
   const self = db.live ? [{
     id: mine || 'local',
-    name: db.driver?.name || 'Heavyline Driver',
+    name: db.driver?.name || 'Gaming Nation Driver',
     self: true,
 
     speed: db.live.speed || 0,
@@ -3806,8 +3806,8 @@ function gaugeRowInner(job, pct) {
   const dmg = Number.isFinite(+job.damage) ? +job.damage : 0;
   const fuel = Number.isFinite(+job.fuel) ? +job.fuel : 0;
   const dmgColor = dmg > 15 ? '#ef5f5f' : dmg > 5 ? '#d99b2b' : '#3ecf8e';
-  const fuelColor = fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#e0637f';
-  return gauge(pct, 'Route', fmt.pct(pct), '#d21f4c')
+  const fuelColor = fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#b9e87a';
+  return gauge(pct, 'Route', fmt.pct(pct), '#8bd62b')
     + gauge(fuel, 'Fuel', fmt.pct(fuel), fuelColor)
     + gauge(clamp(dmg, 0, 100), 'Damage', dmg.toFixed(1) + '%', dmgColor);
 }
@@ -3911,7 +3911,7 @@ function viewLogbook() {
 function viewProfile() {
   const db = Store.db, d = db.driver, s = db.stats;
   return `
-  ${viewHead('Driver record', 'Synced with your Heavyline profile',
+  ${viewHead('Driver record', 'Synced with your Gaming Nation profile',
     `<button class="btn btn-sm" data-act="open-hll" data-href="index.html#/settings">${icon('link')}Edit on the web</button>`)}
 
   <section class="card"><div class="card-body">
@@ -3920,7 +3920,7 @@ function viewProfile() {
       <div class="grow">
         <div class="lg b7">${esc(d.name)}</div>
         <div class="t2 sm mt-4">${esc(d.rank)} · <span class="mono">${esc(d.hllId)}</span></div>
-        <div class="t3 xs mt-8">Driving for Heavyline since ${esc(fmt.date(d.joined))}</div>
+        <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
       </div>
     </div>
     <div class="stat-row mt-20">
@@ -3955,7 +3955,7 @@ function viewMessages() {
   const list = Store.db.messages;
   const sel = list[state.msgSel];
   return `
-  ${viewHead('Messages', 'From Heavyline management',
+  ${viewHead('Messages', 'From Gaming Nation management',
     `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
   <section class="card"><div class="card-body">
     ${list.length ? `<div class="split">
@@ -4196,7 +4196,7 @@ function viewMenu() {
     </div>`).join('')}
 
   <div class="menu-group">
-    <div class="menu-label">Heavyline</div>
+    <div class="menu-label">Gaming Nation</div>
     <section class="card"><div class="card-body p-0">
       <button class="menu-row" data-act="open-hll" data-href="index.html#/dashboard">
         <span class="menu-ico">${icon('link')}</span><span class="grow">Open the web platform</span>
@@ -4246,7 +4246,7 @@ function viewConvoy() {
   ${events.length ? events.map(card).join('')
     : `<section class="card"><div class="card-body"><div class="empty">${icon('route')}
         <div>No convoys scheduled</div>
-        <div class="t3 xs">Convoys published on the Heavyline platform show up here.</div>
+        <div class="t3 xs">Convoys published on the Gaming Nation platform show up here.</div>
       </div></div></section>`}`;
 }
 
@@ -4278,7 +4278,7 @@ function medal(place, size = 26) {
 }
 
 /* ---------------- standings ----------------
-   Read from the Heavyline driver records, not invented here. */
+   Read from the Gaming Nation driver records, not invented here. */
 function viewLeaderboard() {
   const me = Store.db.driver;
   const roster = Auth.roster();
@@ -4313,7 +4313,7 @@ function viewLeaderboard() {
 function viewPending() {
   const list = Store.db.pending;
   return `
-  ${viewHead('Delivery queue', 'Completed runs waiting to reach Heavyline',
+  ${viewHead('Delivery queue', 'Completed runs waiting to reach Gaming Nation',
     list.length ? `<button class="btn btn-sm btn-primary" data-act="submit-all">${icon('upload')}Submit all</button>` : '')}
   <section class="card"><div class="card-body">
     ${list.length ? list.map((p) => `
@@ -4493,19 +4493,19 @@ function viewSettings() {
 /* ---------------- about ---------------- */
 function viewAbout() {
   return `
-  ${viewHead('About', 'Heavyline Trucker · build ' + APP_VERSION)}
+  ${viewHead('About', 'Gaming Nation Trucker · build ' + APP_VERSION)}
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
       ${hllEmblem('lg', 'framed')}
       <div>
-        <div class="lg b7">Heavyline Trucker</div>
-        <div class="t2 sm mt-4">Heavyline Logistics driver client</div>
+        <div class="lg b7">Gaming Nation Trucker</div>
+        <div class="t2 sm mt-4">Gaming Nation driver client</div>
         <div class="brand-strap">Virtual logistics · Real drivers · Real-time operations</div>
       </div>
     </div>
     <p class="t2 mt-20" style="line-height:1.7;max-width:620px">
-      The Heavyline Trucker watches Euro Truck Simulator 2 over the telemetry link, records every run you
-      finish, and pushes the result to your Heavyline driver record — distance, cargo, payout and
+      The Gaming Nation Trucker watches Euro Truck Simulator 2 over the telemetry link, records every run you
+      finish, and pushes the result to your Gaming Nation driver record — distance, cargo, payout and
       damage — so your rank and standing stay current without typing anything in by hand.
     </p>
     <div class="facts">
@@ -4517,7 +4517,7 @@ function viewAbout() {
   </div></section>
 
   <section class="card">
-    <div class="card-head"><span class="label">Heavyline on the web</span></div>
+    <div class="card-head"><span class="label">Gaming Nation on the web</span></div>
     <div class="card-body">
       <div class="row gap-8 wrap">
         <button class="btn btn-sm" data-act="open-hll" data-href="index.html#/dashboard">${icon('grid')}Command centre</button>
@@ -4604,7 +4604,7 @@ function statusBarHTML() {
   return `
     <button class="sb-item btn-like ${hllOn ? 'on' : ''}" data-act="toggle-server"
       title="Check the company service now">
-      <span class="sb-dot ${hllOn ? 'ok' : 'err'}"></span>${hllOn ? 'Heavyline online' : 'Heavyline offline'}</button>
+      <span class="sb-dot ${hllOn ? 'ok' : 'err'}"></span>${hllOn ? 'Gaming Nation online' : 'Gaming Nation offline'}</button>
     <span class="sb-sep"></span>
     <span class="sb-item ${ets2On ? 'on' : ''}">
       <span class="sb-dot ${ets2On ? 'ok' : ''}"></span>${ets2On ? 'ETS2 running' : 'ETS2 closed'}</span>
@@ -4674,7 +4674,7 @@ const Platform = {
       this.installPrompt = null;
       document.body.classList.remove('can-install');
       Store.log('ok', 'Installed as an application');
-      toast('Heavyline Trucker installed', 'ok');
+      toast('Gaming Nation Trucker installed', 'ok');
     });
 
     window.addEventListener('online', () => { Store.log('ok', 'Network back online'); render(); });
@@ -4690,7 +4690,7 @@ const Platform = {
         title: 'Install the client',
         body: '<p class="t2">Your browser has not offered an install prompt yet.</p>'
           + '<p class="t2 mt-12"><b>Desktop</b> - browser menu, then'
-          + ' &ldquo;Install Heavyline Trucker&rdquo; (Chrome/Edge). Or use the packaged desktop build.</p>'
+          + ' &ldquo;Install Gaming Nation Trucker&rdquo; (Chrome/Edge). Or use the packaged desktop build.</p>'
           + '<p class="t2 mt-12"><b>iPhone / iPad</b> - Share, then <b>Add to Home Screen</b>.</p>'
           + '<p class="t2 mt-12"><b>Android</b> - menu, then <b>Install app</b>.</p>'
           + '<p class="t3 xs mt-12">Installing requires the page to be served over https (or localhost).</p>',
@@ -4742,11 +4742,11 @@ function appbarHTML() {
   return `
     <button class="ab-face" data-act="nav" data-view="profile" aria-label="Driver record">
       <span class="ab-avatar">${esc(initialsOf(d.name))}</span>
-      <span class="ab-live ${on ? 'ok' : ''}" title="${on ? 'Heavyline online' : 'Heavyline offline'}"></span>
+      <span class="ab-live ${on ? 'ok' : ''}" title="${on ? 'Gaming Nation online' : 'Gaming Nation offline'}"></span>
     </button>
     <div class="ab-who">
       <div class="ab-name">${esc(d.name)}</div>
-      <div class="ab-sec">${esc(cur ? cur.label : 'Heavyline')}</div>
+      <div class="ab-sec">${esc(cur ? cur.label : 'Gaming Nation')}</div>
     </div>
     <button class="ab-rank ${staff ? 'staff' : ''}" data-act="nav" data-view="menu"
       aria-label="${esc(staff ? roleName(myRole()) : (d.rank || 'Driver'))}">
@@ -5123,7 +5123,7 @@ function handle(act, t) {
       modal({
         title: 'Reset client data?',
         body: `<p class="t2">Clears the logbook, the send queue and every setting on this machine and
-          signs you out. Runs already synced to Heavyline are not affected, and your driver record
+          signs you out. Runs already synced to Gaming Nation are not affected, and your driver record
           on the company stays as it is.</p>`,
         foot: `<button class="btn" data-close>Cancel</button>
                <button class="btn btn-danger" data-act="reset-ok">Reset</button>`,
@@ -5140,7 +5140,7 @@ function handle(act, t) {
       closeMenus();
       modal({
         title: 'Sign out',
-        body: `<p class="t2">Sign out of the Heavyline Trucker on this machine? Queued runs stay put and are
+        body: `<p class="t2">Sign out of the Gaming Nation Trucker on this machine? Queued runs stay put and are
           submitted next time you sign in.</p>`,
         foot: `<button class="btn" data-close>Cancel</button>
                <button class="btn btn-danger" data-act="logout-ok">Sign out</button>`,
@@ -5170,7 +5170,7 @@ function windowControl(kind) {
 /* ============================================================
    SIGNING IN
    ------------------------------------------------------------
-   The client has no identity of its own. It reads the Heavyline
+   The client has no identity of its own. It reads the Gaming Nation
    account store — the same records the web platform writes — so a
    driver signs in here with the details they registered with, and
    the client picks their real driver record up from the same place.
@@ -5508,7 +5508,7 @@ const Auth = {
           const raw = result.error.message || '';
           return {
             error: /invalid login/i.test(raw)
-              ? 'That email and password do not match a Heavyline account.'
+              ? 'That email and password do not match a Gaming Nation account.'
               : raw || 'Login failed.',
           };
         }
@@ -5545,7 +5545,7 @@ const Auth = {
         const row = lookup.data;
         if (row.status === 'suspended' || row.account_status === 'suspended') {
           await window.hllSupabase.auth.signOut();
-          return { error: 'This account is suspended. Contact HLL management.' };
+          return { error: 'This account is suspended. Contact Gaming Nation management.' };
         }
         return {
           account: { email: user.email || email, driverId: row.driver_code },
@@ -5563,7 +5563,7 @@ const Auth = {
     }
 
     if (!this.accounts().length) {
-      return { error: 'No Heavyline account exists on this device yet. Open the HLL dashboard to create one.' };
+      return { error: 'No Gaming Nation account exists on this device yet. Open the HLL dashboard to create one.' };
     }
     const account = this.find(handle);
     if (!account) return { error: 'No account found with those details.' };
@@ -5575,7 +5575,7 @@ const Auth = {
     if (!matches) return { error: 'That password is not right.' };
     const driver = this.driverRecord(account.driverId);
     if (driver && driver.accountStatus === 'suspended') {
-      return { error: 'This account is suspended. Contact HLL management.' };
+      return { error: 'This account is suspended. Contact Gaming Nation management.' };
     }
     return { account, driver };
   },
@@ -5697,15 +5697,15 @@ function signInHTML() {
     <div class="signin-card">
       <div class="row gap-14 mb-20">
         ${hllEmblem('md', 'framed')}
-        <div><div class="brand-1">HEAVYLINE</div><div class="brand-2">Trucker</div></div>
+        <div><div class="brand-1">GAMING NATION</div><div class="brand-2">Trucker</div></div>
       </div>
 
-      <h1 class="si-title">Sign in to Heavyline</h1>
-      <p class="t2 sm mt-4">Use the details you registered with on the HLL platform.</p>
+      <h1 class="si-title">Sign in to Gaming Nation</h1>
+      <p class="t2 sm mt-4">Use the details you registered with on the Gaming Nation platform.</p>
 
       ${none ? `<div class="si-note mt-16">
         ${icon('info')}
-        <div><div class="b6">No Heavyline account on this device</div>
+        <div><div class="b6">No Gaming Nation account on this device</div>
           <div class="t3 xs mt-4">Accounts are created on the HLL dashboard. Open it, create yours,
             then come back and sign in here.</div>
           <button class="btn btn-sm mt-12" data-act="open-hll" data-href="index.html#/auth">
@@ -5714,7 +5714,7 @@ function signInHTML() {
 
       <form id="signInForm" class="mt-20" novalidate>
         <div class="field">
-          <label for="si-id">Email or HLL Driver ID</label>
+          <label for="si-id">Email or Driver ID</label>
           <input class="input" id="si-id" autocomplete="username" placeholder="you@example.com">
         </div>
         <div class="field">
@@ -5738,7 +5738,7 @@ function signInHTML() {
         <div class="si-rescue hide" id="siRescue"></div>
       </form>
 
-      <p class="xs t3 mt-20">The client reads the account store the HLL platform writes in this
+      <p class="xs t3 mt-20">The client reads the account store the Gaming Nation platform writes in this
         browser profile. It does not send your password anywhere.</p>
     </div>
   </div>`;

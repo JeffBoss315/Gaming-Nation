@@ -145,7 +145,7 @@ const built = path.join(ANDROID, 'app', 'build', 'outputs', 'apk', 'debug', 'app
 if (!exists(built)) die('Build reported success but no APK was produced.');
 const outDir = path.join(ROOT, 'dist-apk');
 fs.mkdirSync(outDir, { recursive: true });
-const outName = 'Heavyline-Trucker-' + pkg.version + '.apk';
+const outName = 'Gaming-Nation-Trucker-' + pkg.version + '.apk';
 const outPath = path.join(outDir, outName);
 fs.copyFileSync(built, outPath);
 

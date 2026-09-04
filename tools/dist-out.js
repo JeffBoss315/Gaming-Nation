@@ -14,7 +14,7 @@
 
    and the build stops. Worse than stopping: the tree that could not be
    replaced stays on disk looking exactly like the current app. Somebody
-   launches dist/win-unpacked/Heavyline Trucker.exe, gets a build from
+   launches dist/win-unpacked/Gaming Nation Trucker.exe, gets a build from
    before the last three fixes, and reports bugs that were fixed days ago.
    That happened.
 

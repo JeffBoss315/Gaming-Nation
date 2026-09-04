@@ -151,7 +151,7 @@ app.whenReady().then(async () => {
     const spa = await run(win, 'spa');
     check('a page answering the API is not a gate', spa.gated, 'off');
     check('and the driver still gets their download',
-      /Heavyline-Trucker-1\.0\.0-windows-setup\.exe$/.test(spa.asked || ''), 'true');
+      /Gaming-Nation-Trucker-1\.0\.0-windows-setup\.exe$/.test(spa.asked || ''), 'true');
     check('with nothing shouted at them', spa.toasts.length, 0);
 
     /* The banner has to know the difference between "there is no gate on

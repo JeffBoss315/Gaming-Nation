@@ -1,19 +1,19 @@
 /* ============================================================
-   HLL WORLD HEAVYLINE TRUCKER — driver client
-   Shares the Heavyline house style: near-black surfaces, a single
+   HLL WORLD GAMING NATION TRUCKER — driver client
+   Shares the Gaming Nation house style: near-black surfaces, a single
    orange accent, square industrial edges. Connection state lives in
    a bottom status bar; the run is a waypoint rail with ring gauges.
    ============================================================ */
 
 :root{
   /* brand — a single accent, used sparingly */
-  --accent-rgb:210,31,76;
-  --accent:#d21f4c;
+  --accent-rgb:139,214,43;
+  --accent:#8bd62b;
   /* The client and the platform are one product and have to look like it.
      These are style.css's values, to the digit — the hover colour here was
      still the old orange, left behind when the accent changed, so a driver
      hovering a button in the client saw a colour that exists nowhere else. */
-  --accent-hover:#e85075;
+  --accent-hover:#a3e84d;
   --accent-soft:rgba(var(--accent-rgb),.13);
   --accent-line:rgba(var(--accent-rgb),.34);
 
@@ -242,7 +242,15 @@ table{border-collapse:collapse;width:100%}
 
 
 
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* What goes ON the accent.
+
+   The brand green is light: white on #8bd62b is about 1.9:1, which is
+   not readable at any size. The logo does not do it either — the lime is
+   the ink on black, never the ground under white. So every surface
+   filled with the accent takes near-black text instead. */
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#0a1403}
+.btn-primary svg{color:#0a1403}
 .btn-primary svg{color:#fff}
 .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .btn-ok{background:transparent;border-color:rgba(62,207,142,.32);color:#7fdcb4}
@@ -401,8 +409,8 @@ body.can-install .install-cta{display:inline-flex}
   .appbar{
     display:flex;align-items:center;gap:10px;flex:none;height:52px;padding:0 6px 0 4px;
     padding-top:env(safe-area-inset-top);height:calc(52px + env(safe-area-inset-top));
-    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
-    border-bottom:1px solid rgba(0,0,0,.35);
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
+    border-bottom:1px solid rgba(139,214,43,.45);
     box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(0,0,0,.35);
     position:sticky;top:0;z-index:60;
   }
@@ -433,7 +441,7 @@ body.can-install .install-cta{display:inline-flex}
   .tabbar{
     display:grid;grid-template-columns:repeat(5,1fr);flex:none;
     background:linear-gradient(180deg,#171a20 0%,#101319 100%);
-    border-top:1px solid rgba(210,31,76,.28);
+    border-top:1px solid rgba(139,214,43,.30);
     padding-bottom:env(safe-area-inset-bottom);
     position:sticky;bottom:0;z-index:70;
   }
@@ -449,7 +457,7 @@ body.can-install .install-cta{display:inline-flex}
     border-radius:0 0 2px 2px;background:var(--accent);
   }
   .tab .tab-count{position:absolute;top:5px;right:calc(50% - 20px);min-width:15px;height:15px;
-    padding:0 4px;border-radius:99px;background:var(--accent);color:#fff;font-size:9px;
+    padding:0 4px;border-radius:99px;background:var(--accent);color:#0a1403;font-size:9px;
     font-weight:600;display:grid;place-items:center}
 
   /* Anything that only means something on a machine the game runs on.
@@ -567,11 +575,11 @@ body.can-install .install-cta{display:inline-flex}
 .launch-tile:hover{background:var(--panel-3);border-top-color:var(--accent);transform:translateY(-1px)}
 .launch-tile:active{transform:translateY(0)}
 .launch-tile.game{border-top-color:var(--accent)}
-.launch-tile.tmp{border-top-color:#e0637f}
+.launch-tile.tmp{border-top-color:#b9e87a}
 .lt-mark{width:26px;height:26px;flex:none;display:grid;place-items:center;
   border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
 .launch-tile.game .lt-mark{color:var(--accent)}
-.launch-tile.tmp .lt-mark{color:#e0637f}
+.launch-tile.tmp .lt-mark{color:#b9e87a}
 .lt-mark svg{width:15px;height:15px}
 .lt-text{display:flex;flex-direction:column;min-width:0;line-height:1.15}
 .lt-1{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)}
@@ -607,7 +615,7 @@ body.can-install .install-cta{display:inline-flex}
   padding:32px 20px;
   background:
     radial-gradient(900px 420px at 78% -10%, rgba(var(--accent-rgb),.13), transparent 60%),
-    radial-gradient(700px 380px at 8% 108%, rgba(224,99,127,.09), transparent 62%);
+    radial-gradient(700px 380px at 8% 108%, rgba(185,232,122,.09), transparent 62%);
 }
 
 /* The card was a group of controls painted straight onto the window, with
@@ -715,14 +723,14 @@ body.can-install .install-cta{display:inline-flex}
     display:flex;align-items:center;gap:12px;flex:none;
     height:calc(64px + env(safe-area-inset-top));
     padding:0 14px;padding-top:env(safe-area-inset-top);
-    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
-    border-bottom:1px solid rgba(0,0,0,.35);
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
+    border-bottom:1px solid rgba(139,214,43,.45);
     position:sticky;top:0;z-index:60;
   }
   .ab-face{position:relative;flex:none;width:46px;height:46px}
   .ab-avatar{
     width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
-    background:linear-gradient(160deg,#5c0f26,#3a0a18);
+    background:linear-gradient(160deg,#1d3310,#101d08);
     border:2px solid rgba(255,255,255,.34);color:#fff;
     font-size:14px;font-weight:700;letter-spacing:.02em;
     box-shadow:0 0 0 2px rgba(10,22,38,.9),0 2px 10px rgba(0,0,0,.45);
@@ -928,7 +936,7 @@ body.can-install .install-cta{display:inline-flex}
 /* what the lorry has already covered */
 .splash-fill{
   position:absolute;left:0;bottom:0;height:3px;width:0;border-radius:99px;
-  background:linear-gradient(90deg,#d21f4c,#f2a05a);z-index:1;
+  background:linear-gradient(90deg,#8bd62b,#f2a05a);z-index:1;
   animation:splashFill 3s linear infinite;
 }
 /* lane markings, sliding past to give it some speed */
@@ -1028,10 +1036,10 @@ body.can-install .install-cta{display:inline-flex}
 .lb-filters.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 
 /* ============================================================
-   HEAVYLINE ON A PHONE
+   GAMING NATION ON A PHONE
    ------------------------------------------------------------
    Its own identity, not a borrowed one: the graphite-and-ember
-   palette the rest of Heavyline uses, warmed slightly so it reads
+   palette the rest of Gaming Nation uses, warmed slightly so it reads
    as its own build rather than a shrunk desktop. Inter throughout,
    weight and spacing doing the work instead of a display face.
 
@@ -1050,9 +1058,9 @@ body.can-install .install-cta{display:inline-flex}
     --text:#eceef1;
     --text-2:#a0a7b0;
     --text-3:#6f767f;
-    /* Heavyline's ember, unchanged — the brand is the accent */
-    --accent:#d21f4c;
-    --accent-hover:#e85075;
+    /* Gaming Nation's ember, unchanged — the brand is the accent */
+    --accent:#8bd62b;
+    --accent-hover:#a3e84d;
     --accent-soft:rgba(var(--accent-rgb),.13);
     --accent-line:rgba(var(--accent-rgb),.34);
   }
@@ -1071,16 +1079,16 @@ body.can-install .install-cta{display:inline-flex}
   .appbar{
     height:calc(66px + env(safe-area-inset-top));
     padding:0 16px;padding-top:env(safe-area-inset-top);
-    background:linear-gradient(180deg,#a81e48 0%,#8d1739 100%);
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
     backdrop-filter:none;
-    border-bottom:1px solid rgba(0,0,0,.35);
+    border-bottom:1px solid rgba(139,214,43,.45);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 2px 12px rgba(0,0,0,.4);
   }
   /* Dark on the crimson, so the face reads as a hole in the bar rather
      than a second bright thing competing with the title. */
   .ab-avatar{
     width:42px;height:42px;border-radius:13px;
-    background:linear-gradient(155deg,#5c0f26,#3a0a18);
+    background:linear-gradient(155deg,#1d3310,#101d08);
     border:1px solid rgba(255,255,255,.22);
     color:#fff;font-size:14px;font-weight:700;letter-spacing:.02em;
     box-shadow:0 3px 10px rgba(0,0,0,.45);
@@ -1090,7 +1098,7 @@ body.can-install .install-cta{display:inline-flex}
   .ab-sec{color:rgba(255,255,255,.72)}
   .ab-rank{color:#fff;background:rgba(0,0,0,.22);border-color:rgba(255,255,255,.22)}
   .ab-rank svg{color:#fff}
-  .ab-live{border-color:#8d1739}
+  .ab-live{border-color:#0b1606}
   .ab-face{width:42px;height:42px}
   .ab-live{
     right:-1px;bottom:-1px;width:12px;height:12px;
@@ -1112,7 +1120,7 @@ body.can-install .install-cta{display:inline-flex}
     color:rgba(255,255,255,.78);margin-top:3px;
   }
 
-  /* the rank mark: a plain Heavyline chevron, no borrowed heraldry */
+  /* the rank mark: a plain Gaming Nation chevron, no borrowed heraldry */
   .ab-rank{width:44px;height:44px;border-radius:13px;
     background:rgba(0,0,0,.24);
     border:1px solid rgba(255,255,255,.22);transition:var(--t)}
@@ -1156,7 +1164,7 @@ body.can-install .install-cta{display:inline-flex}
     box-shadow:0 0 10px rgba(var(--accent-rgb),.6);
   }
   .tab .tab-count{
-    top:4px;right:calc(50% - 21px);background:var(--accent);color:#fff;
+    top:4px;right:calc(50% - 21px);background:var(--accent);color:#0a1403;
     font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.5);
   }
 
@@ -1488,12 +1496,12 @@ body.can-install .install-cta{display:inline-flex}
 
 
 /* ============================================================
-   THE HEAVYLINE EMBLEM
+   THE GAMING NATION EMBLEM
    ------------------------------------------------------------
    hll.jpg — the company artwork every icon in this client is
    derived from. Used where the company face belongs (the way in,
    the About screen) and nowhere else, so it keeps meaning
-   "Heavyline" rather than becoming decoration. Square artwork in
+   "Gaming Nation" rather than becoming decoration. Square artwork in
    a square box: it crops, it never stretches.
    ============================================================ */
 .hll-emblem{
@@ -1530,7 +1538,7 @@ body.can-install .install-cta{display:inline-flex}
   --sh-3:0 4px 8px rgba(0,0,0,.34), 0 16px 40px rgba(0,0,0,.42);
   --edge:inset 0 1px 0 rgba(255,255,255,.045);
   --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
-  --accent-grad:linear-gradient(180deg,#e85075 0%,#b8153f 100%);
+  --accent-grad:linear-gradient(180deg,#a3e84d 0%,#6fb01c 100%);
   --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
 
   --ease:cubic-bezier(.4,0,.2,1);

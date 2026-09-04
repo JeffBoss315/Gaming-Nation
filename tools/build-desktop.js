@@ -56,7 +56,7 @@ if (fs.existsSync(out)) {
          Could not clear ...\hll-dist
          EPERM, Permission denied
 
-       with four copies of the installed Heavyline Trucker running out of
+       with four copies of the installed Gaming Nation Trucker running out of
        Program Files. Neither killing somebody's running application nor
        refusing to build is the right answer. The directory is disposable
        by design, so a locked one is stepped over and the build carries on
