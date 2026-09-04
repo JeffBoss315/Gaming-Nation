@@ -78,7 +78,7 @@ const args = ['--yes', 'electron-builder']
   .concat(targets)
   .concat(['--publish', 'never', '--config.directories.output=' + out]);
 
-console.log('\nbuilding into ' + OUT);
+console.log('\nbuilding into ' + out);
 console.log('(outside the project, so the sync client cannot lock it)\n');
 
 const r = spawnSync('npx', args, {
@@ -98,7 +98,7 @@ if (r.status !== 0) process.exit(r.status);
 /* collect-release.js is next in the npm script, and it needs to be told
    where to look. Passing it through the environment keeps the npm script
    readable and means nobody has to repeat the path. */
-console.log('\nbuilt. Collecting from ' + OUT);
+console.log('\nbuilt. Collecting from ' + out);
 process.env.HLL_DIST_DIR = out;
 
 const collected = spawnSync(process.execPath,
