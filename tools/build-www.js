@@ -194,10 +194,21 @@ if (!SITE_URL) {
   }
 
   /* the private pages, and the source a crawler has no use for */
-  const denied = ['/admin.html', '/reset-password.html', '/tracker.html',
-    '/driver-login.html', '/driver-dashboard.html',
-    '/supabase-test.html', '/release/', '/tools/', '/vendor/', '/supabase/',
-    '/script.js', '/tracker.js', '/map-data.js', '/supabase-client.js'];
+  const pages = ['/admin.html', '/reset-password.html', '/tracker.html',
+    '/driver-login.html', '/driver-dashboard.html', '/supabase-test.html'];
+
+  /* Cloudflare Pages serves every page at BOTH addresses — /admin.html and
+     /admin — and a Disallow only matches the path it names. So the list
+     used to block the console at the address nobody types and leave it
+     open at the one everybody does, which is the same as not blocking it.
+
+     Both forms, then, generated rather than typed twice: a page added to
+     the list above cannot be half-covered by somebody forgetting. */
+  const clean = pages.map((p) => p.replace(/\.html$/, ''));
+
+  const denied = pages.concat(clean).concat([
+    '/release/', '/tools/', '/vendor/', '/supabase/',
+    '/script.js', '/tracker.js', '/map-data.js', '/supabase-client.js']);
 
   const allowRoot = 'Allow: /' + '$';   /* kept apart: $ is special in replacements */
 
