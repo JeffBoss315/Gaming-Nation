@@ -53,6 +53,26 @@ pages_build_output_dir = "www"
 # The binding below is what makes env.RELEASES exist inside the Function.
 # ------------------------------------------------------------------
 
-[[r2_buckets]]
-binding = "RELEASES"
-bucket_name = "heavyline-releases"
+# COMMENTED OUT UNTIL R2 IS TURNED ON.
+#
+# Pages validates every binding when it publishes a Function, so a binding
+# naming a bucket that does not exist does not merely disable the gate —
+# it fails the whole deploy. The build succeeded, the site uploaded, and
+# then:
+#
+#   Error: Failed to publish your Function. Got error:
+#   R2 bucket 'heavyline-releases' not found.
+#
+# R2 has to be switched on once in the dashboard before any bucket can be
+# made; the API refuses with "Please enable R2 through the Cloudflare
+# Dashboard" (code 10042). It is a one-time activation, not something a
+# token can do.
+#
+# Until then the Function deploys without a bucket, reports gate: 'off'
+# about itself, and the downloads page falls back to the public URL — see
+# functions/api/download-link.js. Uncomment this block the moment
+# `npx wrangler r2 bucket create heavyline-releases` succeeds.
+#
+# [[r2_buckets]]
+# binding = "RELEASES"
+# bucket_name = "heavyline-releases"
