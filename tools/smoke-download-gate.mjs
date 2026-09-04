@@ -61,10 +61,17 @@ function supabase({ role = 'driver', code = 'HLL0041', application = 'pending', 
   };
 }
 
+/* A fully configured deployment: a signing secret AND a bucket.
+
+   Both are needed now. The Function checks it can actually serve a build
+   before it agrees to gate one, because a gate that cannot serve anything
+   has to stand aside rather than refuse everybody. The tests that want
+   the half-built state ask for it explicitly. */
 const ENV = (over = {}) => ({
   HLL_DOWNLOAD_SECRET: SECRET,
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'anon',
+  RELEASES: bucket(),
   ...over,
 });
 
@@ -163,9 +170,20 @@ globalThis.fetch = supabase({ application: 'approved' });
 res = await postLink('not-a-build', 'Bearer good');
 check('an unknown build — 404', res.status, 404);
 
-/* A misconfigured deploy must refuse rather than sign with nothing. */
+/* A half-built deploy must stand ASIDE, not refuse.
+
+   This used to expect a 500, and that was wrong in a way that would have
+   locked every driver out the moment the Function shipped without its
+   bucket: a gate answering "refused" to everybody is not a gate, it is
+   an outage. It now reports gate: 'off' about itself and the page falls
+   back to the public URL, exactly as where no Function is deployed. */
 res = await postLink('win-setup', 'Bearer good', ENV({ HLL_DOWNLOAD_SECRET: '' }));
-check('no signing secret — refused, not weakened', res.status, 500);
+check('no signing secret — stands aside', res.status, 200);
+check('and says so plainly', (await res.json()).gate, 'off');
+
+res = await postLink('win-setup', 'Bearer good', ENV({ RELEASES: null }));
+check('no bucket bound — stands aside', res.status, 200);
+check('and says so plainly too', (await res.json()).gate, 'off');
 
 /* ---------- 3. fetching the file ------------------------------- */
 
@@ -192,8 +210,10 @@ check('an APK link cannot fetch the installer', res.status, 403);
 res = await getFile('win-setup', token, ENV({ RELEASES: bucket(false) }));
 check('a build missing from the bucket — 404', res.status, 404);
 
-res = await getFile('win-setup', token, ENV({}));
-check('no bucket bound — refused', res.status, 500);
+/* The file endpoint is only ever reached with a signed link, which only
+   exists when the gate was on — so there it IS right to fail loudly. */
+res = await getFile('win-setup', token, ENV({ RELEASES: null }));
+check('serving with no bucket — refused', res.status, 500);
 
 /* ---------- report --------------------------------------------- */
 

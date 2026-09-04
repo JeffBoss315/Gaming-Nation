@@ -25,8 +25,24 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const RELEASE = path.join(ROOT, 'release');
-const DIST = path.join(ROOT, 'dist');
-const DIST_APK = path.join(ROOT, 'dist-apk');
+
+/* Where electron-builder put things.
+
+   Overridable because this project lives inside a OneDrive folder, and
+   OneDrive holds files open while it syncs them: a rebuild fails with
+
+     remove dist/win-unpacked/resources/app.asar:
+     the process cannot access the file because it is being used by
+     another process
+
+   and no process owns it, because the holder is the sync client rather
+   than anything with the file loaded. Building to somewhere outside the
+   synced tree sidesteps it entirely:
+
+     npx electron-builder --win --config.directories.output=<somewhere outside OneDrive>
+     HLL_DIST_DIR=<that same path> node tools/collect-release.js */
+const DIST = path.resolve(process.env.HLL_DIST_DIR || path.join(ROOT, 'dist'));
+const DIST_APK = path.resolve(process.env.HLL_DIST_APK_DIR || path.join(ROOT, 'dist-apk'));
 const DRY = process.argv.includes('--dry-run');
 /* A build that produced only the Windows installers is a normal state —
    the APK needs an Android SDK, and most machines building the desktop app
