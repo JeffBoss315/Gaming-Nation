@@ -45,6 +45,14 @@ const P = {
   bolt:'<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/>',
   map:'<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/>',
   search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/>',
+  /* The reveal control on the password field promised an eye and drew a
+     magnifying glass, because there was no eye to draw. */
+  eye:'<path d="M1.6 12S5.3 5.5 12 5.5 22.4 12 22.4 12 18.7 18.5 12 18.5 1.6 12 1.6 12z"/>'
+    + '<circle cx="12" cy="12" r="3"/>',
+  eyeOff:'<path d="M3 3l18 18"/>'
+    + '<path d="M10.6 6.2A9.9 9.9 0 0 1 12 5.5c6.7 0 10.4 6.5 10.4 6.5a18 18 0 0 1-3.4 4.2"/>'
+    + '<path d="M6.5 7.8A17.6 17.6 0 0 0 1.6 12S5.3 18.5 12 18.5a9.9 9.9 0 0 0 3.9-.8"/>'
+    + '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   route:'<path d="M6 19a3 3 0 0 1 0-6h12a3 3 0 0 0 0-6H8"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/>',
   shield:'<path d="M12 3l7.5 3v5.6c0 4.6-3.1 8.2-7.5 9.4-4.4-1.2-7.5-4.8-7.5-9.4V6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
@@ -2099,6 +2107,47 @@ function defaultServiceUrl() {
   return '';
 }
 
+/* Where the company service listens when it is running beside you. */
+const LOCAL_SERVICE = 'http://localhost:7040';
+
+/* Ask the machine this client is on whether the service is running.
+
+   One request, with a short deadline. If nothing answers, the client
+   carries on exactly as before and says nothing — not running the
+   service is the normal case, and a warning on every start for the
+   ordinary case is noise that teaches people to ignore warnings.
+
+   An address set by hand in Settings still wins: this only fills in
+   when nothing else has said where the service is. */
+async function discoverLocalService() {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (window.HLL_SERVICE) return false;
+    if ((Store.db.settings.fleetUrl || '').trim()) return false;
+    if (typeof fetch !== 'function') return false;
+
+    const stop = new AbortController();
+    const bell = setTimeout(() => stop.abort(), 1200);
+
+    let ok = false;
+    try {
+      const res = await fetch(LOCAL_SERVICE + '/status',
+        { cache: 'no-store', signal: stop.signal });
+      ok = res.ok;
+    } catch (e) { ok = false; }
+    clearTimeout(bell);
+
+    if (!ok) return false;
+
+    window.HLL_SERVICE = LOCAL_SERVICE;
+    console.log('[HLL] company service found on ' + LOCAL_SERVICE);
+    return true;
+
+  } catch (e) {
+    return false;
+  }
+}
+
 const Sync = {
   timer: null, pushTimer: null, version: 0,
   status: 'off', lastError: null, applying: false,
@@ -2675,7 +2724,7 @@ function fleetPanelInner() {
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Driver</th><th>State</th><th>Run</th><th class="right">Speed</th></tr></thead>
       <tbody>${others.map((d) => `<tr>
-        <td><div class="row gap-8"><span class="avatar sm">${esc(initialsOf(d.name || d.id))}</span>
+        <td><div class="row gap-8">${avatarFace(d, 'sm')}
           <span class="b6">${esc(d.name || d.id)}</span></div></td>
         <td>${d.state === 'delivering'
           ? `<span class="pill ok">${icon('truck')}Hauling</span>`
@@ -3216,6 +3265,23 @@ async function toggleServer() {
 
 const initialsOf = (n) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
+/* A driver's face, where the company record has one.
+
+   The picture is uploaded on the website and stored on the driver record,
+   so by the time it reaches the client it has already travelled here in
+   the company payload — there is nothing to fetch and nothing to cache.
+   Everyone else keeps their initials. */
+function avatarFace(d, cls) {
+  const src = d && typeof d.avatar === 'string' && d.avatar.startsWith('data:image/')
+    ? d.avatar : '';
+
+  const inner = src
+    ? `<img class="avatar-img" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    : esc(initialsOf((d && (d.name || d.id)) || '?'));
+
+  return `<span class="avatar ${cls || ''}${src ? ' has-img' : ''}">${inner}</span>`;
+}
+
 /* one call after the typing stops, rather than one per keystroke */
 function debounce(fn, ms) {
   let t = null;
@@ -3469,7 +3535,7 @@ function liveDriversInner() {
     const eta = job && Number.isFinite(+job.etaMin) ? +job.etaMin : null;
 
     return `<div class="fleetrow ${cls}${d.self ? ' me' : ''}">
-      <span class="avatar sm ${d.self ? 'me' : ''}">${esc(initialsOf(d.name || d.id))}</span>
+      ${avatarFace(d, d.self ? 'sm me' : 'sm')}
 
       <div class="fr-who">
         <div class="fr-name">${esc(d.name || d.id)}${
@@ -3843,7 +3909,7 @@ function viewProfile() {
 
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
-      <span class="avatar lg me">${esc(initialsOf(d.name))}</span>
+      ${avatarFace(d, 'lg me')}
       <div class="grow">
         <div class="lg b7">${esc(d.name)}</div>
         <div class="t2 sm mt-4">${esc(d.rank)} · <span class="mono">${esc(d.hllId)}</span></div>
@@ -3961,7 +4027,7 @@ function openAdminDrivers() {
     title: 'Drivers', size: 'wide',
     body: roster.length ? `<div class="adm-list">${roster.map((d) => `
       <div class="adm-row">
-        <span class="avatar sm">${esc(initialsOf(d.name))}</span>
+        ${avatarFace(d, 'sm')}
         <div class="grow" style="min-width:0">
           <div class="b6 trunc">${esc(d.name)}</div>
           <div class="t3 xs mono">${esc(d.id)} · ${esc(roleName(d.role))}${
@@ -4228,7 +4294,7 @@ function viewLeaderboard() {
     <thead><tr><th style="width:52px">#</th><th>Driver</th><th class="right">Distance</th><th class="right">Runs</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr>
       <td>${medal(i + 1, 24)}</td>
-      <td><div class="row gap-8"><span class="avatar sm ${r.me ? 'me' : ''}">${esc(initialsOf(r.name))}</span>
+      <td><div class="row gap-8">${avatarFace(r, r.me ? 'sm me' : 'sm')}
         <span class="b6">${esc(r.name)}</span>${r.me ? '<span class="pill brand">You</span>' : ''}</div></td>
       <td class="right mono">${fmt.km(r.km)}</td>
       <td class="right mono">${fmt.n(r.jobs)}</td>
@@ -4510,7 +4576,7 @@ function navHTML() {
 function railFootHTML() {
   const d = Store.db.driver;
   return `<button class="driver-chip" data-act="driver-menu">
-    <span class="avatar me">${esc(initialsOf(d.name))}</span>
+    ${avatarFace(d, 'me')}
     <span class="driver-text grow" style="min-width:0">
       <span class="b6 trunc" style="display:block">${esc(d.name)}</span>
       <span class="t3 xs mono">${esc(d.hllId)}</span>
@@ -4870,7 +4936,11 @@ function handle(act, t) {
       const show = f.type === 'password';
       f.type = show ? 'text' : 'password';
       t.setAttribute('aria-label', show ? 'Hide the password' : 'Show the password');
+      t.setAttribute('aria-pressed', String(show));
       t.classList.toggle('on', show);
+      /* The icon has to say which way it goes: an eye that never changes
+         cannot tell you whether the password is showing. */
+      t.innerHTML = icon(show ? 'eyeOff' : 'eye');
       f.focus();
       return;
     }
@@ -5561,10 +5631,12 @@ function signInHTML() {
           <div class="pw-wrap">
             <input class="input" id="si-pw" type="password" autocomplete="current-password"
               autocapitalize="off" autocorrect="off" spellcheck="false">
-            <button type="button" class="pw-eye" data-act="pw-reveal" aria-label="Show the password">
-              ${icon('search')}</button>
+            <button type="button" class="pw-eye" id="siEye" data-act="pw-reveal"
+              aria-label="Show the password" aria-pressed="false">
+              ${icon('eye')}</button>
           </div>
           <span class="hint">Capitals and brackets count. Use the eye to check what you typed.</span>
+          <span class="si-caps" id="siCaps">${icon('alert')}Caps Lock is on.</span>
         </div>
         <label class="row gap-8 mb-16" style="cursor:pointer">
           <input type="checkbox" id="si-remember" checked style="accent-color:var(--accent)">
@@ -5588,6 +5660,30 @@ function bindSignIn() {
     const el = $('#siErr');
     if (el) { el.textContent = msg || ''; el.classList.toggle('hide', !msg); }
   };
+
+  /* Caps Lock. The hint under the field says capitals count, which is
+     advice; this is the answer. The browser will not volunteer it, and it
+     is the commonest reason a password somebody typed correctly is
+     refused. */
+  const pwEl = $('#si-pw');
+  const caps = $('#siCaps');
+
+  if (pwEl && caps) {
+    const look = (e) => {
+      const on = typeof e.getModifierState === 'function' && e.getModifierState('CapsLock');
+      caps.classList.toggle('on', !!on);
+    };
+    pwEl.addEventListener('keydown', look);
+    pwEl.addEventListener('keyup', look);
+    /* Not a warning about a field nobody is in any more. */
+    pwEl.addEventListener('blur', () => caps.classList.remove('on'));
+  }
+
+  /* Typing again clears the last failure, so a stale error never sits
+     under a field that has already been corrected. */
+  [$('#si-id'), pwEl].forEach((el) => {
+    if (el) el.addEventListener('input', () => err(''));
+  });
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const handle = $('#si-id').value.trim();
@@ -5595,9 +5691,16 @@ function bindSignIn() {
     if (!handle || !pw) { err('Enter your details to sign in.'); return; }
     err('');
     const btn = f.querySelector('button[type="submit"]');
+    const label = btn.innerHTML;
+
+    /* Disabled alone reads as a dead button. Say what it is doing. */
     btn.disabled = true;
+    btn.innerHTML = '<span class="si-spin" aria-hidden="true"></span>Signing in';
+
     const res = await Auth.verify(handle, pw);
+
     btn.disabled = false;
+    btn.innerHTML = label;
     if (res.error) {
       err(res.error);
       /* Say which of the two things is actually wrong. If this device already
@@ -5694,6 +5797,16 @@ function startServices() {
   GameWatch.start();
   Sync.start();          /* and shares one company with every other machine */
   Fleet.start();
+
+  /* If the service is running on this machine, everything above should be
+     using it. Started again once we know, rather than left off because the
+     answer had not arrived yet when boot ran. */
+  discoverLocalService().then((found) => {
+    if (!found) return;
+    Sync.start();
+    Fleet.start();
+    render();
+  });
 
   if (Store.db.settings.liveTelemetry) {
     Telemetry.start();

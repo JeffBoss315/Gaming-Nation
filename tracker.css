@@ -329,8 +329,8 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .modal-body{padding:16px}
 .modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
 
-.menu{position:absolute;z-index:1220;min-width:186px;background:var(--panel);border:1px solid var(--line-2);
-  border-radius:var(--r-lg);padding:5px;box-shadow:0 18px 40px -18px #000}
+.menu{position:fixed;z-index:1220;min-width:186px;background:var(--panel);border:1px solid var(--line-2);
+  border-radius:var(--r-lg);padding:5px;box-shadow:0 18px 40px -18px #000;max-height:calc(100vh - 20px);overflow-y:auto}
 .menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 10px;
   border-radius:var(--r);font-size:12.5px;color:var(--text-2);transition:background var(--t),color var(--t)}
 .menu button svg{width:14px;height:14px;color:var(--text-3)}
@@ -569,12 +569,30 @@ body.can-install .install-cta{display:inline-flex}
 
 .signin{
   display:flex;align-items:center;justify-content:center;
-  width:100%;padding:32px 20px;
+  width:100%;
+  /* It centred horizontally and then sat at the very top, because a flex
+     child with no height is only as tall as its content. The sign-in is
+     the whole window until somebody is in, so it should use it. */
+  min-height:100%;
+  padding:32px 20px;
   background:
     radial-gradient(900px 420px at 78% -10%, rgba(var(--accent-rgb),.13), transparent 60%),
     radial-gradient(700px 380px at 8% 108%, rgba(74,163,240,.09), transparent 62%);
 }
-.signin-card{width:100%;max-width:400px}
+
+/* The card was a group of controls painted straight onto the window, with
+   nothing behind it — so the one thing on screen read as the least
+   finished part of the client. It gets the same surface every other panel
+   here has. */
+.signin-card{
+  width:100%;max-width:400px;
+  padding:28px;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 55%),var(--panel);
+  border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(0,0,0,.3), 0 24px 60px -24px rgba(0,0,0,.85),
+             inset 0 1px 0 rgba(255,255,255,.05);
+}
 .signin-card .logo{width:38px;height:38px;display:block}
 .si-title{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0}
 
@@ -589,9 +607,45 @@ body.can-install .install-cta{display:inline-flex}
   color:var(--danger);background:rgba(239,95,95,.10);border:1px solid rgba(239,95,95,.30);
 }
 
+/* Caps Lock is the commonest reason a password that is right is refused,
+   and the field will not mention it on its own. */
+.si-caps{
+  display:none;margin-top:8px;gap:7px;align-items:center;
+  font-size:12px;color:var(--warn);
+}
+.si-caps.on{display:flex}
+.si-caps svg{width:14px;height:14px;flex:none}
+
+/* The button keeps its size while it works, so the card does not jump. */
+.si-spin{
+  width:14px;height:14px;flex:none;border-radius:50%;
+  border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+  animation:siSpin .6s linear infinite;
+}
+@keyframes siSpin{to{transform:rotate(360deg)}}
+
 @media (max-width:520px){
   .signin{padding:20px 16px}
+  .signin-card{padding:22px 18px}
   .si-title{font-size:21px}
+}
+
+/* A short window — a small client window, or a phone in landscape. The
+   card and the page were each carrying comfortable padding, and together
+   they made it taller than the viewport, so the one panel on screen was
+   clipped top and bottom and its border never showed. Give the space back
+   rather than making the reader scroll a sign-in form. */
+@media (max-height:640px){
+  .signin{padding:14px 16px;align-items:flex-start}
+  .signin-card{padding:20px 18px}
+  .si-title{font-size:20px}
+  .signin-card .row.mb-20{margin-bottom:12px}
+  .signin-card form.mt-20{margin-top:12px}
+  .signin-card .xs.t3.mt-20{margin-top:12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .si-spin{animation:none}
 }
 
 /* ---------- game map, drawn the way the games draw theirs ---------- */
@@ -1357,6 +1411,14 @@ body.can-install .install-cta{display:inline-flex}
     row-gap:8px;
   }
   .fleetrow>.avatar{grid-area:av}
+
+/* A driver photo fills the circle. The image is clipped rather than the
+   avatar itself, so anything sitting on the edge of it is left alone. */
+.avatar.has-img{background:var(--panel-2);position:relative}
+.avatar-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:50%;
+}
   .fr-who{grid-area:who}
   .fr-run{grid-area:run}
   .fr-state{grid-area:state}

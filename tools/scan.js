@@ -14,7 +14,32 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+
+/* A source file that is not there is the most serious thing this can
+   find, and it used to be the worst reported: readFileSync threw and the
+   audit ended in a stack trace with the path buried in it, which reads
+   like the tool is broken rather than the project.
+
+   It happened for real — index.html and the two driver pages went missing
+   from the working tree — and the first thing anybody saw was ENOENT from
+   node's module loader. Say which file, and say where a copy will be. */
+const read = (f) => {
+  try {
+    return fs.readFileSync(path.join(ROOT, f), 'utf8');
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+
+    console.log('\n  ✗ ' + f + ' is missing from the project.');
+    console.log('');
+    console.log('    Nothing can be audited without it. If it was deleted by');
+    console.log('    accident, there are two places to get it back:');
+    console.log('');
+    console.log('      git checkout -- ' + f + '        (if it is unmodified in git)');
+    console.log('      cp www/' + f + ' ' + f + '   (the last build, if it shipped)');
+    console.log('');
+    process.exit(1);
+  }
+};
 const uniq = (a) => [...new Set(a)];
 const all = (src, re) => [...src.matchAll(re)];
 

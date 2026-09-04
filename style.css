@@ -299,6 +299,14 @@ table{border-collapse:collapse;width:100%}
 .avatar{position:relative;border-radius:50%;flex:none;display:grid;place-items:center;
   font-weight:500;color:var(--text-2);background:var(--panel-3);border:1px solid var(--line);letter-spacing:.01em}
 .avatar.me{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* A driver photo fills the circle. overflow:hidden on .avatar would clip
+   the presence dot that sits on its edge, so the image is clipped instead
+   and the dot is left alone. */
+.avatar.has-img{background:var(--panel-2)}
+.avatar-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:50%;
+}
 .avatar.a-24{width:24px;height:24px;font-size:9.5px}
 .avatar.a-32{width:30px;height:30px;font-size:11px}
 .avatar.a-40{width:38px;height:38px;font-size:13px}
@@ -462,8 +470,8 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .toast.warn .toast-ico{color:var(--warn)}
 .toast.danger .toast-ico{color:var(--danger)}
 
-.menu{position:absolute;z-index:120;min-width:196px;background:var(--panel);border:1px solid var(--line-2);
-  border-radius:var(--r-lg);padding:5px;box-shadow:0 20px 44px -20px rgba(0,0,0,.85)}
+.menu{position:fixed;z-index:120;min-width:196px;background:var(--panel);border:1px solid var(--line-2);
+  border-radius:var(--r-lg);padding:5px;box-shadow:0 20px 44px -20px rgba(0,0,0,.85);max-height:calc(100vh - 20px);overflow-y:auto}
 .menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 10px;
   border-radius:var(--r-sm);font-size:13px;color:var(--text-2);transition:background var(--t-fast),color var(--t-fast)}
 .menu button svg{width:14px;height:14px;color:var(--text-3)}
@@ -2052,6 +2060,31 @@ a.link:hover{background-size:100% 1px}
 .call-card .dm-avatar{width:3.4rem;height:3.4rem;font-size:1rem;margin:0 auto 10px}
 .call-who{font-weight:700;font-size:.95rem}
 .call-state{font-size:.75rem;color:var(--text-2);margin-top:2px;font-variant-numeric:tabular-nums}
+/* ---------- the fleet room ----------
+   A room is a place, not a person: it gets a mark rather than initials,
+   and it never shows an online dot because it is always there. */
+.dm-av{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:var(--panel-3);border:1px solid var(--line);color:var(--text-2)}
+.dm-av.room{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.dm-av svg{width:16px;height:16px}
+.dm-thread.room .dm-thread-name{font-weight:600}
+.dm-unread.call{background:var(--ok);color:#04150e}
+
+/* Who is in the group call. Initials rather than faces: at four people in
+   a bar this size a photo is a smudge, and the point is who is here. */
+.room-peers{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:12px 0 4px}
+.room-peer{display:flex;flex-direction:column;align-items:center;gap:4px;
+  width:46px;height:46px;border-radius:50%;place-content:center;
+  background:var(--panel-3);border:1px solid var(--line);
+  font-size:12px;font-weight:600;color:var(--text-2);position:relative}
+.room-peer i{position:absolute;top:100%;margin-top:4px;font-style:normal;
+  font-size:10px;color:var(--text-3);white-space:nowrap}
+.room-peer.me{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* A peer whose audio has actually arrived, so a connection that never
+   completed is visibly different from one that did. */
+.room-peer.on{border-color:rgba(46,224,160,.5);box-shadow:0 0 0 2px rgba(46,224,160,.14)}
+.call-card.room .room-peers{margin-bottom:22px}
+
 .call-actions{display:flex;gap:8px;justify-content:center;margin-top:14px}
 .call-actions .btn{flex:1}
 

@@ -97,6 +97,66 @@ recruiter needs `recruiter`, `management`, `admin` or `super_admin` — a plain
 
 ---
 
+## 6. Releasing the client to approved drivers only
+
+A driver is released the Heavyline Trucker download when you approve their
+application, and not before. Two things enforce that, and only the second one
+is real:
+
+| | Where | What it stops |
+|---|---|---|
+| The downloads page | the browser | Shows the buttons only to approved drivers |
+| `functions/api/download-link.js` | Cloudflare | Signs a link only for approved drivers |
+
+The first is an interface. Anybody can edit what their own browser believes,
+so on its own it decides what is *offered* and nothing more — while the
+installers sat on public GitHub Releases, a shared URL worked whoever clicked
+it. The second is the gate: the builds live in a private R2 bucket with no
+public address, and the only way to one is a link this site signs, which
+lasts five minutes.
+
+The Function asks Supabase **as the signed-in driver**, under row level
+security, so it holds no key that could read anybody else's record.
+
+### Set it up once
+
+```bash
+# 1. the bucket
+npx wrangler r2 bucket create heavyline-releases
+
+# 2. the builds (after npm run dist and npm run android)
+npm run release:push          # add -- --dry to see what would go
+
+# 3. the signing secret — any long random string
+npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=heavyline
+```
+
+Then in the Cloudflare Pages dashboard → **Settings → Environment variables**:
+
+```
+SUPABASE_URL       https://<your-project>.supabase.co
+SUPABASE_ANON_KEY  sb_publishable_...
+```
+
+Neither is secret — the anon key is already in `supabase-client.js` and in
+every visitor's browser — but the Function reads them from the environment
+rather than having them baked in.
+
+Check it with `npm run smoke:downloads`, which runs the Function code against
+a stubbed Supabase and R2 and tries the ways round it: a forged link, an
+edited expiry, a link for the 6 MB APK replayed against the 80 MB installer,
+an expired one, and asking while still pending.
+
+> **Do not deploy with `--with-release`.** It copies the installers into
+> `www/` as public files, next to the site, where the Function cannot gate
+> them — the approval check is decorative again. It exists for local and
+> offline copies, which have no Functions and no bucket.
+
+Rotating `HLL_DOWNLOAD_SECRET` invalidates every link already handed out,
+which is how you revoke them.
+
+---
+
 ## Checking it works
 
 ```bash

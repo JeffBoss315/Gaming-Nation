@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#070910">
+
+    <title>Driver sign in — Heavyline Logistics</title>
+
+    <meta name="description" content="Sign in to the Heavyline Logistics driver terminal.">
+
+    <!-- A sign-in page has nothing to offer a search engine and everything
+         to lose by being indexed. -->
+    <meta name="robots" content="noindex,nofollow">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+    <link rel="apple-touch-icon" href="icons/favicon-180.png">
+
+    <!-- The platform stylesheet, not a private copy of one. Everything below
+         uses .card, .field, .input, .btn and the design tokens, so this page
+         inherits the type scale, the focus rings, the elevation and the
+         reduced-motion handling the rest of Heavyline already has. -->
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* Only what is genuinely specific to a centred auth page. */
+
+        .dt-wrap{
+            min-height:100dvh;
+            display:grid;
+            place-items:center;
+            padding:24px;
+            position:relative;
+            z-index:1;
+        }
+
+        .dt-auth{width:min(410px,100%)}
+
+        .dt-brand{
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:14px;
+            margin-bottom:24px;
+        }
+
+        .dt-mark{
+            width:58px;height:58px;
+            display:grid;place-items:center;
+            border-radius:var(--r-lg);
+            background:var(--panel-2);
+            border:1px solid var(--line);
+            box-shadow:var(--sh-2),var(--edge);
+            color:var(--accent);
+        }
+        .dt-mark svg{width:32px;height:32px}
+
+        .dt-word{
+            font-size:19px;font-weight:800;
+            letter-spacing:.16em;
+            line-height:1;
+        }
+        .dt-sub{
+            font-size:10.5px;font-weight:600;
+            letter-spacing:.28em;
+            color:var(--text-3);
+            margin-top:6px;
+        }
+
+        .dt-title{font-size:17px;font-weight:600;letter-spacing:-.015em}
+        .dt-note{color:var(--text-2);font-size:12.5px;margin-top:3px}
+
+        /* The password field carries a control inside it, so the text has to
+           stop before the button rather than run underneath it. */
+        .pw{position:relative}
+        .pw .input{padding-right:44px}
+        .dt-pw-toggle{
+            position:absolute;right:4px;top:4px;
+            width:28px;height:28px;
+            display:grid;place-items:center;
+            border-radius:7px;
+            color:var(--text-3);
+            transition:color var(--t-fast),background var(--t-fast);
+        }
+        .dt-pw-toggle:hover{color:var(--text);background:var(--panel-3)}
+        .dt-pw-toggle svg{width:15px;height:15px}
+
+        .dt-field-row{
+            display:flex;align-items:center;justify-content:space-between;
+            gap:12px;
+        }
+        .dt-link{
+            color:var(--text-3);font-size:11.5px;font-weight:500;
+            transition:color var(--t-fast);
+        }
+        .dt-link:hover{color:var(--accent)}
+
+        /* One message strip that changes character, rather than three
+           elements taking turns being empty. Hidden until it has something
+           to say — an empty box on load reads as a fault. */
+        .msg{
+            display:none;
+            gap:9px;
+            align-items:flex-start;
+            padding:10px 12px;
+            border-radius:var(--r);
+            font-size:12.5px;
+            line-height:1.5;
+            border:1px solid var(--line);
+            background:var(--panel-2);
+            color:var(--text-2);
+            margin-bottom:14px;
+        }
+        .msg.on{display:flex}
+        .msg svg{width:15px;height:15px;flex:none;margin-top:1px}
+        .msg.err{
+            color:#f79a9a;
+            border-color:rgba(239,95,95,.34);
+            background:rgba(239,95,95,.09);
+        }
+        .msg.ok{
+            color:#7fdcb4;
+            border-color:rgba(62,207,142,.32);
+            background:rgba(62,207,142,.09);
+        }
+
+        /* The spinner sits in the button while it works. */
+        .spin{
+            width:14px;height:14px;flex:none;
+            border-radius:50%;
+            border:2px solid rgba(255,255,255,.32);
+            border-top-color:#fff;
+            animation:spin .6s linear infinite;
+        }
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        .dt-foot{
+            text-align:center;
+            margin-top:18px;
+            font-size:11.5px;
+            color:var(--text-3);
+        }
+        .dt-foot a{color:var(--text-2);font-weight:500}
+        .dt-foot a:hover{color:var(--accent)}
+
+        @media (prefers-reduced-motion:reduce){
+            .spin{animation:none}
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="bg-fx" aria-hidden="true">
+        <div class="bg-grid"></div>
+    </div>
+
+    <main class="dt-wrap">
+
+        <div class="dt-auth">
+
+            <div class="dt-brand reveal">
+
+                <div class="dt-mark">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M1 4h11v11H1z"/>
+                        <path d="M12 8h4.5l3.5 3.5V15H12z"/>
+                        <circle cx="5.5" cy="18" r="2.2"/>
+                        <circle cx="16.5" cy="18" r="2.2"/>
+                        <path d="M7.7 18h6.6M1 15v3h2.3M20 15v3h-1.3"/>
+                    </svg>
+                </div>
+
+                <div style="text-align:center">
+                    <div class="dt-word">HEAVYLINE</div>
+                    <div class="dt-sub">LOGISTICS</div>
+                </div>
+
+            </div>
+
+            <section class="card reveal d2">
+
+                <div class="card-head">
+                    <div>
+                        <div class="dt-title">Driver terminal</div>
+                        <div class="dt-note">Sign in to go on shift.</div>
+                    </div>
+                    <span class="badge brand">Secure</span>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="msg" id="message" role="alert" aria-live="polite">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 8v5M12 16.5v.01"/>
+                        </svg>
+                        <span id="messageText"></span>
+                    </div>
+
+                    <form id="loginForm" novalidate>
+
+                        <div class="field">
+                            <label for="email">Email address</label>
+                            <input
+                                class="input"
+                                type="email"
+                                id="email"
+                                name="email"
+                                inputmode="email"
+                                autocomplete="username"
+                                autocapitalize="none"
+                                spellcheck="false"
+                                placeholder="driver@heavyline.net"
+                                required
+                            >
+                        </div>
+
+                        <div class="field">
+
+                            <div class="dt-field-row">
+                                <label for="password">Password</label>
+                                <a class="dt-link" href="index.html#/forgot">Forgotten?</a>
+                            </div>
+
+                            <div class="pw">
+                                <input
+                                    class="input"
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    autocomplete="current-password"
+                                    placeholder="Enter your password"
+                                    required
+                                >
+                                <button
+                                    class="dt-pw-toggle"
+                                    type="button"
+                                    id="pwToggle"
+                                    aria-label="Show password"
+                                    aria-pressed="false"
+                                >
+                                    <svg id="pwIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         aria-hidden="true">
+                                        <path d="M1.6 12S5.3 5.5 12 5.5 22.4 12 22.4 12 18.7 18.5 12 18.5 1.6 12 1.6 12z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <span class="hint" id="capsHint" hidden>Caps Lock is on.</span>
+
+                        </div>
+
+                        <button
+                            class="btn btn-primary btn-lg btn-block"
+                            id="loginBtn"
+                            type="submit"
+                        >
+                            Sign in
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </section>
+
+            <p class="dt-foot reveal d4">
+                Not driving for us yet?
+                <a href="index.html#/apply">Apply to the fleet</a>
+            </p>
+
+        </div>
+
+    </main>
+
+    <noscript>
+        <div class="dt-wrap">
+            <div class="card card-pad" style="max-width:420px">
+                <h1 style="font-size:17px;margin:0 0 8px">JavaScript required</h1>
+                <p style="color:var(--text-2);margin:0">
+                    The driver terminal signs you in from the browser and needs
+                    JavaScript enabled.
+                </p>
+            </div>
+        </div>
+    </noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-client.js"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var form     = document.getElementById('loginForm');
+        var emailEl  = document.getElementById('email');
+        var pwEl     = document.getElementById('password');
+        var btn      = document.getElementById('loginBtn');
+        var msg      = document.getElementById('message');
+        var msgText  = document.getElementById('messageText');
+        var capsHint = document.getElementById('capsHint');
+        var pwToggle = document.getElementById('pwToggle');
+
+        var DASHBOARD = 'driver-dashboard.html';
+
+        /* ----------------------------------------------------------
+           Messages and the working state
+        ---------------------------------------------------------- */
+
+        function say(text, kind) {
+            msgText.textContent = text;
+            msg.className = 'msg on' + (kind ? ' ' + kind : '');
+        }
+
+        function clearSay() {
+            msg.className = 'msg';
+            msgText.textContent = '';
+        }
+
+        /* The label is swapped rather than a hidden spinner being revealed,
+           so the button carries no empty slot the rest of the time. */
+        function busy(working) {
+
+            btn.disabled = !!working;
+
+            btn.innerHTML = working
+                ? '<span class="spin" aria-hidden="true"></span>' + working
+                : 'Sign in';
+        }
+
+        /* ----------------------------------------------------------
+           Supabase has to actually be there
+
+           supabase-client.js leaves window.hllSupabase undefined when the
+           CDN bundle does not load — offline, or blocked. Saying so is the
+           whole job here: a sign-in button that silently does nothing is
+           the worst of the outcomes available.
+        ---------------------------------------------------------- */
+
+        if (!window.hllSupabase) {
+
+            say('Cannot reach the account service. Check your connection and reload.', 'err');
+
+            btn.disabled = true;
+            emailEl.disabled = true;
+            pwEl.disabled = true;
+            pwToggle.disabled = true;
+
+            return;
+        }
+
+        /* ----------------------------------------------------------
+           Already signed in? Do not make them do it twice.
+        ---------------------------------------------------------- */
+
+        window.hllSupabase.auth.getSession().then(function (res) {
+
+            if (res && res.data && res.data.session) {
+                say('Session found — opening your dashboard.', 'ok');
+                window.location.replace(DASHBOARD);
+            }
+
+        })['catch'](function () {
+            /* No session, or the check failed. Either way the form stands. */
+        });
+
+        /* ----------------------------------------------------------
+           Small courtesies
+
+           The email is remembered because a driver signs in from the same
+           machine every shift. The password never is.
+        ---------------------------------------------------------- */
+
+        try {
+            var last = localStorage.getItem('hll.lastDriverEmail');
+
+            if (last) {
+                emailEl.value = last;
+                pwEl.focus();
+            } else {
+                emailEl.focus();
+            }
+        } catch (e) {
+            emailEl.focus();
+        }
+
+        /* Caps Lock is the commonest cause of "my password stopped working",
+           and the browser will not mention it. */
+        function caps(ev) {
+
+            var on = typeof ev.getModifierState === 'function' &&
+                     ev.getModifierState('CapsLock');
+
+            capsHint.hidden = !on;
+        }
+
+        pwEl.addEventListener('keydown', caps);
+        pwEl.addEventListener('keyup', caps);
+        pwEl.addEventListener('blur', function () { capsHint.hidden = true; });
+
+        /* Show / hide the password. */
+
+        var EYE =
+            '<path d="M1.6 12S5.3 5.5 12 5.5 22.4 12 22.4 12 18.7 18.5 12 18.5 1.6 12 1.6 12z"/>' +
+            '<circle cx="12" cy="12" r="3"/>';
+
+        var EYE_OFF =
+            '<path d="M3 3l18 18"/>' +
+            '<path d="M10.6 6.2A9.9 9.9 0 0 1 12 5.5c6.7 0 10.4 6.5 10.4 6.5a18 18 0 0 1-3.4 4.2"/>' +
+            '<path d="M6.5 7.8A17.6 17.6 0 0 0 1.6 12S5.3 18.5 12 18.5a9.9 9.9 0 0 0 3.9-.8"/>' +
+            '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>';
+
+        pwToggle.addEventListener('click', function () {
+
+            var show = pwEl.type === 'password';
+
+            pwEl.type = show ? 'text' : 'password';
+
+            pwToggle.setAttribute('aria-pressed', String(show));
+            pwToggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+
+            document.getElementById('pwIcon').innerHTML = show ? EYE_OFF : EYE;
+
+            pwEl.focus();
+        });
+
+        /* Typing again clears the last failure, so a stale error never sits
+           beside a field the driver has already corrected. */
+        [emailEl, pwEl].forEach(function (el) {
+
+            el.addEventListener('input', function () {
+
+                el.classList.remove('err');
+
+                if (msg.classList.contains('err')) clearSay();
+            });
+        });
+
+        /* ----------------------------------------------------------
+           Sign in
+        ---------------------------------------------------------- */
+
+        form.addEventListener('submit', async function (event) {
+
+            event.preventDefault();
+
+            var email = emailEl.value.trim();
+            var password = pwEl.value;
+
+            /* Checked here so an obvious mistake costs no round trip. */
+            if (!email) {
+                emailEl.classList.add('err');
+                emailEl.focus();
+                say('Enter the email address on your driver record.', 'err');
+                return;
+            }
+
+            if (!password) {
+                pwEl.classList.add('err');
+                pwEl.focus();
+                say('Enter your password.', 'err');
+                return;
+            }
+
+            say('Signing in…');
+            busy('Signing in');
+
+            var result;
+
+            /* signInWithPassword rejects on a network failure rather than
+               resolving with an error, so both paths need covering or a
+               dropped connection leaves the button spinning for ever. */
+            try {
+                result = await window.hllSupabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+            } catch (err) {
+                console.error('Heavyline sign-in: the request failed', err);
+                say('Could not reach the account service. Check your connection and try again.', 'err');
+                busy(false);
+                return;
+            }
+
+            if (result.error) {
+
+                console.error('Heavyline sign-in:', result.error);
+
+                /* Supabase returns "Invalid login credentials" both for a
+                   wrong password and for an address with no account, on
+                   purpose — telling them apart tells an attacker which
+                   addresses are real. Kept vague here for the same reason. */
+                var text = /invalid login/i.test(result.error.message || '')
+                    ? 'That email and password do not match a driver account.'
+                    : result.error.message || 'Sign-in failed.';
+
+                say(text, 'err');
+                pwEl.classList.add('err');
+                pwEl.select();
+                busy(false);
+                return;
+            }
+
+            try {
+                localStorage.setItem('hll.lastDriverEmail', email);
+            } catch (e) {
+                /* Private mode. Not worth failing a good sign-in over. */
+            }
+
+            say('Signed in. Opening your dashboard…', 'ok');
+            busy('Opening');
+
+            /* replace, not href: the back button should not land on a login
+               form the driver is already past. */
+            window.location.replace(DASHBOARD);
+        });
+
+    })();
+    </script>
+
+</body>
+</html>

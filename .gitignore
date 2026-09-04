@@ -24,6 +24,9 @@ hll-company.json.tmp
 # state the company service writes beside itself
 hll-chat.json
 hll-outbox.json
+# who has read how far in the fleet room — runtime state, like the
+# conversations themselves
+hll-room-reads.json
 
 # .NET intermediates for the telemetry adapter. obj/ and bin/ are rebuilt by
 # `dotnet build` every time and churn on every compile — two of them were
@@ -33,3 +36,5 @@ hll-outbox.json
 telemetry-adapter/obj/
 telemetry-adapter/bin/
 *.pdb
+
+.fake

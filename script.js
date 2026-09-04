@@ -651,7 +651,10 @@ const Accounts = {
       }
 
       if (driverError) {
-        console.error('[HLL] Failed to create driver row:', driverError);
+        /* Logged below, once it is known whether this is a fault or the
+           ordinary email-confirmation path. Shouting "Failed" at a refusal
+           the code goes on to handle correctly is how a clean run comes
+           back looking broken. */
 
         /* This failure has exactly one shape and two possible cures, and
            "new row violates row-level security policy for table drivers"
@@ -671,25 +674,46 @@ const Accounts = {
         if (refused) {
           const noSession = !(authData && authData.session);
 
+          /* No session is not a fault. It is what email confirmation is
+             FOR: Supabase withholds the session until the address is
+             proved. So the refusal here is expected, and it is not the
+             end of the registration — the driver record is made at the
+             first sign-in instead, by Accounts.provision(), which runs
+             with a session and therefore satisfies the policy.
+
+             This used to throw, which threw away a perfectly good Auth
+             user and told the applicant to go and run a SQL migration.
+             They cannot, and they do not need to. */
+          if (noSession) {
+            console.warn('[HLL] No session yet (email confirmation is on) — '
+              + 'the driver record will be made at first sign-in.');
+
+            return {
+              confirmEmail: true,
+              email: account.email,
+              driverId: driverId,
+              user: user
+            };
+          }
+
+          /* A session came back and the insert was still refused, so this
+             is the policy actually being absent rather than a timing
+             problem. That one does need somebody with database rights. */
+          console.error('[HLL] The drivers insert policy refused a session that exists:',
+            driverError);
+
           throw new Error(
             'Your sign-in was created, but your driver record could not be — '
             + 'the database refused it.\n\n'
-            + (noSession
-              ? 'Email confirmation is on, so there is no session yet and the '
-                + 'browser is not allowed to write that record. The database '
-                + 'has to make it instead: run '
-                + 'supabase/migrations/20260903_driver_row_on_signup.sql in '
-                + 'the Supabase SQL editor. It also creates the record for '
-                + 'anyone already stuck like this, so afterwards just sign in '
-                + 'with the details you have entered here.'
-              : 'A session was returned, so this is a policy problem rather '
-                + 'than a timing one. Run supabase/setup.sql, which creates '
-                + 'the insert policy this needs.'));
+            + 'A session was returned, so this is a policy problem rather '
+            + 'than a timing one. Run supabase/setup.sql, which creates '
+            + 'the insert policy this needs.');
         }
 
         /* The Auth user exists but has nothing to sign in to. Stop here
            rather than filing an application against a driver that is not
            there. */
+        console.error('[HLL] Failed to create driver row:', driverError);
         throw driverError;
       }
 
@@ -746,14 +770,26 @@ const Accounts = {
               country: application.country || 'Not set',
               status: 'pending',
 
-              /* Who applied — the primary key of the drivers row written a
-                 moment ago, not the HLL code and not the auth uuid.
+              /* Who applied — the HLL driver code, which is what this
+                 column holds.
 
-                 The column is text and carries no foreign key, so Postgres
-                 stores the number as a string and enforces nothing. The
-                 migration file has the SQL to make it a real bigint
-                 reference. */
-              driver_id: driver.id,
+                 It used to be driver.id, the bigint primary key, and that
+                 was wrong in two ways that both failed silently. setup.sql
+                 says plainly
+
+                   drivers.driver_code (text)  <-- applications.driver_id
+
+                 and the policy letting a driver read their own application
+                 is written to match:
+
+                   driver_id in (select driver_code from drivers where ...)
+
+                 so a bigint here filed a row its own owner could not see.
+                 And the recruitment screen resolves an applicant back to a
+                 driver by code — given a number it found nobody, and
+                 approving built a second roster row for somebody already
+                 on it. */
+              driver_id: driver.driver_code || driverId,
 
               /* who is handling it, not who decided it — reviewed_at stays
                  null until somebody actually decides */
@@ -984,6 +1020,123 @@ fromRow(row, authUser) {
     };
 },
 
+/* Make the driver record for somebody who has an Auth user and none.
+
+   This is the other half of the email-confirmation problem. signUp()
+   with confirmation on returns a user and NO session, so there is no
+   auth.uid() and the insert policy — with check (auth.uid() =
+   auth_user_id) — refuses the row for the very person entitled to it.
+   supabase/migrations/20260903_driver_row_on_signup.sql solves that with
+   a trigger, and is still the better answer because it does not need the
+   person to ever come back.
+
+   But it needs someone with database rights to run it, and until they do
+   every new driver is stranded. This does not need that. It runs at the
+   first successful sign-in, which is the first moment a session exists —
+   and with a session, auth.uid() is their own id, the existing policy is
+   satisfied, and the row goes in. No new privileges, no new policy: the
+   same insert, moved to a moment when it is allowed.
+
+   Everything it needs was already put into the signUp metadata by
+   register(): full_name, driver_code, role and country. */
+async provision(user) {
+
+    if (!window.hllSupabase || !user) {
+        return { driver: null, error: new Error('Not signed in.') };
+    }
+
+    const meta = user.user_metadata || {};
+
+    const name = meta.full_name || (user.email || '').split('@')[0] || 'Driver';
+    const role = meta.role || 'driver';
+    const country = meta.country || 'Not set';
+
+    /* driver_code is unique and the browser cannot see what is taken, so a
+       clash is a matter of time rather than bad luck. Retry on 23505 with
+       a fresh code, exactly as the trigger does — failing here would leave
+       the person stranded a second time. */
+    let code = meta.driver_code || ('HLL' + String(Math.floor(1000 + Math.random() * 9000)));
+    let driver = null;
+    let lastError = null;
+
+    for (let tries = 0; tries < 6 && !driver; tries++) {
+
+        const { data, error } = await window.hllSupabase
+            .from('drivers')
+            .insert({
+                auth_user_id: user.id,
+                driver_code: code,
+                full_name: name,
+                email: user.email || '',
+                role: role,
+                /* Not approved. The recruiter decides, and until they do
+                   this is what keeps the client download shut. */
+                status: 'pending'
+            })
+            .select()
+            .maybeSingle();
+
+        if (!error) { driver = data; break; }
+
+        lastError = error;
+
+        if (error.code === '23505') {           /* the code was taken */
+            code = 'HLL' + String(Math.floor(1000 + Math.random() * 9000));
+            continue;
+        }
+
+        break;                                   /* anything else will not improve */
+    }
+
+    if (!driver) {
+        console.error('[HLL] Could not provision the driver record:', lastError);
+        return { driver: null, error: lastError || new Error('No driver record was made.') };
+    }
+
+    console.log('[HLL] Driver record provisioned on first sign-in:', driver);
+
+    /* The application, so a recruiter has something to approve. Without it
+       the person exists and can sign in, but never appears on the
+       recruitment screen and is never let in. */
+    const { data: existing } = await window.hllSupabase
+        .from('applications')
+        .select('id')
+        .eq('driver_id', driver.driver_code)
+        .maybeSingle();
+
+    if (!existing && role === 'driver') {
+
+        const reviewer = await recruiterSupabaseId();
+
+        /* driver_code, not id. setup.sql is explicit that
+           applications.driver_id is the text HLL code, and the policy that
+           lets a driver see their own application reads
+             driver_id in (select driver_code from drivers where ...)
+           so a bigint here files a row its owner cannot read. */
+        const { error: appError } = await window.hllSupabase
+            .from('applications')
+            .insert({
+                driver_id: driver.driver_code,
+                full_name: name,
+                email: user.email || '',
+                country: country,
+                status: 'pending',
+                reviewed_by: reviewer,
+                onboarding_status: 'pending'
+            });
+
+        if (appError) {
+            /* Not fatal, and deliberately not rolled back: the driver row
+               is what lets them sign in at all, and a recruiter can still
+               find them on the roster. Losing the sign-in to tidy up the
+               paperwork would be the worse trade. */
+            console.warn('[HLL] Driver provisioned but no application filed:', appError);
+        }
+    }
+
+    return { driver, error: null };
+},
+
 async verify(handle, password) {
     try {
         const email = String(handle || '').trim().toLowerCase();
@@ -1036,12 +1189,30 @@ async verify(handle, password) {
         });
 
         // Find the Heavyline driver linked to this Auth user
-        const { data: driver, error: driverError } =
+        let { data: driver, error: driverError } =
             await window.hllSupabase
                 .from('drivers')
                 .select('*')
                 .eq('auth_user_id', user.id)
                 .maybeSingle();
+
+        /* No row, but the sign-in was good. This is the person who
+           registered while email confirmation was on: the Auth user was
+           made, and the drivers row could not be, because at that moment
+           there was no session to satisfy auth.uid() = auth_user_id.
+
+           There is one now. Make the row rather than turning them away —
+           "contact management" was a dead end for somebody who had done
+           nothing wrong and had no way through it. */
+        if (!driverError && !driver) {
+
+            console.warn('[HLL] No driver record for this account — provisioning it now.');
+
+            const made = await Accounts.provision(user);
+
+            driver = made.driver;
+            if (!driver) driverError = made.error;
+        }
 
         if (driverError || !driver) {
             console.error(
@@ -1051,9 +1222,19 @@ async verify(handle, password) {
 
             await window.hllSupabase.auth.signOut();
 
+            /* 42501 here means the insert policy from setup.sql is not on
+               the table, which is a thing only somebody with database
+               rights can fix — so say which, rather than "contact
+               management" at a person who cannot act on it. */
+            const refused = driverError && (driverError.code === '42501'
+                || /row-level security/i.test(driverError.message || ''));
+
             return {
-                error:
-                    'Your login is valid, but your Heavyline driver account is not linked. Contact management.'
+                error: refused
+                    ? 'Your sign-in works, but your driver record could not be created — '
+                      + 'the database refused it. Run supabase/setup.sql, which adds the '
+                      + 'policy that lets a driver create their own record.'
+                    : 'Your login is valid, but your Heavyline driver account is not linked. Contact management.'
             };
         }
 
@@ -1079,12 +1260,50 @@ async verify(handle, password) {
 
         /* The rest of the app renders a driver, not a database row. Hand it
            one. Both call sites read { error } | { account, driver }. */
+        const record = Accounts.fromRow(driver, user);
+
+        /* Who may download the client.
+
+           fromRow can only read this off the local record, which is empty
+           on a machine that has not seen this driver before — so a driver
+           who WAS approved, signing in on a new computer, was refused the
+           download, and one approved on another machine had to wait for
+           the company blob to reach them.
+
+           The approval itself lives in the database, so ask it. A driver
+           is released the client when their application is approved, and
+           never before: this is the gate, and it now answers the same way
+           on every machine. */
+        let released = record.role === 'admin'
+            || record.role === 'super_admin'
+            || record.role === 'management';
+
+        if (!released) {
+            const { data: appRow, error: appError } = await window.hllSupabase
+                .from('applications')
+                .select('status')
+                .eq('driver_id', driver.driver_code)
+                .maybeSingle();
+
+            if (appError) {
+                /* Do not open the gate because a query failed. Fall back to
+                   whatever this machine already knew, which for anybody new
+                   is false. */
+                console.warn('[HLL] Could not read the application status:', appError);
+                released = !!record.clientAccess;
+            } else {
+                released = !!appRow && appRow.status === 'approved';
+            }
+        }
+
+        record.clientAccess = released;
+
         return {
             account: {
                 email: user.email,
                 driverId: driver.driver_code,
             },
-            driver: Accounts.fromRow(driver, user),
+            driver: record,
             user: user,
             session: data.session,
         };
@@ -1754,8 +1973,99 @@ function avatar(d, size = 40, ring = false) {
   /* one neutral tone for everyone; only the signed-in driver is tinted, so the
      accent colour still means something instead of being decoration */
   const me = state.user && d.id === state.user.id ? 'me' : '';
-  return `<span class="avatar a-${size} ${me} ${ring ? 'avatar-ring' : ''}"
-    title="${esc(d.name)}">${esc(d.initials || initials(d.name))}${pres}</span>`;
+
+  /* A photo if they have uploaded one, initials if not. The photo lives on
+     the driver record as a small data URL — see readAvatarFile — so it
+     travels in the company record like every other thing about a driver,
+     and turns up on the console, the phone and the client without any of
+     them needing to fetch anything.
+
+     The tint is dropped when there is a picture: it would sit on top of
+     the face rather than behind initials. */
+  const src = typeof d.avatar === 'string' && d.avatar.startsWith('data:image/')
+    ? d.avatar : '';
+
+  const body = src
+    ? `<img class="avatar-img" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    : esc(d.initials || initials(d.name));
+
+  return `<span class="avatar a-${size} ${src ? 'has-img' : me} ${ring ? 'avatar-ring' : ''}"
+    title="${esc(d.name)}">${body}${pres}</span>`;
+}
+
+/* Turn a chosen file into something that can live on a driver record.
+
+   Deliberately not the file as given. A phone camera hands over three or
+   four megabytes, and this is going into the company record that every
+   machine pulls — a handful of drivers uploading holiday snaps would make
+   the whole company slow to sync for everyone. So it is redrawn to at most
+   AVATAR_PX on its long edge and re-encoded as JPEG, which takes those
+   megabytes down to tens of kilobytes.
+
+   Square, and cropped from the middle rather than squashed: an avatar is
+   displayed in a circle and a stretched face is worse than a cropped one. */
+const AVATAR_PX = 256;
+const AVATAR_MAX_BYTES = 90 * 1024;
+
+function readAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+
+    if (!file) return reject(new Error('No file chosen.'));
+
+    if (!/^image\//.test(file.type)) {
+      return reject(new Error('That is not an image. Use a JPEG, PNG or WebP.'));
+    }
+
+    /* Guard before decoding, not after: a 60 MP panorama would otherwise be
+       decompressed into memory first and could take the tab down. */
+    if (file.size > 12 * 1024 * 1024) {
+      return reject(new Error('That image is very large. Use one under 12 MB.'));
+    }
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!side) return reject(new Error('That image could not be read.'));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = AVATAR_PX;
+      canvas.height = AVATAR_PX;
+
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+
+      /* centre crop */
+      ctx.drawImage(img,
+        (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
+        0, 0, AVATAR_PX, AVATAR_PX);
+
+      /* Drop the quality until it fits rather than refusing a photo that is
+         merely detailed. Three steps is enough to bring anything this size
+         under the cap; if it somehow is not, say so instead of storing it. */
+      let out = '';
+      for (const q of [0.82, 0.7, 0.55, 0.4]) {
+        out = canvas.toDataURL('image/jpeg', q);
+        if (out.length * 0.75 <= AVATAR_MAX_BYTES) break;
+      }
+
+      if (out.length * 0.75 > AVATAR_MAX_BYTES) {
+        return reject(new Error('That image would not compress small enough.'));
+      }
+
+      resolve(out);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('That image could not be read.'));
+    };
+
+    img.src = url;
+  });
 }
 function avatarStack(drivers, max = 5, size = 32) {
   const shown = drivers.slice(0, max);
@@ -2928,11 +3238,35 @@ function userMenu(anchor) {
       : (can('admin.view') ? `<button data-act="site-admin">${icon('shield')}Management console</button>` : '')}
     <button data-act="switch-account">${icon('refresh')}Switch account</button>
     <button class="danger" data-act="logout">${icon('logout')}Sign out</button>`;
-  const r = anchor.getBoundingClientRect();
-  m.style.top = (r.bottom + 8) + 'px';
-  const left = Math.min(r.left, window.innerWidth - 220);
-  m.style.left = Math.max(10, left) + 'px';
+  /* Added to the page BEFORE it is positioned, because where it goes
+     depends on how tall it is and nothing can measure a node that is not
+     in the document yet.
+
+     This menu hangs off the account card, which is pinned to the BOTTOM of
+     the sidebar. Opening downwards from there put it off the end of the
+     screen every time — the sign-out button sat below the fold and the
+     page grew a scrollbar to reach it. So: below when there is room,
+     above when there is not, and clamped either way for the case where
+     neither side has enough. */
   $('#layers').appendChild(m);
+
+  const PAD = 10;
+  const GAP = 8;
+  const r = anchor.getBoundingClientRect();
+  const h = m.offsetHeight;
+  const w = m.offsetWidth;
+
+  let top = r.bottom + GAP;
+  if (top + h > window.innerHeight - PAD) top = r.top - GAP - h;   /* flip above */
+  top = Math.max(PAD, Math.min(top, window.innerHeight - h - PAD));
+
+  /* The width is measured rather than assumed. It was hard-coded to 220,
+     which is not what .menu is, so the right-hand clamp was wrong by
+     however much the widest label happened to add. */
+  const left = Math.max(PAD, Math.min(r.left, window.innerWidth - w - PAD));
+
+  m.style.top = top + 'px';
+  m.style.left = left + 'px';
   setTimeout(() => {
     const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off); } };
     document.addEventListener('mousedown', off);
@@ -5237,7 +5571,21 @@ function viewSettings() {
                 <div class="sm t3 mono">${esc(u.id)}</div>
                 <div class="row gap-8 mt-8">
                   ${rankChip(u)}
-                  <span class="xs t3">Your initials are used across Heavyline</span></div>
+                </div>
+                <div class="row gap-8 mt-12 wrap">
+                  <input type="file" id="avatarFile" accept="image/*" hidden>
+                  <button class="btn btn-sm" type="button" data-act="avatar-pick">
+                    ${icon('upload')}${u.avatar ? 'Change photo' : 'Upload a photo'}</button>
+                  ${u.avatar
+                    ? `<button class="btn btn-sm btn-ghost" type="button" data-act="avatar-clear">
+                         ${icon('trash')}Remove</button>`
+                    : ''}
+                </div>
+                <div class="xs t3 mt-8">
+                  ${u.avatar
+                    ? 'Your photo shows on the website, the console and in the client.'
+                    : 'Until you add one, your initials are used across Heavyline.'}
+                </div>
               </div>
             </div>
             <form id="profileForm">
@@ -6848,6 +7196,12 @@ function handleAction(act, t, ev) {
     case 'call-hangup': Calls.hangUp(); return;
     case 'call-mute': Calls.toggleMute(); return;
 
+    /* The room call. Join and leave rather than dial and answer: there is
+       nobody in particular to ring, and nobody has to accept. */
+    case 'room-join': RoomCall.join(); return;
+    case 'room-leave': RoomCall.leave(); return;
+    case 'room-mute': RoomCall.mute(); return;
+
     /* auth */
     case 'auth-mode':
       state.ui.authMode = t.dataset.v;
@@ -6967,7 +7321,58 @@ function handleAction(act, t, ev) {
     case 'app-update': saveApplicationDetails(id); return;
     case 'app-message': openApplicationMessage(id); return;
     case 'app-message-send': sendApplicationMessage(id); return;
+    /* The hidden file input is opened from a real button, so the control
+       matches every other button on the page instead of being the one
+       piece of unstyled browser chrome on it. */
+    case 'avatar-pick': {
+      const input = $('#avatarFile');
+      if (!input) return;
+
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        /* Cleared straight away: choosing the same file twice in a row
+           fires no change event otherwise, and looks broken. */
+        input.value = '';
+        if (!file) return;
+
+        try {
+          const data = await readAvatarFile(file);
+          const me = Store.driver(state.user.id) || state.user;
+
+          me.avatar = data;
+          state.user.avatar = data;
+
+          /* Store.save() offers the change to the company service itself,
+             so the face reaches the console and the client without this
+             having to ask. */
+          Store.save();
+          toast('Photo updated', 'ok', 'It shows anywhere your name does.');
+          render();
+
+        } catch (err) {
+          toast('Could not use that image', 'err', err.message);
+        }
+      };
+
+      input.click();
+      return;
+    }
+
+    case 'avatar-clear': {
+      const me = Store.driver(state.user.id) || state.user;
+      delete me.avatar;
+      delete state.user.avatar;
+      Store.save();
+      toast('Photo removed', 'ok', 'Your initials are used again.');
+      render();
+      return;
+    }
+
     case 'app-approve': approveApplication(id); return;
+
+    /* The button no longer carries the URL, because there no longer is a
+       URL until the server has agreed to make one. */
+    case 'download-client': Downloads.request(id); return;
     case 'app-reject': setAppStage(id, 'rejected'); return;
     case 'app-stage': setAppStage(id, t.dataset.stage); return;
 
@@ -7436,7 +7841,13 @@ function approveApplication(id) {
       let d = existing;
       if (!d) {
         d = {
-          id: Accounts.nextDriverId(), name: a.name, initials: initials(a.name),
+          /* Their own code if the application carries one. Only an
+             application filed with no driver behind it gets a fresh id —
+             minting one for somebody who already has a record is how a
+             driver ended up on the roster twice, with the download
+             released to the copy they cannot sign in as. */
+          id: a.submittedBy || Accounts.nextDriverId(),
+          name: a.name, initials: initials(a.name),
           country: a.country, joined: new Date().toISOString(), status: 'offline',
           km: 0, deliveries: 0, convoys: 0, attendance: 100, role: 'driver', accountStatus: 'active',
           discord: a.discord, truckersmp: a.truckersmp, truckId: null, trailerId: null,
@@ -8197,16 +8608,29 @@ const Applications = {
       notes: (local && local.notes) || [],
       messages: (local && local.messages) || [],
 
-      /* The drivers row this was filed by. Kept apart from submittedBy on
-         purpose: driver_id is the Supabase primary key, submittedBy is the
-         HLL driver code, and approveApplication() looks the driver up by
-         code. Feeding one into the other finds nobody and quietly builds a
-         second roster row for somebody already on it. */
+      /* The drivers row this was filed by. applications.driver_id holds the
+         HLL driver code — setup.sql says so and the policy that lets a
+         driver read their own application is written against driver_code. */
       driverSupabaseId: row.driver_id != null
         ? String(row.driver_id)
         : (local && local.driverSupabaseId) || null,
 
-      submittedBy: (local && local.submittedBy) || null,
+      /* Who filed it, resolved from the row and not only from whatever this
+         browser happens to remember.
+
+         This used to read the local record alone, so on a recruiter's
+         machine — which has never seen the applicant — it came back null.
+         approveApplication() then found no driver to approve and built a
+         NEW roster row with a new HLL id, released the download to that,
+         and left the real applicant waiting. From the recruiter's side the
+         approval looked like it worked and nothing reached the driver,
+         which is what sent people to the database to do it by hand.
+
+         An HLL code is what the column carries; anything else (an old row
+         filed with the bigint id) is not a code and is left alone rather
+         than guessed at. */
+      submittedBy: (local && local.submittedBy)
+        || (/^HLL/i.test(String(row.driver_id || '')) ? String(row.driver_id) : null),
     };
   },
 
@@ -10904,8 +11328,60 @@ const Downloads = {
   state: 'unknown',      /* unknown | local | ready | missing */
   missing: [],
 
+  /* Whether the approval gate is actually in front of the builds here.
+
+     'on'  — functions/api/download-link.js answered, so a build is
+             released to approved drivers and nobody else.
+     'off' — it is not deployed on this host, so the buttons below hand
+             out the public URL and the gate is the page's opinion only.
+
+     Staff are told when it is off, because they are the only ones who
+     can do anything about it and the alternative is believing the
+     builds are protected when they are not. */
+  gated: 'unknown',
+
+  /* Is this a machine somebody is working on, or the real site?
+
+     It decides what "no gate" means. Under npm run serve, or off the
+     disk, there are no Cloudflare Functions and there never will be —
+     that is not a misconfiguration, it is what a local copy is. On the
+     deployed site the same fact is a hole. Same state, two different
+     things to say about it. */
+  isLocal() {
+    return location.protocol === 'file:'
+      || ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname);
+  },
+
   async check() {
     if (location.protocol === 'file:') { this.state = 'local'; return; }
+
+    /* Is the gated endpoint here?
+
+       A GET on it is not how a link is minted — that is a POST — so it
+       answers 405. Which is the point: 405 means the Function exists and
+       the builds are behind it, and 404 means this host has no Functions
+       and the page must look for the files the old way.
+
+       Checking for the installers next to the site would now be checking
+       the wrong thing. They are deliberately not there. */
+    try {
+      const res = await fetch('/api/download-link', { method: 'GET', cache: 'no-store' });
+
+      /* A GET is not how a link is minted, so the endpoint answers 405 —
+         as JSON. Every host here rewrites an unknown path to index.html
+         with a 200, so the status alone cannot tell the two apart and
+         the content type has to. */
+      if (/json/i.test(res.headers.get('Content-Type') || '')) {
+        this.gated = 'on';
+        this.state = 'ready';
+        this.missing = [];
+        return;
+      }
+      this.gated = 'off';
+    } catch (e) {
+      this.gated = 'off';   /* no Functions, or offline */
+    }
+
     const missing = [];
     await Promise.all(CLIENT_RELEASE.builds.map(async (b) => {
       try {
@@ -10915,6 +11391,82 @@ const Downloads = {
     }));
     this.missing = missing;
     this.state = missing.length ? 'missing' : 'ready';
+  },
+
+  /* Ask the site for a link to a build.
+
+     The approval gate on this page decides what is OFFERED. That is a
+     statement about the interface, not about the file: while the builds
+     sat on public GitHub Releases, anybody with the URL had them,
+     approved or not.
+
+     They now live in a private R2 bucket with no public address, and
+     functions/api/download-link.js is the only way to one — it asks
+     Supabase, as this driver, whether their application is approved, and
+     signs a URL that lasts five minutes if it is. So the real check
+     happens on the server, where the person being checked cannot reach
+     it, and this is only the button that starts it.
+
+     Falls back to the old direct URL when there is no Function to ask —
+     a local `npm run serve`, or a deploy to a host without them. That is
+     a development convenience and is why the bucket, not this code, is
+     what actually keeps the builds private. */
+  async request(key) {
+
+    const build = CLIENT_RELEASE.builds.find((b) => b.key === key);
+    if (!build) return;
+
+    const fallback = () => { location.href = clientDownloadUrl(build); };
+
+    if (location.protocol === 'file:') return fallback();
+
+    let token = null;
+    try {
+      const { data } = await window.hllSupabase.auth.getSession();
+      token = data && data.session ? data.session.access_token : null;
+    } catch (e) { /* handled by the endpoint, or by the fallback */ }
+
+    let res;
+    try {
+      res = await fetch('/api/download-link', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' },
+          token ? { Authorization: 'Bearer ' + token } : {}),
+        body: JSON.stringify({ build: key }),
+      });
+    } catch (e) {
+      return fallback();                       /* offline, or no endpoint */
+    }
+
+    /* Did the download service actually answer, or did something else?
+
+       This is the part that was wrong. It only treated 404 as "no
+       Function here", and every host this site is deployed to rewrites
+       unknown paths to index.html with a 200 — netlify.toml and
+       vercel.json both say so in as many words. So a site without the
+       Function answered this POST with a page, res.ok was true,
+       res.json() threw on the HTML, and the code reported "the download
+       service did not answer" at somebody whose download was fine.
+
+       What separates the two is not the status, it is whether the reply
+       is JSON. A page is not a refusal. */
+    const kind = res.headers.get('Content-Type') || '';
+    let body = null;
+    if (/json/i.test(kind)) { try { body = await res.json(); } catch (e) { body = null; } }
+
+    if (!body) return fallback();              /* not the API — nothing is gating this */
+
+    Downloads.gated = 'on';
+
+    /* From here the service IS the authority, and a refusal is a real
+       refusal with a reason worth showing. */
+    if (!res.ok || !body.url) {
+      toast('Download refused', 'err',
+        body.error || 'The download service would not release that build.');
+      return;
+    }
+
+    location.href = body.url;
   },
 };
 
@@ -10930,6 +11482,43 @@ function viewDownloads() {
         <h1 class="page-title">Heavyline Trucker</h1>
         <p class="page-sub">The client that tracks your runs and puts you on the live map</p></div>
     </div>
+
+    ${can('admin.view') && Downloads.gated === 'off' && !Downloads.isLocal() ? `
+      <div class="card mb-16" style="border-color:rgba(217,155,43,.35)">
+        <div class="card-body row gap-14 wrap" style="align-items:flex-start">
+          <span class="stat-ico" style="flex:none;color:var(--warn)">${icon('alert')}</span>
+          <div class="grow" style="min-width:240px">
+            <div class="b8">The download gate is not running on this site</div>
+            <p class="t2 sm mt-8">This page only offers the builds to approved
+              drivers, but that is the page's opinion. The files themselves are
+              at a public address, so anybody with the link has them — approved
+              or not.</p>
+            <p class="t2 sm mt-8">To put the gate in front of them: create the R2
+              bucket, upload the builds with
+              <span class="mono">npm run release:push</span>, and set
+              <span class="mono">HLL_DOWNLOAD_SECRET</span>. The three commands
+              are in <span class="mono">SETUP.md</span> section 6.</p>
+            <p class="t3 xs mt-8">Only staff see this.</p>
+          </div>
+        </div>
+      </div>` : ''}
+
+    ${can('admin.view') && Downloads.gated === 'off' && Downloads.isLocal() ? `
+      <div class="card mb-16">
+        <div class="card-body row gap-14 wrap" style="align-items:flex-start">
+          <span class="stat-ico" style="flex:none;color:var(--text-3)">${icon('info')}</span>
+          <div class="grow" style="min-width:240px">
+            <div class="b8">Downloads are ungated on this machine</div>
+            <p class="t2 sm mt-8">The approval gate runs as a Cloudflare Function,
+              and there are none under <span class="mono">npm run serve</span>. So
+              the buttons here hand out the file directly — which is what you want
+              while you are working on it, and says nothing about the deployed
+              site.</p>
+            <p class="t3 xs mt-8">Only staff see this. The published site reports
+              its own state on this page.</p>
+          </div>
+        </div>
+      </div>` : ''}
 
     ${allowed && !CLIENT_DOWNLOAD_BASE && Downloads.state === 'local' ? `
       <div class="card mb-16" style="border-color:var(--warn-line,rgba(217,155,43,.35))">
@@ -10975,9 +11564,9 @@ function viewDownloads() {
               <span class="badge">${esc(b.size)}</span>
             </div>
             ${CLIENT_DOWNLOAD_BASE || Downloads.state === 'ready' || Downloads.state === 'unknown'
-              ? `<a class="btn btn-primary btn-block mt-16" href="${esc(clientDownloadUrl(b))}"${
-                   CLIENT_DOWNLOAD_BASE ? ' rel="noopener"' : ' download'}>
-                   ${icon('download')}Download</a>`
+              ? `<button class="btn btn-primary btn-block mt-16"
+                   data-act="download-client" data-id="${esc(b.key)}">
+                   ${icon('download')}Download</button>`
               : `<button class="btn btn-block mt-16" disabled>${icon('download')}Not available here</button>`}
           </div></div>`).join('')}
       </div>
@@ -11113,6 +11702,17 @@ function bindAuth() {
       btn.disabled = false;
 
       state.ui.regDraft = {};
+
+      /* Same as the driver form: with confirmation on there is no session
+         to open the console with yet. */
+      if (res.confirmEmail) {
+        toast('Owner account created', 'ok', 'Confirm your email to finish');
+        showErr(sf, 'form',
+          'Almost there. We have sent a confirmation link to ' + res.email
+          + '. Open it, then sign in with the same password.');
+        return;
+      }
+
       /* the platform is keyed on driver_code, and Supabase issued it */
       const driver = Store.driver(res.driver.driver_code);
       toast('Owner account created', 'ok', 'Heavyline Logistics is yours to run');
@@ -11218,6 +11818,21 @@ function bindAuth() {
       btn.disabled = false;
 
       state.ui.regDraft = {};
+
+      /* Email confirmation is on, so there is no session and nothing to
+         log in to yet. The account is real and the driver record is made
+         the moment they come back and sign in — see Accounts.provision.
+         Say that plainly instead of dropping them on a dead form. */
+      if (res.confirmEmail) {
+        toast('Account created', 'ok', 'Confirm your email to finish');
+        showErr(rf, 'form',
+          'Almost there. We have sent a confirmation link to ' + res.email
+          + '. Open it, then sign in with the same password — your driver '
+          + 'record and your application are made at that point, and a '
+          + 'recruiter takes it from there.');
+        return;
+      }
+
       const driver = Store.driver(res.driver.driver_code);
       toast('Account created', 'ok', 'Welcome to Heavyline, ' + name.split(' ')[0]);
       Store.notify(driver.id, {
@@ -12057,6 +12672,299 @@ const Messages = {
    So a call costs the company nothing to carry, and there is nothing
    at the service to record.
    ============================================================ */
+/* The whole company's conversation. The service knows it by this id and
+   it is not a driver code, so nothing can collide with it. */
+const FLEET_ROOM = '#fleet';
+
+/* ---------------- the group call ----------------
+
+   A mesh: every participant holds one peer connection to every other one.
+   No server mixes the audio, which is why there is nothing to run and
+   nothing to pay for — and also why it is not the right shape for fifty
+   people. For a crew of a handful it is the simplest thing that works,
+   and the participant list is capped so it degrades by refusing rather
+   than by melting somebody's laptop.
+
+   Who offers to whom is decided once, on joining: the service hands a
+   joiner the list of people already in, and the joiner offers to each of
+   them. Everybody already in waits to be offered to. So exactly one side
+   of every pair starts, and there is no glare to resolve.
+*/
+const RoomCall = {
+  live: false,
+  joining: false,
+  peers: {},           /* driverId -> { pc, name, stream } */
+  local: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+  known: [],           /* who is in it, whether or not this browser has joined */
+
+  /* A mesh is n*(n-1) connections. Past a handful that is a lot of
+     upstream audio from one laptop, so it is refused rather than
+     silently ruining the call for everyone already in it. */
+  MAX: 8,
+
+  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+
+  count() { return Object.keys(this.peers).length + (this.live ? 1 : 0); },
+
+  async signalOut(kind, to, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return null;
+    try {
+      return await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to, kind, room: FLEET_ROOM, payload }),
+      });
+    } catch (e) { return null; }
+  },
+
+  /* Who is in it, for the button label, without joining to find out. */
+  async poll() {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+    try {
+      const res = await fetch(base + '/api/call/room',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      this.known = body.peers || [];
+      paintMessages();
+    } catch (e) { /* the button just shows no count */ }
+  },
+
+  peerFor(id, name) {
+    if (this.peers[id]) return this.peers[id];
+
+    const pc = new RTCPeerConnection(this.config);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', id, { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      const entry = this.peers[id];
+      if (!entry) return;
+      entry.stream = e.streams[0];
+      this.attach();
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        this.drop(id);
+      }
+    };
+
+    if (this.local) this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+
+    this.peers[id] = { pc, name: name || id, stream: null };
+    return this.peers[id];
+  },
+
+  drop(id) {
+    const entry = this.peers[id];
+    if (!entry) return;
+    try { entry.pc.close(); } catch (e) { /* already gone */ }
+    delete this.peers[id];
+    paintCall();
+  },
+
+  async join() {
+    if (this.live || this.joining) return;
+
+    if (!Calls.can()) {
+      toast('This browser cannot make calls', 'warn',
+        'It needs a microphone and a secure connection.');
+      return;
+    }
+    if (Calls.state !== 'idle') {
+      toast('You are already on a call', 'warn', 'End it before joining the room.');
+      return;
+    }
+    if (!Messages.on()) {
+      toast('The room call needs the company service', 'warn', Messages.reason());
+      return;
+    }
+
+    this.joining = true;
+    paintMessages();
+
+    try {
+      this.local = await Calls.media(false);
+    } catch (e) {
+      this.joining = false;
+      toast('No microphone', 'err', 'Heavyline needs permission to use it.');
+      paintMessages();
+      return;
+    }
+
+    const res = await this.signalOut('join', FLEET_ROOM);
+    this.joining = false;
+
+    if (!res || !res.ok) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+      toast('Could not join the room call', 'err', 'The service did not answer.');
+      paintMessages();
+      return;
+    }
+
+    const body = await res.json().catch(() => ({}));
+    const already = (body.peers || []).slice(0, this.MAX - 1);
+
+    if ((body.peers || []).length > this.MAX - 1) {
+      toast('The room call is full', 'warn',
+        'It carries ' + this.MAX + ' people; you are hearing the first ' + already.length + '.');
+    }
+
+    this.live = true;
+    this.startedAt = Date.now();
+    this.tick();
+
+    /* One offer per pair, from the joiner. */
+    for (const p of already) {
+      const entry = this.peerFor(String(p.driverId), p.name);
+      const offer = await entry.pc.createOffer();
+      await entry.pc.setLocalDescription(offer);
+      await this.signalOut('offer', String(p.driverId), { sdp: entry.pc.localDescription });
+    }
+
+    paintCall();
+    paintMessages();
+  },
+
+  async leave(quiet) {
+    if (!this.live && !this.joining) return;
+
+    Object.keys(this.peers).forEach((id) => this.drop(id));
+    this.peers = {};
+
+    if (this.local) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+    }
+
+    clearInterval(this.timer);
+    this.timer = null;
+    this.live = false;
+    this.joining = false;
+    this.muted = false;
+    this.startedAt = 0;
+
+    await this.signalOut('leave', FLEET_ROOM);
+
+    if (!quiet) toast('You left the room call', 'info');
+    paintCall();
+    paintMessages();
+  },
+
+  mute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      const el = document.getElementById('roomTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  /* Every remote stream needs an <audio> of its own — one element cannot
+     play four people at once. They are created here rather than in the
+     markup so a repaint does not tear down audio that is playing. */
+  attach() {
+    const host = document.getElementById('roomAudio');
+    if (!host) return;
+
+    Object.keys(this.peers).forEach((id) => {
+      const entry = this.peers[id];
+      if (!entry.stream) return;
+
+      let el = host.querySelector('[data-peer="' + CSS.escape(id) + '"]');
+      if (!el) {
+        el = document.createElement('audio');
+        el.dataset.peer = id;
+        el.autoplay = true;
+        host.appendChild(el);
+      }
+      if (el.srcObject !== entry.stream) {
+        el.srcObject = entry.stream;
+        el.play().catch(() => {});
+      }
+    });
+
+    host.querySelectorAll('audio').forEach((el) => {
+      if (!this.peers[el.dataset.peer]) el.remove();
+    });
+  },
+
+  async signal(d) {
+    const from = String(d.from || '');
+
+    if (d.kind === 'room.joined') {
+      this.known = this.known.filter((p) => p.driverId !== from)
+        .concat([{ driverId: from, name: d.fromName }]);
+
+      /* Somebody arriving offers to us; we only make room for them. */
+      if (this.live) toast(d.fromName + ' joined the room call', 'info');
+      paintMessages();
+      return;
+    }
+
+    if (d.kind === 'room.left') {
+      this.known = this.known.filter((p) => p.driverId !== from);
+      if (this.live && this.peers[from]) {
+        toast(d.fromName + ' left the room call', 'info');
+        this.drop(from);
+      }
+      paintMessages();
+      return;
+    }
+
+    if (!this.live) return;
+
+    if (d.kind === 'offer') {
+      const entry = this.peerFor(from, d.fromName);
+      await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await entry.pc.createAnswer();
+      await entry.pc.setLocalDescription(answer);
+      await this.signalOut('answer', from, { sdp: entry.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'answer') {
+      const entry = this.peers[from];
+      if (entry) await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice') {
+      const entry = this.peers[from];
+      if (entry && d.payload && d.payload.candidate) {
+        try { await entry.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+        catch (e) { /* a candidate that arrives too early is not fatal */ }
+      }
+      return;
+    }
+
+    if (d.kind === 'hangup') this.drop(from);
+  },
+};
+
 const Calls = {
   pc: null,
   callId: null,
@@ -12256,6 +13164,14 @@ const Calls = {
   async signal(d) {
     if (!d) return;
 
+    /* Room traffic belongs to the group call, which keeps its own peers.
+       Routed here rather than in the event listener so there is one door
+       into call signalling and not two. */
+    if (d.room === FLEET_ROOM || String(d.kind).indexOf('room.') === 0
+        || (RoomCall.live && RoomCall.peers[String(d.from)])) {
+      return RoomCall.signal(d);
+    }
+
     if (d.kind === 'ring') {
       /* Already busy: tell them so rather than letting it ring unanswered
          behind whatever is already on screen. */
@@ -12410,70 +13326,11 @@ function dmRoster() {
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 }
 
-function messagesPanes() {
-  const threads = Messages.threads;
-  const withId = Messages.withId;
-  const roster = dmRoster();
-  const other = roster.find((d) => String(d.id) === String(withId));
-  const otherName = other ? other.name
-    : (threads.find((t) => String(t.withId) === String(withId)) || {}).withName || withId;
-
-  const list = `
-    <div class="dm-list">
-      <div class="dm-list-head">
-        <select class="select sm" id="dmNew" data-act="noop">
-          <option value="">Start a conversation…</option>
-          ${roster.map((d) => `<option value="${esc(String(d.id))}"${
-            String(d.id) === String(withId) ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}
-        </select>
-      </div>
-      ${threads.length ? threads.map((t) => `
-        <button class="dm-thread ${String(t.withId) === String(withId) ? 'on' : ''}"
-          data-act="dm-open" data-id="${esc(String(t.withId))}">
-          ${dmAvatar(t.withName)}
-          <span class="dm-thread-body">
-            <span class="dm-thread-top">
-              <span class="dm-thread-name">${esc(t.withName)}</span>
-              <span class="dm-thread-when">${esc(fmt.rel(t.last.at))}</span>
-            </span>
-            <span class="dm-thread-last">${
-              t.last.deleted ? '<em>message removed</em>'
-                : t.last.text ? esc(String(t.last.text).slice(0, 60))
-                : 'Attachment'}</span>
-          </span>
-          ${Messages.online[t.withId] ? '<span class="dm-dot on" title="Online"></span>' : ''}
-          ${t.unread ? `<span class="dm-unread">${t.unread}</span>` : ''}
-        </button>`).join('')
-      : `<div class="dm-empty t3">No conversations yet.<br>Pick a driver above to start one.</div>`}
-    </div>`;
-
-  if (!withId) {
-    return list + `
-      <div class="dm-pane">
-        <div class="empty">${icon('chat')}
-          <div>Choose a driver</div>
-          <div class="t3 xs">Messages, photos and files go straight to them.</div>
-        </div>
-      </div>`;
-  }
-
-  const me = Messages.me();
-  const online = Messages.online[withId];
-
-  return list + `
-    <div class="dm-pane">
-      <div class="dm-head">
-        ${dmAvatar(otherName)}
-        <div class="grow" style="min-width:0">
-          <div class="b6 trunc">${esc(otherName)}</div>
-          <div class="t3 xs">${online ? 'Online now' : 'Offline'}</div>
-        </div>
-        <button class="icon-btn" data-act="dm-call" data-id="${esc(String(withId))}"
-          title="Voice call" aria-label="Voice call">${icon('phone')}</button>
-        <button class="icon-btn" data-act="dm-video" data-id="${esc(String(withId))}"
-          title="Video call" aria-label="Video call">${icon('video')}</button>
-      </div>
-
+/* The conversation itself, and the box you type into. Shared by the two
+   panes — a driver thread and the fleet room differ in their header, not
+   in how a message looks or how one is sent. */
+function dmThreadBody(me) {
+  return `
       <div class="dm-scroll" id="dmScroll">
         ${Messages.loading ? `<div class="t3 xs" style="padding:12px">Loading…</div>` : ''}
         ${Messages.messages.length ? Messages.messages.map((m) => {
@@ -12493,17 +13350,126 @@ function messagesPanes() {
           </div>`;
         }).join('')
         : `<div class="dm-empty t3">Nothing said yet. Say hello.</div>`}
-      </div>
+      </div>`;
+}
 
+function dmComposerFor(label) {
+  return `
       <form class="dm-composer" id="dmForm">
         <input type="file" id="dmFile" hidden
           accept="image/*,application/pdf,text/plain,text/csv,application/zip,video/mp4,audio/*">
         <button type="button" class="icon-btn" data-act="dm-attach"
           title="Send a photo or a file" aria-label="Attach">${icon('paperclip')}</button>
         <input class="input" id="dmInput" autocomplete="off"
-          placeholder="Message ${esc(otherName)}">
+          placeholder="${esc(label)}">
         <button class="btn btn-primary" type="submit">${icon('send')}Send</button>
-      </form>
+      </form>`;
+}
+
+function messagesPanes() {
+  const threads = Messages.threads;
+  const withId = Messages.withId;
+  const roster = dmRoster();
+  const other = roster.find((d) => String(d.id) === String(withId));
+  const otherName = other ? other.name
+    : (threads.find((t) => String(t.withId) === String(withId)) || {}).withName || withId;
+
+  const list = `
+    <div class="dm-list">
+      <div class="dm-list-head">
+        <select class="select sm" id="dmNew" data-act="noop">
+          <option value="">Start a conversation…</option>
+          ${roster.map((d) => `<option value="${esc(String(d.id))}"${
+            String(d.id) === String(withId) ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}
+        </select>
+      </div>
+      ${threads.length ? threads.map((t) => `
+        <button class="dm-thread ${String(t.withId) === String(withId) ? 'on' : ''} ${t.room ? 'room' : ''}"
+          data-act="dm-open" data-id="${esc(String(t.withId))}">
+          ${t.room
+            ? `<span class="dm-av room">${icon('users')}</span>`
+            : dmAvatar(t.withName)}
+          <span class="dm-thread-body">
+            <span class="dm-thread-top">
+              <span class="dm-thread-name">${esc(t.withName)}</span>
+              <span class="dm-thread-when">${t.last ? esc(fmt.rel(t.last.at)) : ''}</span>
+            </span>
+            <span class="dm-thread-last">${
+              !t.last
+                ? (t.room ? 'Everyone in the company' : '')
+                : t.last.deleted ? '<em>message removed</em>'
+                : t.last.text ? esc(String(t.last.text).slice(0, 60))
+                : 'Attachment'}</span>
+          </span>
+          ${t.room
+            ? (RoomCall.known.length
+                ? `<span class="dm-unread call">${RoomCall.known.length}</span>` : '')
+            : (Messages.online[t.withId] ? '<span class="dm-dot on" title="Online"></span>' : '')}
+          ${t.unread ? `<span class="dm-unread">${t.unread}</span>` : ''}
+        </button>`).join('')
+      : `<div class="dm-empty t3">No conversations yet.<br>Pick a driver above to start one.</div>`}
+    </div>`;
+
+  if (!withId) {
+    return list + `
+      <div class="dm-pane">
+        <div class="empty">${icon('chat')}
+          <div>Choose a driver</div>
+          <div class="t3 xs">Messages, photos and files go straight to them.</div>
+        </div>
+      </div>`;
+  }
+
+  const me = Messages.me();
+  const online = Messages.online[withId];
+  const isRoom = String(withId) === FLEET_ROOM;
+
+  /* The room's header is a different job from a driver's: there is nobody
+     to ring, so the control is join-or-leave and the subtitle counts
+     people rather than saying "online". */
+  if (isRoom) {
+    const inCall = RoomCall.known.length;
+
+    return list + `
+      <div class="dm-pane">
+        <div class="dm-head">
+          <span class="dm-av room">${icon('users')}</span>
+          <div class="grow" style="min-width:0">
+            <div class="b6 trunc">Fleet room</div>
+            <div class="t3 xs">${inCall
+              ? esc(inCall + (inCall === 1 ? ' person' : ' people') + ' in the call')
+              : 'Everyone in the company'}</div>
+          </div>
+          ${RoomCall.live
+            ? `<button class="btn btn-sm btn-danger" data-act="room-leave">
+                 ${icon('phoneOff')}Leave call</button>`
+            : `<button class="btn btn-sm btn-ok" data-act="room-join" ${
+                 RoomCall.joining ? 'disabled' : ''}>
+                 ${icon('phone')}${RoomCall.joining ? 'Joining…'
+                   : inCall ? 'Join call (' + inCall + ')' : 'Start a call'}</button>`}
+        </div>
+        ${dmThreadBody(me)}
+        ${dmComposerFor('Message the whole fleet')}
+      </div>`;
+  }
+
+  return list + `
+    <div class="dm-pane">
+      <div class="dm-head">
+        ${dmAvatar(otherName)}
+        <div class="grow" style="min-width:0">
+          <div class="b6 trunc">${esc(otherName)}</div>
+          <div class="t3 xs">${online ? 'Online now' : 'Offline'}</div>
+        </div>
+        <button class="icon-btn" data-act="dm-call" data-id="${esc(String(withId))}"
+          title="Voice call" aria-label="Voice call">${icon('phone')}</button>
+        <button class="icon-btn" data-act="dm-video" data-id="${esc(String(withId))}"
+          title="Video call" aria-label="Video call">${icon('video')}</button>
+      </div>
+
+      ${dmThreadBody(me)}
+
+      ${dmComposerFor('Message ' + otherName)}
     </div>`;
 }
 
@@ -12542,6 +13508,40 @@ function viewMessages() {
 function paintCall() {
   const host = document.getElementById('callLayer');
   if (!host) return;   /* the sign-in screen has no shell yet */
+
+  /* The room call owns the overlay while it is up. It cannot be running at
+     the same time as a one-to-one call — join() refuses — so there is no
+     question of which to draw. */
+  if (RoomCall.live) {
+    const peers = Object.keys(RoomCall.peers).map((id) => RoomCall.peers[id]);
+
+    host.innerHTML = `<div class="call-card room">
+      <div class="call-who">Fleet room</div>
+      <div class="call-state" id="roomTimer">${esc(RoomCall.elapsed())}</div>
+
+      <div class="room-peers">
+        <span class="room-peer me">${esc(initials(state.user.name))}<i>You</i></span>
+        ${peers.map((p) => `<span class="room-peer ${p.stream ? 'on' : ''}">${
+          esc(initials(p.name))}<i>${esc(String(p.name).split(' ')[0])}</i></span>`).join('')}
+      </div>
+
+      <div class="call-state xs">${
+        peers.length
+          ? esc((peers.length + 1) + ' in the call')
+          : 'Waiting for somebody else to join'}</div>
+
+      <div id="roomAudio" hidden></div>
+
+      <div class="call-actions">
+        <button class="btn ${RoomCall.muted ? 'btn-primary' : ''}" data-act="room-mute">
+          ${icon(RoomCall.muted ? 'micOff' : 'mic')}${RoomCall.muted ? 'Unmute' : 'Mute'}</button>
+        <button class="btn btn-danger" data-act="room-leave">${icon('phoneOff')}Leave</button>
+      </div>
+    </div>`;
+
+    RoomCall.attach();
+    return;
+  }
 
   if (Calls.state === 'idle' && !Calls.incoming) { host.innerHTML = ''; return; }
 
@@ -12612,6 +13612,9 @@ function routeView() {
       if (!Messages.threads.length && Messages.on()) {
         Messages.pullThreads().then(() => { paintMessages(); paintUnreadBadge(); });
       }
+      /* Who is already in the room call, so the button can say "Join (3)"
+         rather than making somebody dial in to find out. */
+      if (Messages.on()) RoomCall.poll();
       return viewMessages();
     case 'livemap':       return viewLivemap();
     case 'ops':           return viewOps();

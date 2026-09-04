@@ -27,6 +27,10 @@ const SKIP = [
   'logout', 'switch-account', 'reset-demo', 'reset-app', 'site-admin',
   'site-drivers', 'export-data', 'install-app', 'copy-error', 'toggle-server',
   'browse-exe', 'detect-exe', 'launch-game',
+  /* asks the server for a signed link and then navigates to it, which
+     ends the walk — and off a served page it would start an 80 MB
+     download. The gate itself is covered by npm run smoke:downloads. */
+  'download-client',
 ];
 
 const WALK = `(async (skip) => {

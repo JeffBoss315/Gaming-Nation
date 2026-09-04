@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#070910">
+
+    <title>Driver terminal — Heavyline Logistics</title>
+
+    <meta name="description" content="The Heavyline Logistics driver terminal: shift status and live position.">
+    <meta name="robots" content="noindex,nofollow">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+    <link rel="apple-touch-icon" href="icons/favicon-180.png">
+
+    <!-- The platform stylesheet. .card, .stat, .btn, .badge and the tokens
+         all come from here, so this page matches the console instead of
+         approximating it. -->
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* Page-specific only. Anything reusable belongs in style.css. */
+
+        .term-bar{
+            position:sticky;top:0;z-index:20;
+            height:var(--topbar);
+            display:flex;align-items:center;gap:14px;
+            padding:0 18px;
+            border-bottom:1px solid var(--line);
+            background:rgba(10,12,15,.72);
+            backdrop-filter:saturate(1.6) blur(14px);
+            -webkit-backdrop-filter:saturate(1.6) blur(14px);
+        }
+
+        .term-mark{
+            width:30px;height:30px;flex:none;
+            display:grid;place-items:center;
+            border-radius:8px;
+            background:var(--panel-2);
+            border:1px solid var(--line);
+            color:var(--accent);
+        }
+        .term-mark svg{width:18px;height:18px}
+
+        .term-name{font-size:13.5px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+        .term-role{font-size:11px;color:var(--text-3);line-height:1.2}
+
+        .grow{flex:1 1 auto;min-width:0}
+
+        /* The live dot has to distinguish three states, not two: connected,
+           trying, and failed. A dot that is only ever green or absent cannot
+           tell a driver that realtime dropped. */
+        .live-dot.idle{background:var(--text-3)}
+        .live-dot.err{background:var(--danger)}
+        .live-dot.on{
+            background:var(--ok);
+            box-shadow:0 0 0 0 rgba(46,224,160,.5);
+            animation:pulse 2.4s ease-out infinite;
+        }
+        @keyframes pulse{
+            70%{box-shadow:0 0 0 7px rgba(46,224,160,0)}
+            100%{box-shadow:0 0 0 0 rgba(46,224,160,0)}
+        }
+
+        .wrap{
+            max-width:var(--maxw);
+            margin:0 auto;
+            padding:22px 18px 64px;
+            position:relative;z-index:1;
+        }
+
+        /* Identity ------------------------------------------------ */
+
+        .who{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+
+        .who-av{
+            width:52px;height:52px;flex:none;
+            display:grid;place-items:center;
+            border-radius:50%;
+            background:var(--panel-3);
+            border:1px solid var(--line);
+            font-size:17px;font-weight:600;
+            color:var(--text-2);
+            letter-spacing:.02em;
+        }
+
+        .who-name{font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.25}
+        .who-meta{
+            display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+            margin-top:5px;font-size:12px;color:var(--text-3);
+        }
+        .who-meta .sep{opacity:.45}
+
+        /* Shift control ------------------------------------------- */
+
+        .shift{
+            display:flex;align-items:center;justify-content:space-between;
+            gap:18px;flex-wrap:wrap;
+        }
+        .shift-state{display:flex;align-items:center;gap:11px}
+
+        .shift-lamp{
+            width:38px;height:38px;flex:none;
+            display:grid;place-items:center;
+            border-radius:50%;
+            border:1px solid var(--line);
+            background:var(--panel-2);
+            color:var(--text-3);
+            transition:color var(--t),background var(--t),border-color var(--t);
+        }
+        .shift-lamp svg{width:19px;height:19px}
+        .shift-lamp.on{
+            color:var(--ok);
+            border-color:rgba(46,224,160,.34);
+            background:rgba(46,224,160,.10);
+        }
+
+        .shift-label{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+        .shift-hint{font-size:12px;color:var(--text-3);margin-top:2px}
+
+        .shift-actions{display:flex;gap:9px;flex-wrap:wrap}
+
+        /* Live position ------------------------------------------- */
+
+        .coords{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+            gap:14px;
+        }
+        .coord-lbl{
+            font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+            color:var(--text-3);font-weight:600;
+        }
+        .coord-val{
+            font-family:var(--mono);
+            font-size:16px;font-weight:500;
+            font-variant-numeric:tabular-nums;
+            margin-top:4px;
+            letter-spacing:-.01em;
+        }
+
+        /* A compass that turns is the one piece of this screen that shows
+           the data is live at a glance, without reading a number. */
+        .compass{
+            flex:none;
+            display:flex;flex-direction:column;align-items:center;gap:6px;
+        }
+        .compass svg{width:132px;height:132px;display:block}
+        .compass-ring{stroke:var(--line-2);fill:var(--panel-2)}
+        .compass-tick{stroke:var(--line-2)}
+        .compass-card{
+            fill:var(--text-3);
+            font-size:9px;font-weight:700;
+            font-family:var(--font);
+            letter-spacing:.08em;
+        }
+        .compass-needle{
+            transition:transform .5s var(--ease-out);
+            transform-origin:60px 60px;
+        }
+        /* Under the dial rather than inside it: centred in the face, the
+           readout landed on top of the S cardinal and the needle hub. */
+        .compass-read{text-align:center;pointer-events:none}
+        .compass-deg{
+            font-family:var(--mono);
+            font-size:15px;font-weight:700;
+            font-variant-numeric:tabular-nums;
+        }
+        .compass-dir{font-size:10px;color:var(--text-3);font-weight:600;letter-spacing:.1em}
+
+        .live-row{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+
+        /* Speed bar: a number plus a bar reads faster than a number alone. */
+        .speed-bar{
+            height:6px;border-radius:99px;
+            background:var(--panel-3);
+            overflow:hidden;margin-top:9px;
+        }
+        .speed-fill{
+            height:100%;width:0%;
+            border-radius:99px;
+            background:var(--accent-grad);
+            transition:width .5s var(--ease-out);
+        }
+
+        /* Uplink log ---------------------------------------------- */
+
+        .log{
+            max-height:250px;
+            overflow-y:auto;
+            font-family:var(--mono);
+            font-size:11.5px;
+            line-height:1.75;
+        }
+        .log-line{
+            display:flex;gap:10px;
+            padding:3px 0;
+            border-bottom:1px solid rgba(255,255,255,.03);
+        }
+        .log-line:last-child{border-bottom:0}
+        .log-at{color:var(--text-3);flex:none}
+        .log-what{color:var(--text-2);min-width:0;overflow-wrap:anywhere}
+        .log-line.ok   .log-what{color:var(--ok)}
+        .log-line.err  .log-what{color:var(--danger)}
+        .log-line.warn .log-what{color:var(--warn)}
+
+        .empty{
+            color:var(--text-3);font-size:12.5px;
+            text-align:center;padding:20px 10px;
+        }
+
+        /* A blocking notice for the cases where the page cannot work at all:
+           no Supabase, no session, no driver record. */
+        .halt{
+            display:none;
+            position:fixed;inset:0;z-index:200;
+            place-items:center;
+            padding:24px;
+            background:rgba(7,9,16,.92);
+            backdrop-filter:blur(6px);
+            -webkit-backdrop-filter:blur(6px);
+        }
+        .halt.on{display:grid}
+        .halt .card{width:min(430px,100%)}
+
+        @media (max-width:640px){
+            .wrap{padding:16px 13px 56px}
+            .compass svg{width:108px;height:108px}
+        }
+
+        @media (prefers-reduced-motion:reduce){
+            .live-dot.on{animation:none}
+            .compass-needle,.speed-fill{transition:none}
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="bg-fx" aria-hidden="true">
+        <div class="bg-grid"></div>
+    </div>
+
+    <!-- =========================================================
+         TOP BAR
+    ========================================================== -->
+
+    <header class="term-bar">
+
+        <div class="term-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M1 4h11v11H1z"/>
+                <path d="M12 8h4.5l3.5 3.5V15H12z"/>
+                <circle cx="5.5" cy="18" r="2.2"/>
+                <circle cx="16.5" cy="18" r="2.2"/>
+                <path d="M7.7 18h6.6M1 15v3h2.3M20 15v3h-1.3"/>
+            </svg>
+        </div>
+
+        <div class="grow">
+            <div class="term-name">Heavyline</div>
+            <div class="term-role">Driver terminal</div>
+        </div>
+
+        <div class="status-pill" id="realtimePill" title="Realtime connection">
+            <span class="live-dot idle" id="realtimeDot"></span>
+            <span id="realtimeText">Connecting</span>
+        </div>
+
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <path d="M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+            Sign out
+        </button>
+
+    </header>
+
+    <main class="wrap">
+
+        <!-- =====================================================
+             WHO IS DRIVING
+        ====================================================== -->
+
+        <section class="card card-pad reveal" style="margin-bottom:14px">
+
+            <div class="who">
+
+                <div class="who-av" id="driverAvatar" aria-hidden="true">–</div>
+
+                <div class="grow">
+
+                    <div class="who-name" id="driverName">Loading…</div>
+
+                    <div class="who-meta">
+                        <span class="mono" id="driverCode">———</span>
+                        <span class="sep">·</span>
+                        <span id="driverEmail">———</span>
+                    </div>
+
+                </div>
+
+                <span class="badge" id="accountStatus">unknown</span>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             SHIFT
+        ====================================================== -->
+
+        <section class="card card-pad reveal d1" style="margin-bottom:14px">
+
+            <div class="shift">
+
+                <div class="shift-state">
+
+                    <div class="shift-lamp" id="statusDot">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"/>
+                            <path d="M12 7v5l3 2"/>
+                        </svg>
+                    </div>
+
+                    <div>
+                        <div class="shift-label" id="statusText">OFFLINE</div>
+                        <div class="shift-hint" id="shiftHint">
+                            Go on shift to share your position with dispatch.
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="shift-actions">
+
+                    <button class="btn btn-ok" id="onlineBtn" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="M5 12l5 5L19 7"/>
+                        </svg>
+                        Go on shift
+                    </button>
+
+                    <button class="btn btn-danger" id="offlineBtn" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <rect x="6" y="6" width="12" height="12" rx="2"/>
+                        </svg>
+                        End shift
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             AT A GLANCE
+        ====================================================== -->
+
+        <div class="grid g-4 reveal d2" style="margin-bottom:14px">
+
+            <div class="stat">
+                <div class="stat-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/>
+                        <circle cx="12" cy="10" r="2.5"/>
+                    </svg>
+                </div>
+                <div class="stat-val" id="gpsStatus">Idle</div>
+                <div class="stat-lbl">GPS</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M4 18a8 8 0 1 1 16 0"/>
+                        <path d="M12 14l4-4"/>
+                    </svg>
+                </div>
+                <div class="stat-val" id="gpsSpeed">—</div>
+                <div class="stat-lbl">Speed</div>
+                <div class="speed-bar"><div class="speed-fill" id="speedFill"></div></div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <path d="M4 4h16v5H4zM4 15h16v5H4z"/>
+                        <path d="M7 6.5v.01M7 17.5v.01"/>
+                    </svg>
+                </div>
+                <div class="stat-val" id="fixCount">0</div>
+                <div class="stat-lbl">Fixes uploaded</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-ico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 7v5l3 2"/>
+                    </svg>
+                </div>
+                <div class="stat-val" id="lastFix">—</div>
+                <div class="stat-lbl">Last upload</div>
+            </div>
+
+        </div>
+
+
+        <!-- =====================================================
+             LIVE POSITION
+        ====================================================== -->
+
+        <div class="grid g-main reveal d3" style="margin-bottom:14px">
+
+            <section class="card">
+
+                <div class="card-head">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/>
+                            <circle cx="12" cy="10" r="2.5"/>
+                        </svg>
+                        Live position
+                    </div>
+                    <span class="badge" id="accuracyBadge">no fix</span>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="live-row">
+
+                        <div class="compass" role="img" aria-label="Heading" id="compass">
+
+                            <svg viewBox="0 0 120 120" aria-hidden="true">
+
+                                <circle class="compass-ring" cx="60" cy="60" r="52" stroke-width="1"/>
+
+                                <g class="compass-tick" stroke-width="1" stroke-linecap="round">
+                                    <path d="M60 12v7M60 101v7M12 60h7M101 60h7"/>
+                                    <path d="M26 26l5 5M94 26l-5 5M26 94l5-5M94 94l-5-5" opacity=".55"/>
+                                </g>
+
+                                <text class="compass-card" x="60" y="29" text-anchor="middle">N</text>
+                                <text class="compass-card" x="60" y="97" text-anchor="middle">S</text>
+                                <text class="compass-card" x="95" y="64" text-anchor="middle">E</text>
+                                <text class="compass-card" x="25" y="64" text-anchor="middle">W</text>
+
+                                <g class="compass-needle" id="compassNeedle">
+                                    <path d="M60 26 L67 63 L60 58 L53 63 Z" fill="#4f7fff"/>
+                                    <path d="M60 94 L53 63 L60 68 L67 63 Z" fill="#2f3849"/>
+                                </g>
+
+                                <circle cx="60" cy="60" r="3.2" fill="#141926" stroke="#2f3849"/>
+
+                            </svg>
+
+                            <div class="compass-read">
+                                <div class="compass-deg" id="headingDeg">—</div>
+                                <div class="compass-dir" id="headingDir">NO FIX</div>
+                            </div>
+
+                        </div>
+
+                        <div class="grow">
+
+                            <div class="coords">
+
+                                <div>
+                                    <div class="coord-lbl">Latitude</div>
+                                    <div class="coord-val" id="latitude">—</div>
+                                </div>
+
+                                <div>
+                                    <div class="coord-lbl">Longitude</div>
+                                    <div class="coord-val" id="longitude">—</div>
+                                </div>
+
+                                <div>
+                                    <div class="coord-lbl">Altitude</div>
+                                    <div class="coord-val" id="altitude">—</div>
+                                </div>
+
+                                <div>
+                                    <div class="coord-lbl">Accuracy</div>
+                                    <div class="coord-val" id="accuracy">—</div>
+                                </div>
+
+                            </div>
+
+                            <p class="hint" style="margin:16px 0 0" id="posHint">
+                                Position is read from this device and sent to dispatch
+                                while you are on shift.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            <section class="card">
+
+                <div class="card-head">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <path d="M4 17l5-5-5-5M12 19h8"/>
+                        </svg>
+                        Uplink
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="clearLogBtn" type="button">Clear</button>
+                </div>
+
+                <div class="card-body" style="padding-top:10px">
+                    <div class="log" id="log" aria-live="polite">
+                        <div class="empty" id="logEmpty">Nothing sent yet.</div>
+                    </div>
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+
+    <!-- =========================================================
+         TOASTS
+    ========================================================== -->
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+
+    <!-- =========================================================
+         BLOCKING NOTICE
+    ========================================================== -->
+
+    <div class="halt" id="halt" role="alertdialog" aria-modal="true" aria-labelledby="haltTitle">
+
+        <div class="card">
+
+            <div class="card-head">
+                <div class="card-title" id="haltTitle">Cannot open the terminal</div>
+            </div>
+
+            <div class="card-body">
+
+                <p style="margin:0 0 16px;color:var(--text-2)" id="haltText"></p>
+
+                <div style="display:flex;gap:9px;flex-wrap:wrap">
+                    <a class="btn btn-primary" href="driver-login.html">Sign in</a>
+                    <button class="btn btn-ghost" type="button" onclick="location.reload()">Retry</button>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <noscript>
+        <div class="wrap">
+            <div class="card card-pad" style="max-width:420px;margin:60px auto">
+                <h1 style="font-size:17px;margin:0 0 8px">JavaScript required</h1>
+                <p style="color:var(--text-2);margin:0">
+                    The driver terminal reads your position in the browser and
+                    needs JavaScript enabled.
+                </p>
+            </div>
+        </div>
+    </noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-client.js"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var LOGIN = 'driver-login.html';
+
+        /* A fix a second is what watchPosition offers on a phone, and every
+           one of them is an insert. Dispatch cannot use that resolution and
+           the table would carry 86k rows per driver per day, so the uploads
+           are spaced out. The display still updates on every fix. */
+        var UPLOAD_EVERY_MS = 5000;
+
+        var el = function (id) { return document.getElementById(id); };
+
+        var watchId      = null;
+        var currentDriver = null;
+        var channel      = null;
+        var lastUploadAt = 0;
+        var fixes        = 0;
+        var uploading    = false;
+
+        /* ----------------------------------------------------------
+           Toasts and the uplink log
+        ---------------------------------------------------------- */
+
+        function toast(text, kind) {
+
+            var box = el('toasts');
+
+            var t = document.createElement('div');
+            t.className = 'toast';
+
+            var body = document.createElement('div');
+            body.style.fontSize = '12.5px';
+            body.style.lineHeight = '1.5';
+            body.textContent = text;
+
+            if (kind === 'err') body.style.color = '#f79a9a';
+            if (kind === 'ok')  body.style.color = '#7fdcb4';
+
+            t.appendChild(body);
+            box.appendChild(t);
+
+            setTimeout(function () {
+                t.classList.add('out');
+                setTimeout(function () { t.remove(); }, 260);
+            }, 4200);
+        }
+
+        function log(what, kind) {
+
+            var box = el('log');
+            var empty = el('logEmpty');
+
+            if (empty) empty.remove();
+
+            var line = document.createElement('div');
+            line.className = 'log-line' + (kind ? ' ' + kind : '');
+
+            var at = document.createElement('span');
+            at.className = 'log-at';
+            at.textContent = new Date().toLocaleTimeString();
+
+            var msg = document.createElement('span');
+            msg.className = 'log-what';
+            msg.textContent = what;
+
+            line.appendChild(at);
+            line.appendChild(msg);
+            box.insertBefore(line, box.firstChild);
+
+            /* The log is a tail, not an archive: an unbounded list on a
+               device that runs a whole shift is a memory leak. */
+            while (box.children.length > 120) {
+                box.removeChild(box.lastChild);
+            }
+        }
+
+        el('clearLogBtn').addEventListener('click', function () {
+            var box = el('log');
+            box.innerHTML = '<div class="empty" id="logEmpty">Nothing sent yet.</div>';
+        });
+
+        /* ----------------------------------------------------------
+           The blocking notice
+
+           Used where the page genuinely cannot continue. Everything else
+           is a toast, because a driver mid-shift should not lose the screen
+           over one failed insert.
+        ---------------------------------------------------------- */
+
+        function halt(text) {
+            el('haltText').textContent = text;
+            el('halt').classList.add('on');
+        }
+
+        /* ----------------------------------------------------------
+           Supabase has to actually be there
+
+           This is the bug that used to take the page down: the realtime
+           channel was built at the top level of the script, so when the CDN
+           bundle failed to load the whole file threw on that line and the
+           driver got a dashboard of dashes with nothing explaining why.
+        ---------------------------------------------------------- */
+
+        if (!window.hllSupabase) {
+
+            halt('Cannot reach the account service. Check your connection and reload.');
+            return;
+        }
+
+        var db = window.hllSupabase;
+
+        /* ----------------------------------------------------------
+           Formatting
+        ---------------------------------------------------------- */
+
+        var POINTS = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
+                      'S','SSW','SW','WSW','W','WNW','NW','NNW'];
+
+        function compassPoint(deg) {
+            return POINTS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+        }
+
+        function initials(name) {
+
+            var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+
+            if (!parts.length) return '–';
+
+            return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : ''))
+                .toUpperCase();
+        }
+
+        function sinceText(ms) {
+
+            var s = Math.round((Date.now() - ms) / 1000);
+
+            if (s < 5)  return 'just now';
+            if (s < 60) return s + 's ago';
+
+            var m = Math.round(s / 60);
+            if (m < 60) return m + 'm ago';
+
+            return Math.round(m / 60) + 'h ago';
+        }
+
+        /* ----------------------------------------------------------
+           Painting the screen
+        ---------------------------------------------------------- */
+
+        function paintStatus(status) {
+
+            var on = status === 'online';
+
+            el('statusText').textContent = String(status || 'offline').toUpperCase();
+            el('statusDot').classList.toggle('on', on);
+
+            var badge = el('accountStatus');
+            badge.textContent = status || 'offline';
+            badge.className = 'badge ' + (on ? 'ok' : '');
+
+            el('shiftHint').textContent = on
+                ? 'Dispatch can see you. Your position uploads while this page is open.'
+                : 'Go on shift to share your position with dispatch.';
+
+            el('onlineBtn').disabled = on;
+            el('offlineBtn').disabled = !on;
+        }
+
+        function paintPosition(c) {
+
+            el('latitude').textContent  = c.latitude.toFixed(6);
+            el('longitude').textContent = c.longitude.toFixed(6);
+
+            el('altitude').textContent = (c.altitude === null || c.altitude === undefined)
+                ? '—'
+                : Math.round(c.altitude) + ' m';
+
+            /* speed arrives in m/s, and is null when the device cannot work
+               it out — which is not the same as standing still. */
+            var kmh = (c.speed === null || c.speed === undefined)
+                ? null
+                : Math.max(0, c.speed * 3.6);
+
+            el('gpsSpeed').textContent = kmh === null ? '—' : kmh.toFixed(0) + ' km/h';
+            el('speedFill').style.width = Math.min(100, ((kmh || 0) / 120) * 100) + '%';
+
+            if (c.accuracy === null || c.accuracy === undefined) {
+                el('accuracy').textContent = '—';
+            } else {
+                el('accuracy').textContent = '± ' + Math.round(c.accuracy) + ' m';
+
+                var badge = el('accuracyBadge');
+                badge.textContent = Math.round(c.accuracy) + ' m';
+                badge.className = 'badge ' + (c.accuracy <= 25 ? 'ok' : c.accuracy <= 100 ? 'warn' : 'danger');
+            }
+
+            /* heading is null when stationary — the last known one is more
+               use than snapping the needle back to north. */
+            if (c.heading !== null && c.heading !== undefined && !isNaN(c.heading)) {
+
+                el('compassNeedle').style.transform = 'rotate(' + c.heading + 'deg)';
+                el('headingDeg').textContent = Math.round(c.heading) + '°';
+                el('headingDir').textContent = compassPoint(c.heading);
+            }
+        }
+
+        function paintRealtime(state) {
+
+            var dot = el('realtimeDot');
+            var text = el('realtimeText');
+
+            dot.className = 'live-dot ' + state;
+
+            text.textContent = state === 'on'  ? 'Live'
+                             : state === 'err' ? 'Offline'
+                             : 'Connecting';
+        }
+
+        /* The "last upload" tile has to keep counting on its own; nothing
+           else would repaint it between fixes. */
+        var lastFixAt = 0;
+
+        setInterval(function () {
+            if (lastFixAt) el('lastFix').textContent = sinceText(lastFixAt);
+        }, 5000);
+
+        /* ----------------------------------------------------------
+           Uploading a position
+
+           The old version called getUser() and then looked the driver row up
+           again on every single fix — three round trips a second. The driver
+           is already loaded; use it.
+        ---------------------------------------------------------- */
+
+        async function upload(c) {
+
+            if (!currentDriver || uploading) return;
+
+            uploading = true;
+
+            var res;
+
+            try {
+                res = await db.from('driver_locations').insert({
+                    driver_id : currentDriver.id,
+                    latitude  : c.latitude,
+                    longitude : c.longitude,
+                    speed     : (c.speed === null || c.speed === undefined) ? null : c.speed * 3.6,
+                    heading   : (c.heading === null || c.heading === undefined) ? null : c.heading,
+                    updated_at: new Date().toISOString()
+                });
+            } catch (err) {
+                console.error('Heavyline: position upload failed', err);
+                log('upload failed — network', 'err');
+                uploading = false;
+                return;
+            }
+
+            uploading = false;
+
+            if (res.error) {
+
+                console.error('Heavyline: position upload rejected', res.error);
+
+                /* 42P01 is "relation does not exist", which here means the
+                   table was never created. That is a setup problem, not a
+                   driving problem, so it is worth naming precisely rather
+                   than logging "upload failed" once a second for ever. */
+                if (res.error.code === '42P01') {
+                    log('driver_locations table is missing', 'err');
+                    toast('Position storage is not set up. Run the driver_locations migration in Supabase.', 'err');
+                    stopGPS();
+                    return;
+                }
+
+                /* 42501 is the row level security refusal. RLS is on — that
+                   much is confirmed against the live project — so this means
+                   the insert policy for authenticated drivers is missing,
+                   which is the one thing tools/check-supabase.js cannot see
+                   without a driver session. Naming it here is what turns it
+                   from a silent failure into something fixable, and stopping
+                   is right: the answer will not change on the next fix. */
+                if (res.error.code === '42501') {
+                    log('rejected by row level security', 'err');
+                    toast('Your account is not allowed to record positions. ' +
+                          'The driver_locations insert policy is missing in Supabase.', 'err');
+                    stopGPS();
+                    return;
+                }
+
+                log('upload rejected — ' + (res.error.message || 'unknown'), 'err');
+                return;
+            }
+
+            fixes += 1;
+            lastFixAt = Date.now();
+
+            el('fixCount').textContent = String(fixes);
+            el('lastFix').textContent = 'just now';
+
+            log(c.latitude.toFixed(4) + ', ' + c.longitude.toFixed(4) + ' sent', 'ok');
+        }
+
+        /* ----------------------------------------------------------
+           GPS
+        ---------------------------------------------------------- */
+
+        function startGPS() {
+
+            if (watchId !== null) return;
+
+            if (!navigator.geolocation) {
+                el('gpsStatus').textContent = 'Unsupported';
+                log('this device has no geolocation', 'err');
+                toast('This device cannot report its position.', 'err');
+                return;
+            }
+
+            el('gpsStatus').textContent = 'Waiting';
+            log('requesting position permission', 'warn');
+
+            watchId = navigator.geolocation.watchPosition(
+
+                function (position) {
+
+                    var c = position.coords;
+
+                    el('gpsStatus').textContent = 'Active';
+                    el('posHint').textContent =
+                        'Position is read from this device and sent to dispatch every ' +
+                        (UPLOAD_EVERY_MS / 1000) + ' seconds.';
+
+                    paintPosition(c);
+
+                    var now = Date.now();
+
+                    if (now - lastUploadAt >= UPLOAD_EVERY_MS) {
+                        lastUploadAt = now;
+                        upload(c);
+                    }
+                },
+
+                function (error) {
+
+                    console.error('Heavyline: GPS error', error);
+
+                    el('gpsStatus').textContent =
+                        error.code === error.PERMISSION_DENIED ? 'Blocked' : 'Error';
+
+                    log('gps error — ' + error.message, 'err');
+
+                    toast(
+                        error.code === error.PERMISSION_DENIED
+                            ? 'Location permission was refused. Dispatch cannot see you.'
+                            : 'Could not read your position: ' + error.message,
+                        'err'
+                    );
+                },
+
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 5000,
+                    timeout: 15000
+                }
+            );
+
+            log('gps watch started');
+        }
+
+        function stopGPS() {
+
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                log('gps watch stopped');
+            }
+
+            el('gpsStatus').textContent = 'Idle';
+        }
+
+        /* ----------------------------------------------------------
+           Loading the driver
+        ---------------------------------------------------------- */
+
+        async function loadDriver() {
+
+            var auth;
+
+            try {
+                auth = await db.auth.getUser();
+            } catch (err) {
+                console.error('Heavyline: auth check failed', err);
+                halt('Cannot reach the account service. Check your connection and reload.');
+                return;
+            }
+
+            if (auth.error || !auth.data || !auth.data.user) {
+                /* Not signed in — back to the terminal door, not the public
+                   site. The old build sent them to index.html, which left a
+                   driver looking at the marketing page wondering what
+                   happened. */
+                window.location.replace(LOGIN);
+                return;
+            }
+
+            var user = auth.data.user;
+
+            var res = await db
+                .from('drivers')
+                .select('*')
+                .eq('auth_user_id', user.id)
+                .maybeSingle();
+
+            if (res.error) {
+                console.error('Heavyline: driver lookup failed', res.error);
+                halt('Could not load your driver record: ' + res.error.message);
+                return;
+            }
+
+            /* maybeSingle rather than single: an authenticated user with no
+               driver row is a real state (the row is created on approval),
+               and single() turns it into an error that reads like a fault. */
+            if (!res.data) {
+                halt('This account is not linked to a driver record yet. ' +
+                     'Dispatch has to approve your application first.');
+                return;
+            }
+
+            currentDriver = res.data;
+
+            el('driverName').textContent   = currentDriver.full_name || 'Driver';
+            el('driverCode').textContent   = currentDriver.driver_code || '———';
+            el('driverEmail').textContent  = user.email || '———';
+            el('driverAvatar').textContent = initials(currentDriver.full_name);
+
+            document.title = (currentDriver.full_name || 'Driver') + ' — Heavyline terminal';
+
+            paintStatus(currentDriver.status || 'offline');
+
+            log('signed in as ' + (currentDriver.driver_code || user.email));
+
+            /* A driver whose record already says online has come back to a
+               page that was reloaded mid-shift. Pick the watch back up. */
+            if (currentDriver.status === 'online') startGPS();
+
+            listen();
+        }
+
+        /* ----------------------------------------------------------
+           Changing shift state
+        ---------------------------------------------------------- */
+
+        async function setStatus(status) {
+
+            if (!currentDriver) return;
+
+            el('onlineBtn').disabled = true;
+            el('offlineBtn').disabled = true;
+
+            var res;
+
+            try {
+                res = await db
+                    .from('drivers')
+                    .update({ status: status })
+                    .eq('auth_user_id', currentDriver.auth_user_id);
+            } catch (err) {
+                console.error('Heavyline: status update failed', err);
+                toast('Could not reach dispatch. Try again.', 'err');
+                paintStatus(currentDriver.status || 'offline');
+                return;
+            }
+
+            if (res.error) {
+                console.error('Heavyline: status update rejected', res.error);
+                toast('Could not update your status: ' + res.error.message, 'err');
+                paintStatus(currentDriver.status || 'offline');
+                return;
+            }
+
+            currentDriver.status = status;
+
+            paintStatus(status);
+
+            if (status === 'online') {
+                startGPS();
+                toast('On shift. Dispatch can see you.', 'ok');
+            } else {
+                stopGPS();
+                toast('Shift ended.', 'ok');
+            }
+
+            log('status set to ' + status);
+        }
+
+        el('onlineBtn').addEventListener('click', function () { setStatus('online'); });
+        el('offlineBtn').addEventListener('click', function () { setStatus('offline'); });
+
+        /* ----------------------------------------------------------
+           Realtime
+
+           Filtered server-side on auth_user_id. The old build subscribed to
+           every row in drivers and threw away the ones that were not this
+           driver, which means every driver's terminal woke up for every
+           other driver's status change.
+        ---------------------------------------------------------- */
+
+        function listen() {
+
+            if (channel || !currentDriver) return;
+
+            channel = db
+                .channel('driver-terminal-' + currentDriver.id)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'drivers',
+                        filter: 'auth_user_id=eq.' + currentDriver.auth_user_id
+                    },
+                    function (payload) {
+
+                        if (!payload.new) return;
+
+                        var status = payload.new.status;
+
+                        if (status === currentDriver.status) return;
+
+                        currentDriver = payload.new;
+
+                        paintStatus(status);
+
+                        log('dispatch set your status to ' + status, 'warn');
+                        toast('Dispatch set you ' + status + '.', 'ok');
+
+                        if (status === 'online') startGPS();
+                        else stopGPS();
+                    }
+                )
+                .subscribe(function (state, error) {
+
+                    if (error) console.error('Heavyline: realtime error', error);
+
+                    if (state === 'SUBSCRIBED') {
+                        paintRealtime('on');
+                        log('realtime connected', 'ok');
+
+                    } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
+                        paintRealtime('err');
+                        /* Worth naming: the commonest cause is the drivers
+                           table not being in the supabase_realtime
+                           publication, which fails quietly otherwise. */
+                        log('realtime unavailable — is drivers in the publication?', 'err');
+
+                    } else if (state === 'CLOSED') {
+                        paintRealtime('idle');
+                    }
+                });
+        }
+
+        /* ----------------------------------------------------------
+           Signing out
+        ---------------------------------------------------------- */
+
+        el('logoutBtn').addEventListener('click', async function () {
+
+            stopGPS();
+
+            /* Ending the shift on the way out, so a driver who closes the
+               terminal does not sit on the dispatch board as on shift. */
+            if (currentDriver && currentDriver.status === 'online') {
+                try {
+                    await db.from('drivers')
+                        .update({ status: 'offline' })
+                        .eq('auth_user_id', currentDriver.auth_user_id);
+                } catch (e) { /* signing out matters more than tidiness */ }
+            }
+
+            if (channel) {
+                try { await db.removeChannel(channel); } catch (e) {}
+                channel = null;
+            }
+
+            try { await db.auth.signOut(); } catch (e) {}
+
+            window.location.replace(LOGIN);
+        });
+
+        /* The watch and the socket both outlive a navigation otherwise. */
+        window.addEventListener('pagehide', function () {
+            stopGPS();
+            if (channel) { try { db.removeChannel(channel); } catch (e) {} }
+        });
+
+        /* ----------------------------------------------------------
+           Go
+        ---------------------------------------------------------- */
+
+        loadDriver();
+
+    })();
+    </script>
+
+</body>
+</html>

@@ -210,7 +210,17 @@ const login = async (email) => {
     (thread.body ? thread.body.messages.length : '?') + ' message(s)');
 
   const threads = await req('GET', '/api/dm/threads', null, marek);
-  const t = threads.body && threads.body.threads[0];
+
+  /* Looked up rather than taken from the front of the list: the fleet room
+     is pinned there now, and a test that depends on the order of a list is
+     a test that breaks whenever the list gains anything. */
+  const all = (threads.body && threads.body.threads) || [];
+  const t = all.find((x) => x.withId === 'HLL-1001');
+
+  const room = all.find((x) => x.room);
+  check('the fleet room is always there, pinned first',
+    !!room && all[0] === room && room.withId === '#fleet',
+    room ? room.withName : 'no room');
   check('the conversation is listed with who it is with',
     !!t && t.withId === 'HLL-1001' && t.withName === 'Anna Bergen',
     t ? t.withName : 'no thread');
@@ -318,8 +328,135 @@ const login = async (email) => {
     { to: 'HLL-2002', kind: 'drop-tables', callId: 'CALL-1' }, anna);
   check('an unknown signal is refused', nonsense.status === 400, 'HTTP ' + nonsense.status);
 
+  /* ---------- 5b. the fleet room ----------
+
+     The opposite requirement to a direct message, and worth stating as
+     such: a room message MUST reach everyone with a stream open,
+     including the driver who has nothing to do with the two above. The
+     private-message tests spend their time proving nothing leaks to
+     'nosy'; here it has to arrive there. */
+
+  /* nosy's stream was closed after the privacy checks above, so the one
+     driver who has to HEAR this needs it open again. */
+  const sRoom = openStream(nosy);
+  await wait(300);
+
+  const before = sRoom.got.filter((e) => e.kind === 'dm').length;
+
+  const roomSay = await req('POST', '/api/dm/send',
+    { to: '#fleet', text: 'Anyone near Hamburg tonight?' }, anna);
+  check('a message to the room is accepted',
+    roomSay.status === 200 && !!roomSay.body.message,
+    'HTTP ' + roomSay.status);
+
+  check('and it is stamped as a room message',
+    !!roomSay.body.message && roomSay.body.message.to === '#fleet'
+      && roomSay.body.message.room === true,
+    roomSay.body.message ? String(roomSay.body.message.to) : '?');
+
+  await wait(320);
+
+  const nosyRoom = sRoom.got.filter((e) => e.kind === 'dm');
+  check('it reaches a driver who is in neither private thread',
+    nosyRoom.length === before + 1
+      && nosyRoom[nosyRoom.length - 1].data.room === true,
+    (nosyRoom.length - before) + ' frame(s)');
+
+  const roomRead = await req('GET', '/api/dm/%23fleet', null, nosy);
+  check('the room reads back for anybody',
+    roomRead.status === 200 && roomRead.body.messages.length === 1
+      && roomRead.body.room === true,
+    'HTTP ' + roomRead.status);
+
+  const roomThreads = await req('GET', '/api/dm/threads', null, nosy);
+  const roomRow = ((roomThreads.body && roomThreads.body.threads) || [])
+    .find((t) => t.room);
+  check('an unread room message is counted for somebody who has not read it',
+    !!roomRow && roomRow.unread === 1, roomRow ? String(roomRow.unread) : '?');
+
+  await req('POST', '/api/dm/read', { withId: '#fleet' }, nosy);
+  const afterRead = await req('GET', '/api/dm/threads', null, nosy);
+  const readRow = ((afterRead.body && afterRead.body.threads) || []).find((t) => t.room);
+  check('and marking the room read clears it',
+    !!readRow && readRow.unread === 0, readRow ? String(readRow.unread) : '?');
+
+  /* Your own words are not unread to you. */
+  const mineRow = ((await req('GET', '/api/dm/threads', null, anna)).body.threads || [])
+    .find((t) => t.room);
+  check('your own room message is not unread to you',
+    !!mineRow && mineRow.unread === 0, mineRow ? String(mineRow.unread) : '?');
+
+  /* ---------- 5c. the group call ---------- */
+
+  const emptyRoom = await req('GET', '/api/call/room', null, anna);
+  check('the room call starts empty',
+    emptyRoom.status === 200 && emptyRoom.body.peers.length === 0,
+    (emptyRoom.body ? emptyRoom.body.peers.length : '?') + ' in it');
+
+  const joinA = await req('POST', '/api/call/signal',
+    { to: '#fleet', kind: 'join' }, anna);
+  check('the first to join is told nobody is there yet',
+    joinA.status === 200 && joinA.body.peers.length === 0,
+    (joinA.body ? joinA.body.peers.length : '?') + ' peer(s)');
+
+  await wait(250);
+
+  const joinB = await req('POST', '/api/call/signal',
+    { to: '#fleet', kind: 'join' }, marek);
+  check('the second is handed the first to offer to',
+    joinB.status === 200 && joinB.body.peers.length === 1
+      && joinB.body.peers[0].driverId === 'HLL-1001',
+    joinB.body && joinB.body.peers[0] ? joinB.body.peers[0].driverId : 'nobody');
+
+  await wait(320);
+
+  const annaCall = sAnna.got.filter((e) => e.kind === 'call');
+  check('and the one already in hears them arrive',
+    annaCall.some((e) => e.data.kind === 'room.joined' && e.data.from === 'HLL-2002'),
+    annaCall.map((e) => e.data.kind).join(','));
+
+  const roster = await req('GET', '/api/call/room', null, nosy);
+  check('the call lists both of them',
+    roster.status === 200 && roster.body.peers.length === 2,
+    (roster.body ? roster.body.peers.length : '?') + ' in it');
+
+  /* A mesh is still one peer talking to one peer, so the ordinary
+     signalling has to keep working while the room call is up. */
+  const meshOffer = await req('POST', '/api/call/signal',
+    { to: 'HLL-1001', kind: 'offer', payload: { sdp: 'x' } }, marek);
+  check('peer signalling inside the room still goes to one driver',
+    meshOffer.status === 200 && meshOffer.body.delivered === 1,
+    'delivered ' + (meshOffer.body ? meshOffer.body.delivered : '?'));
+
+  const leaveB = await req('POST', '/api/call/signal',
+    { to: '#fleet', kind: 'leave' }, marek);
+  check('leaving is accepted', leaveB.status === 200 && leaveB.body.left === true,
+    'HTTP ' + leaveB.status);
+
+  await wait(300);
+
+  check('and the room hears it',
+    sAnna.got.filter((e) => e.kind === 'call')
+      .some((e) => e.data.kind === 'room.left' && e.data.from === 'HLL-2002'),
+    'yes');
+
+  const afterLeave = await req('GET', '/api/call/room', null, anna);
+  check('the call is down to one',
+    afterLeave.status === 200 && afterLeave.body.peers.length === 1,
+    (afterLeave.body ? afterLeave.body.peers.length : '?') + ' in it');
+
+  /* Ringing, answering and declining make no sense in a room, and a
+     signal that means nothing there should be refused rather than
+     delivered to nobody. */
+  const wrongSignal = await req('POST', '/api/call/signal',
+    { to: '#fleet', kind: 'ring' }, anna);
+  check('a signal that needs a person is refused for the room',
+    wrongSignal.status === 400, 'HTTP ' + wrongSignal.status);
+
+  await req('POST', '/api/call/signal', { to: '#fleet', kind: 'leave' }, anna);
+
   /* ---------- 6. it survives a restart ---------- */
-  sAnna.stop(); sMarek.stop();
+  sAnna.stop(); sMarek.stop(); sRoom.stop();
   await wait(200);
   server.kill();
   await wait(700);

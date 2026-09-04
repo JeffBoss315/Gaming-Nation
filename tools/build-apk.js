@@ -90,7 +90,20 @@ const run = (cmd, args, cwd, env) => {
      re-join argv into a string and break paths containing spaces, e.g.
      "C:\Program Files\nodejs\node.exe". */
   const needsShell = isWin && /\.(bat|cmd)$/i.test(cmd);
-  const r = spawnSync(cmd, args, {
+
+  /* ...but a shell re-joins argv for the command it IS used on, and that
+     is the case this missed. gradlew.bat is a .bat, so it takes the shell
+     path — and with the project under "…\VS CODE\PROJECTS\hll" the shell
+     split the path at the space and reported
+
+       'C:\Users\jeffb\OneDrive\Desktop\VS' is not recognized
+
+     which reads like a broken install rather than an unquoted argument.
+     Quote whatever the shell is going to re-parse. Only under a shell:
+     without one the quotes would become part of the filename. */
+  const quoted = (s) => (needsShell && /[\s&|<>^()]/.test(s) ? '"' + s + '"' : s);
+
+  const r = spawnSync(quoted(cmd), args.map(quoted), {
     cwd: cwd || ROOT,
     stdio: 'inherit',
     shell: needsShell,

@@ -16,3 +16,43 @@
 
 name = "heavyline"
 pages_build_output_dir = "www"
+
+# ------------------------------------------------------------------
+# The client installers
+#
+# They are NOT in www/. They live in a private R2 bucket with no public
+# URL, and functions/api/download-link.js is the only way to one: it asks
+# Supabase — as the signed-in driver, under row level security — whether
+# their application is approved, and signs a link that lasts five minutes
+# if it is.
+#
+# That is the difference between a gate and a suggestion. While the
+# builds sat on public GitHub Releases, the downloads page decided what
+# was OFFERED and anybody with the URL had the file anyway.
+#
+# SET UP ONCE
+#
+#   1. Make the bucket
+#        npx wrangler r2 bucket create heavyline-releases
+#
+#   2. Put the builds in it (after npm run dist)
+#        npm run release:push
+#
+#   3. Give the Function a signing secret. Any long random string; it
+#      never leaves Cloudflare, and changing it invalidates every link
+#      already handed out, which is the way to revoke them.
+#        npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=heavyline
+#
+#   4. Tell it where Supabase is. Not secrets — the anon key is public
+#      and is in supabase-client.js — but they belong in the environment
+#      rather than baked into a Function.
+#        Pages dashboard -> Settings -> Environment variables
+#          SUPABASE_URL       https://sfzeauvkguywidrqjntk.supabase.co
+#          SUPABASE_ANON_KEY  sb_publishable_...
+#
+# The binding below is what makes env.RELEASES exist inside the Function.
+# ------------------------------------------------------------------
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "heavyline-releases"

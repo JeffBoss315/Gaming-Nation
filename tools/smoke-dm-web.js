@@ -247,7 +247,10 @@ app.whenReady().then(async () => {
       go('#/messages'); render();
       await new Promise(r => setTimeout(r, 700));
       await Messages.pullThreads();
-      const t = Messages.threads[0];
+      /* The driver's conversation, not whatever is at the top of the list:
+         the fleet room is pinned there now, and this test is about a
+         message from one driver to another. */
+      const t = Messages.threads.find((x) => !x.room) || Messages.threads[0];
       if (t) { await Messages.open(t.withId); }
       render();
       await new Promise(r => setTimeout(r, 500));

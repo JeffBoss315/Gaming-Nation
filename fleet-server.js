@@ -150,6 +150,27 @@ function isOnline(driverId) {
   return live;
 }
 
+/* Everybody holding a stream open, once each. A driver with the desktop
+   client and a browser open is two listeners and one person, and both the
+   room's member count and the group call have to count them as one. */
+function onlineDrivers() {
+  const ids = new Set();
+  listeners.forEach((res) => { if (res.hllDriverId) ids.add(res.hllDriverId); });
+  return Array.from(ids);
+}
+
+/* To everyone except one person — the shape every room announcement wants,
+   because the one who caused it does not need telling. */
+function sendToOthers(exceptId, kind, data) {
+  let n = 0;
+  listeners.forEach((res) => {
+    if (res.hllDriverId && res.hllDriverId !== String(exceptId)) {
+      send(res, kind, data); n++;
+    }
+  });
+  return n;
+}
+
 const fleetList = () => Array.from(fleet.values());
 
 /* Positions arrive far faster than anyone can read them — a truck reports
@@ -336,6 +357,34 @@ function threadId(a, b) {
   return [String(a), String(b)].sort().join('~');
 }
 
+/* The room the whole company is in.
+
+   Deliberately a thread id that no pair can ever produce: a pair thread is
+   two ids joined with '~', and a driver code never starts with '#'. So the
+   room lives in the same store as every direct thread, is paged by the
+   same code, and is delivered down the same channel — it is one more
+   conversation, not a second messaging system.
+
+   What it does need of its own is unread: a direct message is read when
+   the one other person reads it, and there is no "the other person" here.
+   Each driver carries their own mark instead. */
+const FLEET_ROOM = '#fleet';
+const FLEET_ROOM_NAME = 'Fleet room';
+
+const isRoom = (id) => String(id) === FLEET_ROOM;
+
+const ROOM_READS_FILE = process.env.HLL_ROOM_READS_FILE
+  || path.join(ROOT, 'hll-room-reads.json');
+
+let roomReads = readJSON(ROOM_READS_FILE, null) || {};   /* driverId -> ISO */
+
+function roomUnread(driverId) {
+  const since = roomReads[String(driverId)];
+  return dmFor(FLEET_ROOM).filter((m) =>
+    String(m.driverId) !== String(driverId)
+    && (!since || m.at > since)).length;
+}
+
 const dmFor = (id) => dms[id] || (dms[id] = []);
 
 function dmPage(id, limit, before) {
@@ -361,6 +410,8 @@ function threadsFor(me) {
   const out = [];
 
   Object.keys(dms).forEach((id) => {
+    if (isRoom(id)) return;                 /* pinned separately, below */
+
     const parts = id.split('~');
     if (parts.indexOf(mine) === -1) return;
 
@@ -383,6 +434,25 @@ function threadsFor(me) {
   });
 
   out.sort((a, b) => new Date(b.last.at) - new Date(a.last.at));
+
+  /* The room goes first and stays first, whether or not anybody has spoken
+     in it — it is a place, not a conversation somebody started, and a
+     driver looking for it should not have to remember when it was last
+     used. */
+  const roomList = dmFor(FLEET_ROOM);
+
+  out.unshift({
+    threadId: FLEET_ROOM,
+    withId: FLEET_ROOM,
+    withName: FLEET_ROOM_NAME,
+    withRole: 'room',
+    room: true,
+    online: true,
+    members: onlineDrivers().length,
+    last: roomList.length ? roomList[roomList.length - 1] : null,
+    unread: roomUnread(mine),
+  });
+
   return out;
 }
 
@@ -672,6 +742,20 @@ async function api(req, res, url) {
     if (!me) return json(res, 401, { error: 'no identity' });
 
     const withId = decodeURIComponent(dmGet[1]);
+
+    /* The room is a thread like any other; it just is not a person, so it
+       is not looked up as one. */
+    if (isRoom(withId)) {
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+      const page = dmPage(FLEET_ROOM, limit, url.searchParams.get('before'));
+      return json(res, 200, Object.assign({
+        withId: FLEET_ROOM,
+        room: true,
+        online: true,
+        members: onlineDrivers().length,
+      }, page));
+    }
+
     if (!driverRecord(withId)) return json(res, 404, { error: 'no such driver' });
 
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
@@ -686,9 +770,13 @@ async function api(req, res, url) {
 
     const b = await body(req);
     const to = String((b && b.to) || '');
-    const other = driverRecord(to);
-    if (!other) return json(res, 404, { error: 'no such driver' });
-    if (String(other.id) === String(me.id)) {
+    const toRoom = isRoom(to);
+
+    /* Talking to yourself is a mistake; talking to the room you are in is
+       the whole point of it, so the self check does not apply there. */
+    const other = toRoom ? null : driverRecord(to);
+    if (!toRoom && !other) return json(res, 404, { error: 'no such driver' });
+    if (other && String(other.id) === String(me.id)) {
       return json(res, 400, { error: 'that is your own thread' });
     }
 
@@ -711,14 +799,17 @@ async function api(req, res, url) {
       driverId: me.id,
       driver: me.name,
       role: levelOf(me.role) >= CONTROL_LEVEL ? 'staff' : 'driver',
-      to: other.id,
+      to: toRoom ? FLEET_ROOM : other.id,
+      room: toRoom || undefined,
       text,
       attachment,
       at: new Date().toISOString(),
-      readAt: null,
+      /* A room message is never "read" by one person, so the field that
+         means that is left off rather than set to something untrue. */
+      readAt: toRoom ? undefined : null,
     };
 
-    const id = threadId(me.id, other.id);
+    const id = toRoom ? FLEET_ROOM : threadId(me.id, other.id);
     dmFor(id).push(message);
 
     /* A thread nobody will ever scroll back through does not need to grow
@@ -729,8 +820,13 @@ async function api(req, res, url) {
 
     /* Both ends: the sender's other windows as well, so a message typed on
        the desktop appears in the browser they left open. */
-    sendTo(other.id, 'dm', { kind: 'dm.message', threadId: id, message });
-    sendTo(me.id, 'dm', { kind: 'dm.message', threadId: id, message });
+    if (toRoom) {
+      /* Everyone, including the sender's other windows. */
+      broadcast('dm', { kind: 'dm.message', threadId: id, room: true, message });
+    } else {
+      sendTo(other.id, 'dm', { kind: 'dm.message', threadId: id, message });
+      sendTo(me.id, 'dm', { kind: 'dm.message', threadId: id, message });
+    }
 
     return json(res, 200, { message });
   }
@@ -741,6 +837,16 @@ async function api(req, res, url) {
 
     const b = await body(req);
     const withId = String((b && b.withId) || '');
+
+    /* Nobody is told when the room is read: in a room of twenty, twenty
+       read receipts per message is noise, and there is no one sender
+       waiting to see a tick. The mark is kept for the reader alone. */
+    if (isRoom(withId)) {
+      roomReads[String(me.id)] = new Date().toISOString();
+      save(ROOM_READS_FILE, roomReads);
+      return json(res, 200, { read: 0, room: true });
+    }
+
     if (!driverRecord(withId)) return json(res, 404, { error: 'no such driver' });
 
     const id = threadId(me.id, withId);
@@ -867,7 +973,34 @@ async function api(req, res, url) {
 
    That is why there is no bandwidth cost to a call and no recording of one:
    the service sees who rang whom, and never a second of it. */
-const CALL_SIGNALS = ['ring', 'offer', 'answer', 'ice', 'accept', 'decline', 'hangup', 'busy'];
+/* join and leave are the room's two extra signals: a group call has no
+   ringing and no answering, you are either in it or you are not. */
+const CALL_SIGNALS = ['ring', 'offer', 'answer', 'ice', 'accept', 'decline',
+  'hangup', 'busy', 'join', 'leave'];
+
+/* Who is in the group call right now.
+
+   Held in memory only, and on purpose: a call is happening or it is not,
+   and a participant list that survived a restart would list people who
+   hung up when the process died. */
+const roomCall = new Map();       /* driverId -> { name, at, video } */
+
+function roomCallList() {
+  return Array.from(roomCall.entries()).map(([id, v]) => ({
+    driverId: id, name: v.name, video: !!v.video, since: v.at,
+  }));
+}
+
+/* Somebody who closed the tab without leaving is still in the map. They
+   are not on the stream any more, so drop them when anybody asks. */
+function pruneRoomCall() {
+  const live = new Set(onlineDrivers());
+  let changed = false;
+  roomCall.forEach((_v, id) => {
+    if (!live.has(id)) { roomCall.delete(id); changed = true; }
+  });
+  return changed;
+}
 
 async function callSignal(req, res) {
   const me = whoami(req);
@@ -880,6 +1013,57 @@ async function callSignal(req, res) {
   }
 
   const to = String((b && b.to) || '');
+
+  /* ---- the group call ----
+
+     Joining and leaving are announcements to the room; everything else in
+     a group call is still one peer talking to one other peer, because a
+     mesh is exactly that — an offer, an answer and some candidates, per
+     pair. So only join and leave are handled here, and the rest falls
+     through to the ordinary one-to-one path with a real driver id on it. */
+  if (isRoom(to)) {
+    pruneRoomCall();
+
+    if (kind === 'join') {
+      /* The list is taken BEFORE adding them, so what comes back is who
+         to call — a joiner offers to everyone already in, and everyone
+         already in waits to be offered to. One offer per pair, and no
+         race about which end starts it. */
+      const peers = roomCallList().filter((p) => p.driverId !== String(me.id));
+
+      roomCall.set(String(me.id), {
+        name: me.name, at: new Date().toISOString(), video: !!(b && b.video),
+      });
+
+      sendToOthers(me.id, 'call', {
+        kind: 'room.joined',
+        room: FLEET_ROOM,
+        from: me.id,
+        fromName: me.name,
+        video: !!(b && b.video),
+        at: new Date().toISOString(),
+      });
+
+      return json(res, 200, { peers, joined: true });
+    }
+
+    if (kind === 'leave' || kind === 'hangup') {
+      roomCall.delete(String(me.id));
+
+      sendToOthers(me.id, 'call', {
+        kind: 'room.left',
+        room: FLEET_ROOM,
+        from: me.id,
+        fromName: me.name,
+        at: new Date().toISOString(),
+      });
+
+      return json(res, 200, { left: true });
+    }
+
+    return json(res, 400, { error: 'that signal needs a driver, not the room' });
+  }
+
   const other = driverRecord(to);
   if (!other) return json(res, 404, { error: 'no such driver' });
 
@@ -999,6 +1183,15 @@ const server = http.createServer((req, res) => {
     return res.end(text);
   }
 
+  /* Who is in the group call, for a page that wants to show it without
+     joining — the button says "Join (3)" rather than making somebody dial
+     in to find out whether anybody is there. */
+  if (url.pathname === '/api/call/room' && req.method === 'GET') {
+    if (!whoami(req)) return json(res, 401, { error: 'no identity' });
+    pruneRoomCall();
+    return json(res, 200, { room: FLEET_ROOM, peers: roomCallList() });
+  }
+
   if (url.pathname === '/api/call/signal' && req.method === 'POST') {
     return callSignal(req, res).catch((e) => {
       console.warn('[hll] call signal: ' + e.message);
@@ -1054,6 +1247,8 @@ server.listen(PORT, HOST, () => {
   console.log('  Messages     :  ' + base + '/api/dm/threads');
   console.log('  Attachments  :  ' + base + '/files/<id>');
   console.log('  Calls        :  ' + base + '/api/call/signal');
+  console.log('  Fleet room   :  ' + base + '/api/dm/%23fleet   (group chat)');
+  console.log('  Group call   :  ' + base + '/api/call/room');
   console.log('  Status       :  ' + base + '/status');
   console.log('');
   console.log('  Company file :  ' + COMPANY_FILE);

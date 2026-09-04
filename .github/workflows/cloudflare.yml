@@ -25,9 +25,13 @@
 #   2. Or add two repository secrets and let this workflow do it:
 #
 #        Settings -> Secrets and variables -> Actions -> New repository secret
-#        CLOUDFLARE_API_TOKEN     a token with the "Cloudflare Pages: Edit"
-#                                 permission on this account
-#        CLOUDFLARE_ACCOUNT_ID    c54290a31703c611a3387fd22b2c147a
+#        CLOUDFLARE_API_TOKEN     a token with "Cloudflare Pages: Edit" on
+#                                 this account. That one permission is all a
+#                                 site deploy needs — do not hand a CI job a
+#                                 token that can touch the whole account.
+#
+#      The account id (c54290a31703c611a3387fd22b2c147a) is defaulted in the
+#      deploy step, so the token is the only secret to add.
 #
 # Do NOT use `npm run www` as the build command anywhere: that runs
 # tools/scan.js first, which is a release audit and fails on a clean
@@ -57,19 +61,23 @@ jobs:
         with:
           node-version: 20
 
-      # Without the token there is nothing this job can do, and a workflow
+      # Without a token there is nothing this job can do, and a workflow
       # that fails red on every push teaches people to ignore the red. If
       # Cloudflare is building from Git instead, this is the expected path.
+      #
+      # Only the TOKEN needs to be a secret. An account id is an identifier,
+      # not a credential, so it is defaulted in the deploy step below and
+      # one secret is enough. CLOUDFLARE_ACCOUNT_ID still overrides it.
       - name: Is there a token to deploy with
         id: check
         run: |
-          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
             echo "ready=yes" >> "$GITHUB_OUTPUT"
           else
             echo "ready=no" >> "$GITHUB_OUTPUT"
-            echo "No Cloudflare credentials set — skipping."
+            echo "No CLOUDFLARE_API_TOKEN set — skipping."
             echo "Either connect the repo in the Cloudflare dashboard, or add"
-            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as repository secrets."
+            echo "CLOUDFLARE_API_TOKEN under Settings -> Secrets and variables -> Actions."
           fi
 
       # tools/build-www.js is plain node with no dependencies, so npm ci
@@ -86,10 +94,22 @@ jobs:
           test -f www/index.html || { echo "www/index.html missing"; exit 1; }
           echo "built $(find www -type f | wc -l) files"
 
+      # Run from the repository root, not from www/, because that is where
+      # wrangler looks for functions/ — the download gate is a Pages
+      # Function and deploying the folder alone would leave it behind.
       - name: Deploy
         if: steps.check.outputs.ready == 'yes'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
           command: pages deploy www --project-name=heavyline --branch=main
+
+      - name: Where it went
+        if: steps.check.outputs.ready == 'yes'
+        run: |
+          echo "Published to https://heavyline.pages.dev"
+          if [ -d functions ]; then
+            echo "functions/ went with it — the download gate is live once"
+            echo "HLL_DOWNLOAD_SECRET and the R2 binding are set on the project."
+          fi

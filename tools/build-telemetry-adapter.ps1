@@ -11,10 +11,10 @@ if (-not $candidates) {
   throw 'The .NET 8 SDK is not installed. Install Microsoft.DotNet.SDK.8, restart VS Code, and run npm run telemetry:build again.'
 }
 
-$dotnet = $candidates[0]
+$dotnet = $candidates | Select-Object -First 1
 & $dotnet restore 'telemetry-adapter\HllTelemetryAdapter.csproj' --ignore-failed-sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $dotnet publish 'telemetry-adapter\HllTelemetryAdapter.csproj' -c Release -o . --ignore-failed-sources
+& $dotnet publish 'telemetry-adapter\HllTelemetryAdapter.csproj' -c Release -o . --ignore-failed-sources -p:PublishSingleFile=true
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (-not (Test-Path 'hll-telemetry-adapter.exe')) {
