@@ -110,21 +110,27 @@ if (Test-Path $res) {
     Write-Host '  (no android project - skipped launcher icons)'
 }
 
-# A small square mark: the logo's wordmark is unreadable at 30px, so crop to
-# just the truck for in-app use where the name is already written beside it.
+# A small square mark, for in-app use where the name is written beside it.
+#
+# This used to crop a wide strip out of the top — the old artwork was a
+# wordmark with a truck above it, and the truck was the only part that
+# survived being 30px wide. The Gaming Nation logo is not built that way:
+# it is a square badge that already reads small, and the same crop sliced
+# the middle out of it and cut the lettering in half. So the mark is now
+# the whole thing, fitted square.
 function Write-Mark {
     param([string] $Path, [int] $Size)
-    # the truck occupies roughly the top half of the artwork
-    $srcX = [int]($logo.Width  * 0.09)
-    $srcY = [int]($logo.Height * 0.10)
-    $srcW = [int]($logo.Width  * 0.82)
-    $srcH = [int]($logo.Height * 0.40)
+    # the whole badge, with a hair trimmed off the edges
+    $srcX = [int]($logo.Width  * 0.02)
+    $srcY = [int]($logo.Height * 0.02)
+    $srcW = [int]($logo.Width  * 0.96)
+    $srcH = [int]($logo.Height * 0.96)
     $bmp = New-Object System.Drawing.Bitmap $Size, $Size, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
     $g.Clear($plate)
-    # letterbox the wide crop into a square
+    # fit the crop into the square, whatever its aspect
     $scale  = [Math]::Min($Size / $srcW, $Size / $srcH)
     $drawW  = [int]($srcW * $scale)
     $drawH  = [int]($srcH * $scale)

@@ -1964,7 +1964,7 @@ function notifyStaff(perm, payload, exceptId) {
    object-fit: cover, so it can never be stretched however it is placed. */
 function hllEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
-    <img src="hll.jpg" alt="Gaming Nation" width="1410" height="1414" loading="lazy">
+    <img src="hll.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
 }
 
