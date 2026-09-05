@@ -11320,13 +11320,13 @@ const CLIENT_RELEASE = {
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
       file: 'release/Gaming-Nation-Trucker-1.0.0-windows-setup.exe',
-      size: '80.5 MB', note: 'Installs to your machine and adds a Start menu entry.' },
+      size: '80.8 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
       file: 'release/Gaming-Nation-Trucker-1.0.0-windows-portable.exe',
-      size: '80.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
+      size: '80.3 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
       file: 'release/Gaming-Nation-Trucker-1.0.0-android.apk',
-      size: '6.6 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
+      size: '6.7 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
 
