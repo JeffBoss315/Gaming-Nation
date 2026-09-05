@@ -1,5 +1,5 @@
 /*
-   HLL Telemetry Bridge launcher.
+   GMN Telemetry Bridge launcher.
 
    The game plugin writes Protocol 6 frames to a named Windows mapping. The
    adapter owns that binary format; this launcher only manages its lifecycle
@@ -41,7 +41,7 @@ const timeoutMs = Number(flag('timeout', 15000));
 const endpoint = 'http://127.0.0.1:' + port + '/api/' + game + '/telemetry';
 
 function fail(message) {
-  console.error('HLL telemetry bridge: ' + message);
+  console.error('GMN telemetry bridge: ' + message);
   process.exitCode = 1;
 }
 
@@ -76,12 +76,12 @@ if (process.platform !== 'win32') {
   }
   if (!contract || contract.dll !== path.basename(plugin) || contract.protocol !== 6 ||
       contract.map !== map) {
-    fail('telemetry metadata does not match the HLL Protocol 6 bridge contract' +
+    fail('telemetry metadata does not match the GMN Protocol 6 bridge contract' +
       '\nExpected DLL: ' + path.basename(plugin) + ', protocol: 6, map: ' + map);
   } else {
   endpointReady().then((alreadyReady) => {
     if (alreadyReady) {
-      console.log('HLL telemetry bridge already ready: ' + endpoint);
+      console.log('GMN telemetry bridge already ready: ' + endpoint);
       return;
     }
   const child = spawn(adapter, [], {
@@ -102,7 +102,7 @@ if (process.platform !== 'win32') {
       res.resume();
       if (res.statusCode === 200 && !ready) {
         ready = true;
-        console.log('HLL telemetry bridge ready: ' + endpoint);
+        console.log('GMN telemetry bridge ready: ' + endpoint);
       }
     });
     req.on('error', () => {});

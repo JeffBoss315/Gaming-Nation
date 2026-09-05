@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
     thrown.push(message);
   });
 
-  await win.loadURL('file:///' + path.join(ROOT, 'index.html').replace(/\\/g, '/'));
+  await win.loadURL('file:///' + path.join(ROOT, 'login.html').replace(/\\/g, '/'));
 
   const js = (code) => win.webContents.executeJavaScript(code, true);
 

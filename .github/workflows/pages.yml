@@ -48,7 +48,7 @@ jobs:
 
       - name: Check something was actually built
         run: |
-          test -f www/index.html || { echo "www/index.html missing"; exit 1; }
+          test -f www/login.html || { echo "www/login.html missing"; exit 1; }
           echo "built $(find www -type f | wc -l) files"
 
       - uses: actions/upload-pages-artifact@v3

@@ -138,7 +138,7 @@ app.whenReady().then(async () => {
 
       /* create the convoy through the real editor path */
       const e = {
-        id: 'EV-9100', name: 'HLL Convoy Test', type: 'convoy',
+        id: 'EV-9100', name: 'GMN Convoy Test', type: 'convoy',
         typeLabel: 'Official Convoy', tone: '',
         start: 'Rotterdam', dest: 'Hamburg',
         path: ['Rotterdam', 'Bremen', 'Hamburg'],

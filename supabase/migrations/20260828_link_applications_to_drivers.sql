@@ -205,7 +205,7 @@ where a.driver_id is null
 -- 5. public.company  — CONFIRMED MISSING
 --
 -- Proven, not guessed. The runtime sweep (tools/smoke-errors.js)
--- reported, on both index.html and admin.html:
+-- reported, on both login.html and admin.html:
 --
 --   [HLL] Company sync failed: new row violates row-level
 --   security policy for table "company" [42501]

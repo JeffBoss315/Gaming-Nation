@@ -1,5 +1,5 @@
 /* ============================================================
-   GAMING NATION — HLL Digital Headquarters
+   GAMING NATION — GMN Digital Headquarters
    Design system: restrained, flat, professional.
    One accent colour. Solid surfaces. Minimal motion.
    ============================================================ */
@@ -760,7 +760,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
    quietly: a route, and a light travelling it. No illustration, nothing
    bouncing — a thin line, a moving highlight, and the name.
 
-   Every class the markup already uses is kept, so index.html, admin.html
+   Every class the markup already uses is kept, so login.html, admin.html
    and tracker.html need no changes, and the JS that adds .gone and writes
    into #splashNote still works. */
 .splash{

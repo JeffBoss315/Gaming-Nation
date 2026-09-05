@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
   const say = (k, v) => R.steps.push(k + ': ' + v);
 
   /* ---- the drivers' website ---- */
-  const drivers = await open('index.html');
+  const drivers = await open('login.html');
   const a = await drivers.webContents.executeJavaScript(`(async () => {
     const out = {};
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

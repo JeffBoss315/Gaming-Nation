@@ -275,7 +275,7 @@ function serveFile(res, pathname) {
   let file = path.join(SITE_DIR, rel);
   if (!file.startsWith(path.resolve(SITE_DIR))) { json(res, 403, { error: 'no' }); return; }
 
-  if (rel === '/' || rel === '\\' || rel === '') file = path.join(SITE_DIR, 'index.html');
+  if (rel === '/' || rel === '\\' || rel === '') file = path.join(SITE_DIR, 'login.html');
 
   /* '/admin' as well as '/admin.html', the way a website behaves */
   if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html';
@@ -558,7 +558,7 @@ async function api(req, res, url) {
   if (p === '/api/jobs/id' && method === 'POST') {
     company.jobSeq = (company.jobSeq || 0) + 1;
     save(COMPANY_FILE, company);
-    return json(res, 200, { id: 'HLL-' + String(company.jobSeq).padStart(6, '0') });
+    return json(res, 200, { id: 'GMN-' + String(company.jobSeq).padStart(6, '0') });
   }
 
   /* A finished run, filed by the game connector. */

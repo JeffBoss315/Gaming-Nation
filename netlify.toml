@@ -15,10 +15,10 @@
   NODE_VERSION = "20"
 
 # The site is one document with hash routes behind it, so anything that
-# is not a real file has to come back as index.html rather than a 404.
+# is not a real file has to come back as login.html rather than a 404.
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/login.html"
   status = 200
 
 [[headers]]

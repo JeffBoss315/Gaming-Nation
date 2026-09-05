@@ -1,7 +1,7 @@
 /* The driver terminal: the #/driver-login and #/driver-terminal views.
 
    These two were driver-login.html and driver-dashboard.html until they
-   were merged into index.html. They are the phone-side of the platform — a driver signs in against
+   were merged into login.html. They are the phone-side of the platform — a driver signs in against
    Supabase Auth and puts themselves on the dispatch board, and their
    position uploads while they are on shift. Nothing in the existing sweep
    covered them: tools/smoke-errors.js walks index, admin and tracker, and
@@ -211,7 +211,7 @@ app.whenReady().then(async () => {
 
     /* ---- 1. the login page ------------------------------------- */
 
-    await win.loadURL(page('index.html') + '#/driver-login');
+    await win.loadURL(page('login.html') + '#/driver-login');
 
     /* An earlier run may have left the stand-in's session flag behind,
        which would send this one straight past the form. */

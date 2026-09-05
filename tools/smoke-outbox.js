@@ -129,7 +129,7 @@ const readQueue = () => {
   /* no job number could be fetched, so it took a local one and said so —
      the run still happens, and still lands, under a number marked as local */
   check('an unreachable service does not stop the run getting a number',
-    !!job && /^HLL-L/.test(job.body.job.id), job ? job.body.job.id : '-');
+    !!job && /^GMN-L/.test(job.body.job.id), job ? job.body.job.id : '-');
 
   /* ---- Gaming Nation comes back ---- */
   say('');

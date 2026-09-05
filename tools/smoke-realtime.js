@@ -80,7 +80,7 @@ function listen() {
 
 (async () => {
   await wait(250);
-  say('\nHLL live channel\n');
+  say('\nGMN live channel\n');
 
   const stream = listen();
   await wait(300);

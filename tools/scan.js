@@ -45,13 +45,13 @@ const all = (src, re) => [...src.matchAll(re)];
 
 /* Targets: the entry file plus anything it shares. */
 const TARGETS = [
-  { name: 'platform', files: ['script.js', 'map-data.js'], pages: ['index.html', 'admin.html'] },
+  { name: 'platform', files: ['script.js', 'map-data.js'], pages: ['login.html', 'admin.html'] },
   { name: 'client', files: ['tracker.js', 'map-data.js'], pages: ['tracker.html'] },
 ];
 
 /* A rule can also live in the page that uses it.
 
-   index.html carries the driver terminal's stylesheet inline — scoped to
+   login.html carries the driver terminal's stylesheet inline — scoped to
    #dt-root — because the two pages it came from, driver-login.html and
    driver-dashboard.html, were merged into it. Reading only the two
    stylesheets reported all 43 of those classes as having no rule anywhere,
@@ -240,8 +240,8 @@ if (cap.webDir !== 'app-www') {
 if (!/const APP\s*=[\s\S]{0,160}'app-www'/.test(builder)) {
   fail('build', 'the builder no longer writes the app payload', 'app-www is not assembled');
 }
-if (!/site\.write\('index\.html', read\('index\.html'\)\)/.test(builder)) {
-  fail('build', "the website's index.html is not the drivers' site", 'check build-www.js');
+if (!/site\.write\('login\.html', read\('login\.html'\)\)/.test(builder)) {
+  fail('build', "the website's login.html is not the drivers' site", 'check build-www.js');
 }
 if (/site\.(write|copy)\([^)]*tracker/.test(builder)) {
   fail('build', 'the website payload carries the tracking client',
@@ -253,12 +253,12 @@ const built = path.join(ROOT, 'www');
 if (fs.existsSync(built)) {
   const strays = fs.readdirSync(built).filter((f) => /^tracker\./.test(f));
   strays.forEach((f) => fail('build', 'the built website contains a client file', 'www/' + f));
-  const home = path.join(built, 'index.html');
+  const home = path.join(built, 'login.html');
   if (fs.existsSync(home) && /HLL_SITE\s*=\s*'admin'/.test(fs.readFileSync(home, 'utf8'))) {
-    fail('build', 'the built website opens on the console', 'www/index.html');
+    fail('build', 'the built website opens on the console', 'www/login.html');
   }
   if (fs.existsSync(home) && !/HLL_SITE\s*=\s*'drivers'/.test(fs.readFileSync(home, 'utf8'))) {
-    fail('build', "the built website does not open on the drivers' site", 'www/index.html');
+    fail('build', "the built website does not open on the drivers' site", 'www/login.html');
   }
   console.log('  www/ holds ' + fs.readdirSync(built).length + ' entries');
 }

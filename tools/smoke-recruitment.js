@@ -17,7 +17,7 @@ app.setPath('userData', path.join(app.getPath('temp'), 'hll-probe-driver'));
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });
-  await win.loadFile(path.join(ROOT, 'index.html'));
+  await win.loadFile(path.join(ROOT, 'login.html'));
   await win.webContents.executeJavaScript(FAKE_SUPABASE);
   await new Promise((r) => setTimeout(r, 1600));
 

@@ -128,12 +128,12 @@ const req = (method, p, body) => new Promise((done, fail) => {
   check('a job taken in game is picked up', /JOB STARTED/.test(out),
     (out.match(/JOB STARTED.*/) || [''])[0].trim());
   check('the job number comes from Gaming Nation, in sequence',
-    /HLL-\d{6}/.test(out), (out.match(/HLL-\d{6}/) || ['none'])[0]);
+    /GMN-\d{6}/.test(out), (out.match(/GMN-\d{6}/) || ['none'])[0]);
 
   const ev2 = await req('GET', '/api/events?since=0');
   const start = (ev2.events || []).find((e) => e.kind === 'job.start');
   check('the job start reaches Gaming Nation', !!start, start ? start.text : 'NOT SENT');
-  check('carrying its job number', !!start && /^HLL-/.test(start.jobId || ''),
+  check('carrying its job number', !!start && /^GMN-/.test(start.jobId || ''),
     start ? start.jobId : '-');
 
   /* ---- drive it ---- */

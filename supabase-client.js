@@ -1,7 +1,7 @@
 /* Shared Supabase browser client.
 
    Loaded after the Supabase UMD bundle by every page that needs an account:
-   the two web front-ends (index.html, admin.html) and the standalone driver
+   the two web front-ends (login.html, admin.html) and the standalone driver
    pages. The bundle comes off a CDN, so it can simply not be there — a
    packaged desktop build opened offline, or a blocked request. Guard it:
    window.hllSupabase is then left undefined and the callers that need it

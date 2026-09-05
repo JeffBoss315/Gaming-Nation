@@ -74,7 +74,7 @@
       "vendor/**/*",
       "hll.jpg",
       "icons/**/*",
-      "index.html",
+      "login.html",
       "admin.html",
       "style.css",
       "script.js",

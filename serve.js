@@ -174,7 +174,7 @@ const server = http.createServer((req, res) => {
   /* The root of the site is the drivers' website. The client is a download,
      not a page to wander onto — it is reachable here only because this is the
      development server, and it is not part of the published site. */
-  if (pathname === '/') pathname = '/index.html';
+  if (pathname === '/') pathname = '/login.html';
 
   /* keep requests inside the project directory */
   const filePath = path.join(ROOT, path.normalize(pathname));

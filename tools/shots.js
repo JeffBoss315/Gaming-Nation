@@ -56,7 +56,7 @@ async function shot(win, name) {
 app.whenReady().then(async () => {
   fs.mkdirSync(OUT, { recursive: true });
 
-  for (const page of ['index.html', 'admin.html', 'tracker.html']) {
+  for (const page of ['login.html', 'admin.html', 'tracker.html']) {
     const win = new BrowserWindow({
       width: 1440, height: 900, show: false,
       webPreferences: { partition: 'shots-' + page },

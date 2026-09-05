@@ -2,7 +2,7 @@
    Assembles the two web payloads. They are different things and
    are no longer built into the same folder:
 
-     www/       the public website. index.html is the drivers'
+     www/       the public website. login.html is the drivers'
                 site, admin.html is the management console. The
                 tracking client is NOT here — it is a download,
                 not a page somebody can wander onto.
@@ -72,15 +72,15 @@ function payload(dir) {
 
 /* Both web pages name each other, so moving one moves the declaration. */
 const linkDriversTo = (html, page) =>
-  html.replace(/drivers:\s*'index\.html'/g, "drivers: '" + page + "'");
+  html.replace(/drivers:\s*'login\.html'/g, "drivers: '" + page + "'");
 
 /* ============================================================
    1. www/ — the public website
    ============================================================ */
 const site = payload(SITE);
 
-site.write('index.html', read('index.html'));
-site.log.push("index.html        (drivers' website)");
+site.write('login.html', read('login.html'));
+site.log.push("login.html        (drivers' website)");
 
 site.write('admin.html', read('admin.html'));
 site.log.push('admin.html        (management console)');
@@ -97,7 +97,7 @@ site.write('reset-password.html', read('reset-password.html'));
 site.log.push('reset-password.html  (from the reset email)');
 
 /* The driver terminal used to be two more files here — driver-login.html
-   and driver-dashboard.html. They are views inside index.html now, at
+   and driver-dashboard.html. They are views inside login.html now, at
    #/driver-login and #/driver-terminal, so there is nothing extra to copy
    and no way to ship half of it: the sign-in and the screen it leads to
    are the same document as the site. */
@@ -142,7 +142,7 @@ if (!SITE_URL) {
         '@type': 'Organization',
         '@id': SITE_URL + '/#organisation',
         name: CFG.name || 'Gaming Nation',
-        alternateName: CFG.shortName || 'HLL',
+        alternateName: CFG.shortName || 'GMN',
         url: SITE_URL + '/',
         logo: SITE_URL + '/icons/icon-512.png',
         image: SITE_URL + '/hll.jpg',
@@ -162,9 +162,9 @@ if (!SITE_URL) {
   const seo = [
     '<script>window.HLL_SITE_URL = ' + JSON.stringify(SITE_URL) + ';</script>',
     '',
-    '    <link rel="canonical" href="' + SITE_URL + '/">',
+    '    <link rel="canonical" href="' + SITE_URL + '/login.html">',
     '',
-    '    <meta property="og:url" content="' + SITE_URL + '/">',
+    '    <meta property="og:url" content="' + SITE_URL + '/login.html">',
     '    <meta property="og:image" content="' + SITE_URL + '/hll.jpg">',
     '    <meta name="twitter:image" content="' + SITE_URL + '/hll.jpg">',
     '',
@@ -174,15 +174,15 @@ if (!SITE_URL) {
   ].join('\n');
 
   const marker = '<!-- HLL_SEO';
-  let html = read('index.html');
+  let html = read('login.html');
   const at = html.indexOf(marker);
   if (at === -1) {
-    console.log('  WARNING: the HLL_SEO marker is gone from index.html — no tags injected');
+    console.log('  WARNING: the HLL_SEO marker is gone from login.html — no tags injected');
   } else {
     const end = html.indexOf('-->', at);
     html = html.slice(0, at) + seo + html.slice(end + 3);
-    site.write('index.html', html);
-    site.log.push('index.html        (+ canonical, cards, structured data)');
+    site.write('login.html', html);
+    site.log.push('login.html        (+ canonical, cards, structured data)');
   }
 
   /* the private pages, and the source a crawler has no use for */
@@ -202,8 +202,6 @@ if (!SITE_URL) {
     '/release/', '/tools/', '/vendor/', '/supabase/',
     '/script.js', '/tracker.js', '/map-data.js', '/supabase-client.js']);
 
-  const allowRoot = 'Allow: /' + '$';   /* kept apart: $ is special in replacements */
-
   site.write('robots.txt', [
     '# ' + (CFG.name || 'Gaming Nation') + ' — ' + SITE_URL,
     '#',
@@ -212,10 +210,14 @@ if (!SITE_URL) {
     '# The public website is meant to be found. The management console, the',
     '# driver client and the account pages are not: they sit behind a sign-in,',
     '# and an indexed login page is a dead end for whoever clicks it.',
+    '#',
+    '# The site lives at /login.html, not at /. There used to be an',
+    '# "Allow: /$" here and it was dropped with the rename: the root is no',
+    '# longer a page, and pointing a crawler at it only spends the budget',
+    '# on whatever the host answers a missing asset with.',
     '',
     'User-agent: *',
-    allowRoot,
-    'Allow: /index.html',
+    'Allow: /login.html',
     '',
   ].concat(denied.map((d) => 'Disallow: ' + d)).concat([
     '',
@@ -253,7 +255,7 @@ if (!SITE_URL) {
     '     that do not exist as separate URLs. -->',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     '  <url>',
-    '    <loc>' + SITE_URL + '/</loc>',
+    '    <loc>' + SITE_URL + '/login.html</loc>',
     '    <lastmod>' + new Date().toISOString().slice(0, 10) + '</lastmod>',
     '    <changefreq>weekly</changefreq>',
     '    <priority>1.0</priority>',
@@ -346,11 +348,11 @@ if (process.argv.includes('--with-release')) {
 const app = payload(APP);
 
 /* the native shell boots index.html, so the client takes that name */
-app.write('index.html', read('tracker.html').replace(/index\.html#\//g, 'hq.html#/'));
+app.write('index.html', read('tracker.html').replace(/login\.html#\//g, 'hq.html#/'));
 app.log.push('index.html        (the client, links -> hq.html)');
 
 /* the drivers' site rides along so "open on the platform" has somewhere to go */
-app.write('hq.html', linkDriversTo(read('index.html'), 'hq.html'));
+app.write('hq.html', linkDriversTo(read('login.html'), 'hq.html'));
 app.log.push("hq.html           (drivers' website)");
 app.write('admin.html', linkDriversTo(read('admin.html'), 'hq.html'));
 app.log.push('admin.html        (management console)');
@@ -358,7 +360,7 @@ app.log.push('admin.html        (management console)');
 for (const f of ['tracker.css', 'tracker.js', 'map-data.js', 'style.css', 'script.js',
                  'supabase-client.js', 'manifest.webmanifest', 'sw.js']) {
   let body = read(f);
-  if (f === 'tracker.js') body = body.replace(/index\.html#\//g, 'hq.html#/');
+  if (f === 'tracker.js') body = body.replace(/login\.html#\//g, 'hq.html#/');
   if (f === 'manifest.webmanifest' || f === 'sw.js') {
     body = body.replace(/\.\/tracker\.html/g, './index.html');
   }

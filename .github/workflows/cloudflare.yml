@@ -104,7 +104,7 @@ jobs:
       - name: Check something was built
         if: steps.check.outputs.ready == 'yes'
         run: |
-          test -f www/index.html || { echo "www/index.html missing"; exit 1; }
+          test -f www/login.html || { echo "www/login.html missing"; exit 1; }
           echo "built $(find www -type f | wc -l) files"
 
       # Run from the repository root, not from www/, because that is where

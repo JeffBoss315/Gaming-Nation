@@ -3,7 +3,7 @@
   "buildCommand": "npm run www",
   "outputDirectory": "www",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/(.*)", "destination": "/login.html" }],
   "headers": [
     {
       "source": "/(.*)",

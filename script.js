@@ -1,5 +1,5 @@
 /* ============================================================
-   GAMING NATION — HLL Digital Headquarters
+   GAMING NATION — GMN Digital Headquarters
    Part 1/4 — utilities, icons, domain constants, seed data, store
    ============================================================ */
 'use strict';
@@ -151,7 +151,7 @@ const RANKS = [
   { i: 5, key: 'professional', name: 'Professional Driver',  abbr: 'PRO', km: 100000, convoys: 40, att: 75, color: '#8b7cf0' },
   { i: 6, key: 'elite',        name: 'Elite Driver',         abbr: 'ELT', km: 175000, convoys: 65, att: 80, color: '#d99b2b' },
   { i: 7, key: 'veteran',      name: 'Veteran Driver',       abbr: 'VET', km: 275000, convoys: 90, att: 85, color: '#8bd62b' },
-  { i: 8, key: 'captain',      name: 'HLL Captain',          abbr: 'CPT', km: 400000, convoys: 130, att: 90, color: '#9db8ff' },
+  { i: 8, key: 'captain',      name: 'GMN Captain',          abbr: 'CPT', km: 400000, convoys: 130, att: 90, color: '#9db8ff' },
 ];
 const rankOf = (d) => RANKS[clamp(d.rankIdx ?? 0, 0, RANKS.length - 1)];
 /* rank a driver *qualifies* for, from their stats */
@@ -189,20 +189,20 @@ function can(perm, user = state.user) {
 
 /* 3.3 Achievements — spec §10 */
 const ACHIEVEMENTS = [
-  { id: 'a-first',    name: 'First Delivery',       desc: 'Complete your first HLL delivery.',            icon: 'package',  tier: 'bronze', metric: 'deliveries', goal: 1 },
-  { id: 'a-10k',      name: '10,000 KM Driven',     desc: 'Cover 10,000 km under HLL colours.',           icon: 'route',    tier: 'bronze', metric: 'km', goal: 10000 },
-  { id: 'a-50k',      name: '50,000 KM Driven',     desc: 'Cover 50,000 km under HLL colours.',           icon: 'route',    tier: 'silver', metric: 'km', goal: 50000 },
+  { id: 'a-first',    name: 'First Delivery',       desc: 'Complete your first GMN delivery.',            icon: 'package',  tier: 'bronze', metric: 'deliveries', goal: 1 },
+  { id: 'a-10k',      name: '10,000 KM Driven',     desc: 'Cover 10,000 km under GMN colours.',           icon: 'route',    tier: 'bronze', metric: 'km', goal: 10000 },
+  { id: 'a-50k',      name: '50,000 KM Driven',     desc: 'Cover 50,000 km under GMN colours.',           icon: 'route',    tier: 'silver', metric: 'km', goal: 50000 },
   { id: 'a-100k',     name: '100,000 KM Driven',    desc: 'Join the six-figure mileage club.',            icon: 'gauge',    tier: 'gold',   metric: 'km', goal: 100000 },
-  { id: 'a-250k',     name: 'Quarter Million',      desc: 'Cover 250,000 km under HLL colours.',          icon: 'bolt',     tier: 'plat',   metric: 'km', goal: 250000 },
-  { id: 'a-conv10',   name: '10 Convoys',           desc: 'Attend 10 official HLL convoys.',              icon: 'truck',    tier: 'bronze', metric: 'convoys', goal: 10 },
-  { id: 'a-conv50',   name: '50 Convoys',           desc: 'Attend 50 official HLL convoys.',              icon: 'truck',    tier: 'silver', metric: 'convoys', goal: 50 },
-  { id: 'a-conv100',  name: '100 Convoys',          desc: 'Attend 100 official HLL convoys.',             icon: 'trophy',   tier: 'gold',   metric: 'convoys', goal: 100 },
+  { id: 'a-250k',     name: 'Quarter Million',      desc: 'Cover 250,000 km under GMN colours.',          icon: 'bolt',     tier: 'plat',   metric: 'km', goal: 250000 },
+  { id: 'a-conv10',   name: '10 Convoys',           desc: 'Attend 10 official GMN convoys.',              icon: 'truck',    tier: 'bronze', metric: 'convoys', goal: 10 },
+  { id: 'a-conv50',   name: '50 Convoys',           desc: 'Attend 50 official GMN convoys.',              icon: 'truck',    tier: 'silver', metric: 'convoys', goal: 50 },
+  { id: 'a-conv100',  name: '100 Convoys',          desc: 'Attend 100 official GMN convoys.',             icon: 'trophy',   tier: 'gold',   metric: 'convoys', goal: 100 },
   { id: 'a-perfect',  name: 'Perfect Attendance',   desc: 'Hold 100% attendance across a full season.',   icon: 'checkCircle', tier: 'gold', metric: 'attendance', goal: 100 },
   { id: 'a-deliv100', name: 'Century Hauler',       desc: 'Complete 100 deliveries.',                     icon: 'package',  tier: 'silver', metric: 'deliveries', goal: 100 },
   { id: 'a-deliv500', name: 'Freight Machine',      desc: 'Complete 500 deliveries.',                     icon: 'package',  tier: 'plat',   metric: 'deliveries', goal: 500 },
   { id: 'a-veteran',  name: 'Veteran Driver',       desc: 'Reach the rank of Veteran Driver.',            icon: 'medal',    tier: 'gold',   metric: 'rank', goal: 7 },
   { id: 'a-elite',    name: 'Elite Driver',         desc: 'Reach the rank of Elite Driver.',              icon: 'star',     tier: 'gold',   metric: 'rank', goal: 6 },
-  { id: 'a-lead',     name: 'Convoy Leader',        desc: 'Lead an official HLL convoy.',                 icon: 'flag',     tier: 'silver', metric: 'manual', goal: 1 },
+  { id: 'a-lead',     name: 'Convoy Leader',        desc: 'Lead an official GMN convoy.',                 icon: 'flag',     tier: 'silver', metric: 'manual', goal: 1 },
   { id: 'a-community',name: 'Community Contributor',desc: 'Recognised for outstanding community work.',   icon: 'users',    tier: 'gold',   metric: 'manual', goal: 1 },
   { id: 'a-founder',  name: 'Founding Member',      desc: 'Joined Gaming Nation in its first year.',icon: 'shield',   tier: 'plat',   metric: 'manual', goal: 1 },
 ];
@@ -429,7 +429,7 @@ function achProgress(a, d) {
    Passwords are salted and hashed with SHA-256 through the Web
    Crypto API, so nothing readable is written to storage. This is
    still browser-side: it stops casual snooping of localStorage, it
-   is NOT a substitute for server-side authentication. When the HLL
+   is NOT a substitute for server-side authentication. When the GMN
    backend exists, Accounts.verify() is the single call to replace.
    ============================================================ */
 const LS_ACCOUNTS = 'hll.accounts.v1';
@@ -442,7 +442,7 @@ const Accounts = {
   save(list) {
     if (typeof Sync !== 'undefined' && Sync.on && Sync.on() && !Sync.applying) Sync.push();
     try { localStorage.setItem(LS_ACCOUNTS, JSON.stringify(list)); }
-    catch (e) { console.warn('[HLL] could not persist accounts', e); }
+    catch (e) { console.warn('[GMN] could not persist accounts', e); }
   },
   find(handle) {
     const h = String(handle || '').trim().toLowerCase();
@@ -478,7 +478,7 @@ const Accounts = {
      exactly the case a brand new company hits */
   nextDriverId() {
     const ids = Store.db.drivers.map((d) => +String(d.id).split('-')[1]).filter(Number.isFinite);
-    return 'HLL-' + (Math.max(1000, ...ids) + 1);
+    return 'GMN-' + (Math.max(1000, ...ids) + 1);
   },
 
   /* staff create logins for drivers who did not register themselves */
@@ -507,7 +507,7 @@ const Accounts = {
        Supabase Auth user  --+
                              | user.id
        drivers row  <--------+  auth_user_id
-       applications row         driver_id, as the HLL driver code
+       applications row         driver_id, as the GMN driver code
        local record             what the platform actually draws with
 
      The order is the point: verify() finds a driver by auth_user_id, so the
@@ -525,7 +525,7 @@ const Accounts = {
          1. CREATE SUPABASE AUTH USER
          ============================================================ */
 
-      const driverId = 'HLL' + String(Math.floor(1000 + Math.random() * 9000));
+      const driverId = 'GMN' + String(Math.floor(1000 + Math.random() * 9000));
 
       /* The founding account. account.owner is what the owner setup screen
          sends; the address is the one this company was opened with. */
@@ -554,7 +554,7 @@ const Accounts = {
         });
 
       if (authError) {
-        console.error('[HLL] Supabase Auth registration failed:', authError);
+        console.error('[GMN] Supabase Auth registration failed:', authError);
 
         /* A sign-up that failed after the Auth user was made leaves that user
            behind — the browser cannot delete it, that needs the service key.
@@ -579,7 +579,7 @@ const Accounts = {
         throw new Error('Supabase created no Auth user.');
       }
 
-      console.log('[HLL] Supabase Auth user created:', {
+      console.log('[GMN] Supabase Auth user created:', {
         id: user.id,
         email: user.email,
         driver_code: driverId
@@ -611,7 +611,7 @@ const Accounts = {
       }
 
       if (driver) {
-        console.log('[HLL] Driver record created by Supabase:', driver);
+        console.log('[GMN] Driver record created by Supabase:', driver);
       }
 
       /* No trigger installed yet: fall back to making it here. This only
@@ -685,7 +685,7 @@ const Accounts = {
              user and told the applicant to go and run a SQL migration.
              They cannot, and they do not need to. */
           if (noSession) {
-            console.warn('[HLL] No session yet (email confirmation is on) — '
+            console.warn('[GMN] No session yet (email confirmation is on) — '
               + 'the driver record will be made at first sign-in.');
 
             return {
@@ -699,7 +699,7 @@ const Accounts = {
           /* A session came back and the insert was still refused, so this
              is the policy actually being absent rather than a timing
              problem. That one does need somebody with database rights. */
-          console.error('[HLL] The drivers insert policy refused a session that exists:',
+          console.error('[GMN] The drivers insert policy refused a session that exists:',
             driverError);
 
           throw new Error(
@@ -713,11 +713,11 @@ const Accounts = {
         /* The Auth user exists but has nothing to sign in to. Stop here
            rather than filing an application against a driver that is not
            there. */
-        console.error('[HLL] Failed to create driver row:', driverError);
+        console.error('[GMN] Failed to create driver row:', driverError);
         throw driverError;
       }
 
-      console.log('[HLL] Gaming Nation driver created:', driver);
+      console.log('[GMN] Gaming Nation driver created:', driver);
 
 
       /* ============================================================
@@ -770,7 +770,7 @@ const Accounts = {
               country: application.country || 'Not set',
               status: 'pending',
 
-              /* Who applied — the HLL driver code, which is what this
+              /* Who applied — the GMN driver code, which is what this
                  column holds.
 
                  It used to be driver.id, the bigint primary key, and that
@@ -801,7 +801,7 @@ const Accounts = {
 
         if (applicationError) {
           console.error(
-            '[HLL] Could not file the registration application:',
+            '[GMN] Could not file the registration application:',
             applicationError
           );
 
@@ -815,7 +815,7 @@ const Accounts = {
             .eq('id', driver.id);
 
           if (rollbackError) {
-            console.warn('[HLL] Rolled back driver row', driver.id,
+            console.warn('[GMN] Rolled back driver row', driver.id,
               '— the Auth user remains and must be removed in Supabase.');
           }
 
@@ -825,7 +825,7 @@ const Accounts = {
         /* the row this application is, so setStatus can find it again */
         application.supabaseId = savedApplication ? savedApplication.id : null;
 
-        console.log('[HLL] Registration application saved:', savedApplication);
+        console.log('[GMN] Registration application saved:', savedApplication);
       }
 
 
@@ -945,7 +945,7 @@ const Accounts = {
 
       Store.save();
 
-      console.log('[HLL] Registration completed successfully:', {
+      console.log('[GMN] Registration completed successfully:', {
         auth_user_id: user.id,
         driver_code: driverId,
         driver_uuid: driver.id,
@@ -960,7 +960,7 @@ const Accounts = {
       };
 
     } catch (error) {
-      console.error('[HLL] Registration failed:', error);
+      console.error('[GMN] Registration failed:', error);
       throw error;
     }
   },
@@ -1055,7 +1055,7 @@ async provision(user) {
        clash is a matter of time rather than bad luck. Retry on 23505 with
        a fresh code, exactly as the trigger does — failing here would leave
        the person stranded a second time. */
-    let code = meta.driver_code || ('HLL' + String(Math.floor(1000 + Math.random() * 9000)));
+    let code = meta.driver_code || ('GMN' + String(Math.floor(1000 + Math.random() * 9000)));
     let driver = null;
     let lastError = null;
 
@@ -1081,7 +1081,7 @@ async provision(user) {
         lastError = error;
 
         if (error.code === '23505') {           /* the code was taken */
-            code = 'HLL' + String(Math.floor(1000 + Math.random() * 9000));
+            code = 'GMN' + String(Math.floor(1000 + Math.random() * 9000));
             continue;
         }
 
@@ -1089,11 +1089,11 @@ async provision(user) {
     }
 
     if (!driver) {
-        console.error('[HLL] Could not provision the driver record:', lastError);
+        console.error('[GMN] Could not provision the driver record:', lastError);
         return { driver: null, error: lastError || new Error('No driver record was made.') };
     }
 
-    console.log('[HLL] Driver record provisioned on first sign-in:', driver);
+    console.log('[GMN] Driver record provisioned on first sign-in:', driver);
 
     /* The application, so a recruiter has something to approve. Without it
        the person exists and can sign in, but never appears on the
@@ -1109,7 +1109,7 @@ async provision(user) {
         const reviewer = await recruiterSupabaseId();
 
         /* driver_code, not id. setup.sql is explicit that
-           applications.driver_id is the text HLL code, and the policy that
+           applications.driver_id is the text GMN code, and the policy that
            lets a driver see their own application reads
              driver_id in (select driver_code from drivers where ...)
            so a bigint here files a row its owner cannot read. */
@@ -1130,7 +1130,7 @@ async provision(user) {
                is what lets them sign in at all, and a recruiter can still
                find them on the roster. Losing the sign-in to tidy up the
                paperwork would be the worse trade. */
-            console.warn('[HLL] Driver provisioned but no application filed:', appError);
+            console.warn('[GMN] Driver provisioned but no application filed:', appError);
         }
     }
 
@@ -1150,7 +1150,7 @@ async verify(handle, password) {
 
         // Make sure Supabase is available
         if (!window.hllSupabase) {
-            console.error('[HLL] Supabase client is missing.');
+            console.error('[GMN] Supabase client is missing.');
 
             return {
                 error: 'Supabase is not connected.'
@@ -1166,7 +1166,7 @@ async verify(handle, password) {
 
         if (error) {
             console.error(
-                '[HLL] Supabase authentication failed:',
+                '[GMN] Supabase authentication failed:',
                 error
             );
 
@@ -1183,7 +1183,7 @@ async verify(handle, password) {
             };
         }
 
-        console.log('[HLL] Supabase user authenticated:', {
+        console.log('[GMN] Supabase user authenticated:', {
             id: user.id,
             email: user.email
         });
@@ -1206,7 +1206,7 @@ async verify(handle, password) {
            nothing wrong and had no way through it. */
         if (!driverError && !driver) {
 
-            console.warn('[HLL] No driver record for this account — provisioning it now.');
+            console.warn('[GMN] No driver record for this account — provisioning it now.');
 
             const made = await Accounts.provision(user);
 
@@ -1216,7 +1216,7 @@ async verify(handle, password) {
 
         if (driverError || !driver) {
             console.error(
-                '[HLL] Driver lookup failed:',
+                '[GMN] Driver lookup failed:',
                 driverError
             );
 
@@ -1251,7 +1251,7 @@ async verify(handle, password) {
             };
         }
 
-        console.log('[HLL] Gaming Nation driver authenticated:', {
+        console.log('[GMN] Gaming Nation driver authenticated:', {
             driverId: driver.id,
             driverCode: driver.driver_code,
             name: driver.full_name,
@@ -1289,7 +1289,7 @@ async verify(handle, password) {
                 /* Do not open the gate because a query failed. Fall back to
                    whatever this machine already knew, which for anybody new
                    is false. */
-                console.warn('[HLL] Could not read the application status:', appError);
+                console.warn('[GMN] Could not read the application status:', appError);
                 released = !!record.clientAccess;
             } else {
                 released = !!appRow && appRow.status === 'approved';
@@ -1309,7 +1309,7 @@ async verify(handle, password) {
         };
 
     } catch (err) {
-        console.error('[HLL] Authentication error:', err);
+        console.error('[GMN] Authentication error:', err);
 
         return {
             error: err.message || 'Login failed.'
@@ -1381,7 +1381,7 @@ async function recruiterSupabaseId() {
     if (error) throw error;
 
     if (!data) {
-      console.warn('[HLL] No drivers row for the recruiter:', RECRUITER_AUTH_ID);
+      console.warn('[GMN] No drivers row for the recruiter:', RECRUITER_AUTH_ID);
       return null;
     }
 
@@ -1391,7 +1391,7 @@ async function recruiterSupabaseId() {
   } catch (error) {
     /* Not fatal. The application is still filed; it just goes in
        unassigned, and the recruiter still gets the notification. */
-    console.warn('[HLL] Could not resolve the recruiter driver row:', error);
+    console.warn('[GMN] Could not resolve the recruiter driver row:', error);
     return null;
   }
 }
@@ -1510,7 +1510,7 @@ function provisionOwner() {
         status: 'active', ownerSeed: true,
       });
       Accounts.save(list);
-      console.info('[HLL] owner sign-in details restored to the ones this build ships with');
+      console.info('[GMN] owner sign-in details restored to the ones this build ships with');
     }
   } else {
     list.push(Object.assign({}, OWNER_SEED, { created, status: 'active' }));
@@ -1574,7 +1574,7 @@ async function changePassword() {
   const { error: updateError } =
     await window.hllSupabase.auth.updateUser({ password: next });
   if (updateError) {
-    console.error('[HLL] password update failed:', updateError);
+    console.error('[GMN] password update failed:', updateError);
     toast('Could not update the password', 'danger', updateError.message);
     return;
   }
@@ -1608,7 +1608,7 @@ const Store = {
     try {
       const raw = localStorage.getItem(LS_DB);
       if (raw) { this.db = JSON.parse(raw); return this.db; }
-    } catch (e) { console.warn('[HLL] store read failed, reseeding', e); }
+    } catch (e) { console.warn('[GMN] store read failed, reseeding', e); }
     this.db = seedDB();
     this.save();
     return this.db;
@@ -1617,7 +1617,7 @@ const Store = {
     /* anything written locally is offered to the service a moment later */
     if (typeof Sync !== 'undefined' && Sync.on && Sync.on() && !Sync.applying) Sync.push();
     try { localStorage.setItem(LS_DB, JSON.stringify(this.db)); }
-    catch (e) { console.warn('[HLL] store write failed', e); }
+    catch (e) { console.warn('[GMN] store write failed', e); }
   },
   reset() {
     try {
@@ -1773,7 +1773,7 @@ function normaliseCompany() {
   db.tickets.forEach((t) => arr(t, 'messages'));
   db.applications.forEach((a) => arr(a, 'notes'));
 
-  if (fixed) { Store.save(); console.info('[HLL] repaired ' + fixed + ' missing field(s) on the company record'); }
+  if (fixed) { Store.save(); console.info('[GMN] repaired ' + fixed + ' missing field(s) on the company record'); }
   return fixed;
 }
 
@@ -1893,7 +1893,7 @@ function resetToOwner() {
   if (n) {
 
     console.info(
-      '[HLL] company cleared back to its owner — removed '
+      '[GMN] company cleared back to its owner — removed '
       + removedDrivers.length
       + ' driver record(s) and '
       + others.length
@@ -1960,7 +1960,7 @@ function purgeOrphanDrivers() {
   db.notifications = (db.notifications || []).filter((n) => !gone.has(n.driverId));
 
   Store.save();
-  console.info('[HLL] removed ' + orphans.length + ' driver record(s) with no account: '
+  console.info('[GMN] removed ' + orphans.length + ' driver record(s) with no account: '
     + orphans.map((d) => d.name + ' (' + d.id + ')').join(', '));
   return orphans.length;
 }
@@ -2303,7 +2303,7 @@ function sparkline(values, color = 'var(--accent)') {
 }
 
 /* ---------------- 8. Route map ---------------- */
-/* Schematic network map of the HLL operating area. Nodes are positioned
+/* Schematic network map of the GMN operating area. Nodes are positioned
    to mirror the relative geography of the European road network; the
    landmass is deliberately abstract rather than a survey-accurate map. */
 function routeMap(path, opts = {}) {
@@ -3012,7 +3012,7 @@ const state = {
 
    The company runs two web front-ends off one application:
 
-     index.html  the drivers' website — what a driver signs in to
+     login.html  the drivers' website — what a driver signs in to
      admin.html  the management console — what runs the company
 
    Each page declares which it is before this script loads, and names the
@@ -3020,7 +3020,7 @@ const state = {
    drivers' site to hq.html (index.html there is the tracking client), and
    the build rewrites these declarations to match. */
 const SITE = window.HLL_SITE === 'admin' ? 'admin' : 'drivers';
-const PAGES = Object.assign({ drivers: 'index.html', admin: 'admin.html' },
+const PAGES = Object.assign({ drivers: 'login.html', admin: 'admin.html' },
   window.HLL_PAGES || {});
 const isAdminSite = () => SITE === 'admin';
 
@@ -3327,7 +3327,7 @@ function viewAuth() {
         <h1 class="hero-title">The digital <span class="grad-text">headquarters</span> of the Gaming Nation fleet.</h1>
         <p class="t2 mt-16" style="font-size:15px;line-height:1.65">
           Convoys, driver records, fleet assignments, rankings and achievements —
-          one command centre for every HLL driver, and a full management console for the people running it.</p>
+          one command centre for every GMN driver, and a full management console for the people running it.</p>
         <div class="row gap-8 wrap mt-20">
           ${['Convoy management', 'Live route maps', 'Driver progression', 'Fleet control'].map((t) =>
             `<span class="badge brand">${icon('check')}${t}</span>`).join('')}
@@ -3364,7 +3364,7 @@ function viewAuth() {
    no password is shipped in this file for anyone to find. */
 /* ---------------- social links ----------------
    One definition, rendered on the sign-in screen and the community page.
-   The marks come from the sprite in index.html rather than icon(), which
+   The marks come from the sprite in login.html rather than icon(), which
    draws stroked outlines on a 24px grid and would mangle a solid logo. */
 const SOCIALS = [
   { brand: 'github',   href: 'https://github.com/JeffBoss315',                          label: 'GitHub profile' },
@@ -3456,7 +3456,7 @@ function setupFormHTML() {
 function signInFormHTML() {
   return `
     <div class="eyebrow">Driver access</div>
-    <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em">Sign in to HLL</h2>
+    <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em">Sign in to GMN</h2>
     <p class="t2 sm mt-4">Use the account you registered with.</p>
 
     <form id="loginForm" class="mt-20" novalidate>
@@ -3564,7 +3564,7 @@ function doLogin(driver, msg) {
         $('#app').innerHTML = '';
     }
 
-    // Support both old HLL records and Supabase driver records
+    // Support both old GMN records and Supabase driver records
     const driverName =
         driver.full_name ||
         driver.name ||
@@ -3573,7 +3573,7 @@ function doLogin(driver, msg) {
     const driverId =
         driver.driver_code ||
         driver.id ||
-        'HLL';
+        'GMN';
 
     // Show welcome message without crashing
     toast(
@@ -3603,7 +3603,7 @@ function signOutEverywhere() {
   ServiceAuth.logout();
   if (window.hllSupabase) {
     window.hllSupabase.auth.signOut()
-      .catch((err) => console.warn('[HLL] Supabase sign-out failed', err));
+      .catch((err) => console.warn('[GMN] Supabase sign-out failed', err));
   }
 }
 
@@ -3618,7 +3618,7 @@ async function restoreSupabaseSession() {
     const { data, error } = await window.hllSupabase.auth.getSession();
 
     if (error) {
-      console.warn('[HLL] could not read the Supabase session:', error);
+      console.warn('[GMN] could not read the Supabase session:', error);
       return;                        /* a lookup that failed is not a sign-out */
     }
 
@@ -3637,7 +3637,7 @@ async function restoreSupabaseSession() {
         .maybeSingle();
 
     if (rowError || !row) {
-      console.warn('[HLL] the session has no driver record:', rowError);
+      console.warn('[GMN] the session has no driver record:', rowError);
       signOutEverywhere();
       render();
       return;
@@ -3648,7 +3648,7 @@ async function restoreSupabaseSession() {
     render();
 
   } catch (err) {
-    console.error('[HLL] session restore failed:', err);
+    console.error('[GMN] session restore failed:', err);
   }
 }
 
@@ -4125,7 +4125,7 @@ function viewDrivers() {
     <div class="card mb-20">
       <div class="card-body row gap-12 wrap">
         <div class="search grow" style="max-width:340px">${icon('search')}
-          <input class="input" id="driverSearch" placeholder="Search name, HLL ID, country…" value="${esc(state.ui.driverQuery)}" style="padding-left:38px">
+          <input class="input" id="driverSearch" placeholder="Search name, GMN ID, country…" value="${esc(state.ui.driverQuery)}" style="padding-left:38px">
         </div>
         <select class="select" id="driverRank" style="width:auto;min-width:180px">
           <option value="all">All ranks</option>
@@ -4193,7 +4193,7 @@ function driverCard(d, i) {
 /* ---------------- 18. Driver profile ---------------- */
 function viewDriver(id) {
   const d = Store.driver(id);
-  if (!d) return notFound('Driver not found', 'That HLL ID is not on the roster.', '#/drivers');
+  if (!d) return notFound('Driver not found', 'That GMN ID is not on the roster.', '#/drivers');
   const me = d.id === state.user.id;
   const r = rankOf(d), nextRank = RANKS[r.i + 1];
   const truck = Store.truck(d.truckId), trailer = Store.trailer(d.trailerId);
@@ -4302,7 +4302,7 @@ function viewDriver(id) {
 
               <div class="card"><div class="card-head"><div class="card-title">${icon('info')}Driver record</div></div>
                 <div class="card-body">
-                  ${kv('HLL ID', `<span class="mono">${esc(d.id)}</span>`)}
+                  ${kv('GMN ID', `<span class="mono">${esc(d.id)}</span>`)}
                   ${kv('Rank', `<span style="color:${r.color}">${esc(r.name)}</span>`)}
                   ${kv('Role', esc(ROLES[d.role].name))}
                   ${kv('Joined', esc(fmt.date(d.joined)))}
@@ -4633,7 +4633,7 @@ function convoyCard(e, i) {
 
 function viewConvoy(id) {
   const e = Store.event(id);
-  if (!e) return notFound('Convoy not found', 'That event is not in the HLL calendar.', '#/convoys');
+  if (!e) return notFound('Convoy not found', 'That event is not in the GMN calendar.', '#/convoys');
   const leader = Store.driver(e.leaderId);
   const my = Store.registrationOf(e, state.user.id);
   const regs = e.registered.map((r) => ({ r, d: Store.driver(r.driverId) })).filter((x) => x.d);
@@ -4753,7 +4753,7 @@ function viewConvoy(id) {
                 <div class="mt-4">${rankChip(leader)}</div></div></div>` : ''}
             <div class="divider"></div>
             <div class="row gap-8 wrap">
-              <span class="badge">${icon('discord')}Voice: HLL Convoy 1</span>
+              <span class="badge">${icon('discord')}Voice: GMN Convoy 1</span>
               <span class="badge">${icon('shield')}2 marshals</span>
             </div>
           </div></div>
@@ -4839,7 +4839,7 @@ function viewEvents() {
     <div class="page-head">
       <div><div class="eyebrow">Company calendar</div>
         <h1 class="page-title">Events</h1>
-        <p class="page-sub">Convoys, meetings, training and recruitment sessions across the HLL calendar</p></div>
+        <p class="page-sub">Convoys, meetings, training and recruitment sessions across the GMN calendar</p></div>
       ${can('events.manage') ? `<button class="btn btn-primary" data-act="event-create">${icon('plus')}Create event</button>` : ''}
     </div>
 
@@ -5033,7 +5033,7 @@ function viewAchievements() {
                 <span class="mono ${met ? '' : 't2'}" style="${met ? 'color:var(--ok)' : ''}">${f2(cur)} / ${f2(goal)}</span></div>
                 ${bar(clamp(cur / goal * 100, 0, 100), met ? 'ok' : '', 'thin')}</div>`;
             }).join('') : `<div class="span-2 row gap-10"><span style="color:var(--accent);width:20px;height:20px">${icon('star')}</span>
-              <span class="t2">You hold HLL Captain — the highest rank Gaming Nation awards.</span></div>`}
+              <span class="t2">You hold GMN Captain — the highest rank Gaming Nation awards.</span></div>`}
         </div>
       </div>
     </div>
@@ -5068,7 +5068,7 @@ function viewRecruitment() {
           <div class="card-body">
             <div class="timeline">
               ${[['Application', 'Submit the form with your driving history and Discord details.'],
-                 ['Review', 'A recruiter checks your application against the HLL entry standard.'],
+                 ['Review', 'A recruiter checks your application against the GMN entry standard.'],
                  ['Interview / assessment', 'A short voice chat and a supervised assessment drive.'],
                  ['Approval', 'Successful applicants receive an Driver ID and Discord roles.'],
                  ['Driver onboarding', 'Vehicle assignment, livery, and your first convoy briefing.']]
@@ -5088,7 +5088,7 @@ function viewRecruitment() {
           <div class="card-body col gap-10">
             ${[['Minimum age 16', true], ['Working microphone for convoys', true],
                ['Discord account', true], ['TruckersMP account in good standing', true],
-               ['At least 50 hours in ETS2 / ATS', true], ['Willing to run HLL livery', true]]
+               ['At least 50 hours in ETS2 / ATS', true], ['Willing to run GMN livery', true]]
               .map(([t]) => `<div class="row gap-10"><span style="width:16px;height:16px;color:var(--ok)">${icon('checkCircle')}</span>
                 <span class="md t2">${esc(t)}</span></div>`).join('')}
           </div></div>
@@ -5119,7 +5119,7 @@ function viewRecruitment() {
 /* Application progress for the signed-in applicant (spec §11: track status). */
 const APPLICATION_STAGES = [
   ['pending',   'Application received', 'Your application is queued for a recruiter.'],
-  ['review',    'Under review',         'A recruiter is checking your details against the HLL entry standard.'],
+  ['review',    'Under review',         'A recruiter is checking your details against the GMN entry standard.'],
   ['interview', 'Interview / assessment','You will be invited to a voice chat and an assessment drive.'],
   ['approved',  'Approved',             'Welcome aboard — your Driver ID has been issued.'],
 ];
@@ -5371,7 +5371,7 @@ function viewCommunity() {
               <div class="divider"></div>
               <div class="row-b">
                 <div class="row gap-8">${author ? avatar(author, 32) : ''}
-                  <div><div class="sm b6">${esc(author ? author.name : 'HLL Management')}</div>
+                  <div><div class="sm b6">${esc(author ? author.name : 'GMN Management')}</div>
                   <div class="xs t3">${esc(fmt.date(a.date))}</div></div></div>
                 ${can('content.manage') ? `<div class="row gap-6">
                   <button class="btn btn-sm btn-ghost" data-act="ann-edit" data-id="${a.id}">${icon('edit')}Edit</button>
@@ -5445,7 +5445,7 @@ function viewSupport() {
     <div class="page-head">
       <div><div class="eyebrow">Driver support</div>
         <h1 class="page-title">Support</h1>
-        <p class="page-sub">${staff ? 'All driver requests across the company' : 'Your requests to HLL management'}</p></div>
+        <p class="page-sub">${staff ? 'All driver requests across the company' : 'Your requests to GMN management'}</p></div>
       <button class="btn btn-primary" data-act="ticket-new">${icon('plus')}New request</button>
     </div>
 
@@ -5475,7 +5475,7 @@ function viewSupport() {
           <td>${statusBadge(t.status)}</td>
           <td class="sm t3 nowrap">${esc(fmt.rel(t.updated))}</td></tr>`;
       }).join('')}</tbody></table></div></div>`
-      : `<div class="card">${emptyState('lifeBuoy', 'No support requests', 'Raise a request and HLL management will pick it up.',
+      : `<div class="card">${emptyState('lifeBuoy', 'No support requests', 'Raise a request and GMN management will pick it up.',
           `<button class="btn btn-primary mt-8" data-act="ticket-new">${icon('plus')}New request</button>`)}</div>`}
   </div>`;
 }
@@ -5508,7 +5508,7 @@ function viewTicket(id) {
               ${isStaff ? `<span class="avatar a-40" style="background:var(--accent)">HL</span>` : (from ? avatar(from, 40) : '')}
               <div class="grow" style="max-width:78%">
                 <div class="row gap-8 mb-4 ${isStaff ? 'right' : ''}" style="${isStaff ? 'justify-content:flex-end' : ''}">
-                  <span class="sm b6">${esc(isStaff ? 'HLL Support' : (from ? from.name : 'Driver'))}</span>
+                  <span class="sm b6">${esc(isStaff ? 'GMN Support' : (from ? from.name : 'Driver'))}</span>
                   <span class="xs t3">${esc(fmt.rel(m.at))}</span></div>
                 <div style="padding:12px 14px;border-radius:14px;line-height:1.65;
                   background:${isStaff ? 'var(--accent-soft)' : 'var(--panel-2)'};
@@ -5519,7 +5519,7 @@ function viewTicket(id) {
           <form id="ticketReply">
             <div class="field"><label for="tk-msg">Add a reply</label>
               <textarea class="textarea" id="tk-msg" placeholder="Type your message…"></textarea></div>
-            <div class="row-b"><span class="xs t3">Replies notify ${staff ? 'the driver' : 'HLL management'}.</span>
+            <div class="row-b"><span class="xs t3">Replies notify ${staff ? 'the driver' : 'GMN management'}.</span>
               <button class="btn btn-primary" type="submit">${icon('send')}Send reply</button></div>
           </form>
         </div></div>
@@ -5650,7 +5650,7 @@ function viewSettings() {
             ${[['convoyReminders', 'Convoy reminders', 'Get a reminder 24 hours and 1 hour before a convoy you are registered for.'],
                ['announcements', 'Company announcements', 'Be notified when management publishes an announcement.'],
                ['emailDigest', 'Weekly email digest', 'A summary of your stats, upcoming convoys and fleet news.'],
-               ['discordSync', 'Discord role sync', 'Keep your Discord roles in step with your HLL rank.'],
+               ['discordSync', 'Discord role sync', 'Keep your Discord roles in step with your GMN rank.'],
                ['publicProfile', 'Public driver profile', 'Allow other drivers to view your full statistics.']]
               .map(([k, t, s]) => `<div class="row-b gap-16" style="padding:11px 0;border-bottom:1px solid var(--line)">
                 <div><div class="b6 md">${esc(t)}</div><div class="xs t3 mt-4">${esc(s)}</div></div>
@@ -5738,7 +5738,7 @@ function viewAdmin() {
   <div class="page">
     <div class="page-head">
       <div><div class="eyebrow">Management</div>
-        <h1 class="page-title">HLL Admin Console</h1>
+        <h1 class="page-title">GMN Admin Console</h1>
         <p class="page-sub">Signed in as ${esc(ROLES[state.user.role].name)} · ${esc(state.user.id)}</p></div>
       <div class="row gap-8">
         <button class="btn" data-act="export-data">${icon('download')}Export data</button>
@@ -6222,7 +6222,7 @@ function openFleetEditor(id) {
           <select class="select" id="fl-chassis">${['4x2', '6x2', '6x4', '8x4'].map((c) =>
             `<option ${t?.chassis === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
         <div class="field"><label for="fl-plate">Registration</label>
-          <input class="input" id="fl-plate" value="${esc(t?.plate || '')}" placeholder="HLL 123A"></div>
+          <input class="input" id="fl-plate" value="${esc(t?.plate || '')}" placeholder="GMN 123A"></div>
         <div class="field"><label for="fl-year">Model year</label>
           <input class="input" id="fl-year" type="number" min="2000" max="2030" value="${t?.year || 2026}"></div>
         <div class="field"><label for="fl-livery">Livery</label>
@@ -6279,7 +6279,7 @@ function openAnnouncementEditor(id) {
 
 function openTicketModal() {
   openModal({
-    title: 'New support request', sub: 'HLL management usually replies within a few hours',
+    title: 'New support request', sub: 'GMN management usually replies within a few hours',
     body: `<form id="ticketForm">
       <div class="field"><label for="tk-sub">Subject *</label>
         <input class="input" id="tk-sub" placeholder="Briefly describe the issue"></div>
@@ -7600,14 +7600,14 @@ function saveEvent(id) {
   if (!e) {
     e = { id: 'EV-' + randI(4000, 8999), registered: [], status: 'scheduled', instructions: [
       'Arrive at the meeting point at least 30 minutes before departure.',
-      'Full HLL livery is required. Trailer must be attached before the briefing.',
+      'Full GMN livery is required. Trailer must be attached before the briefing.',
       'Hold a minimum 60 m gap. No overtaking inside the convoy.',
       'Follow convoy control on Discord voice at all times.'] };
     Store.db.events.push(e);
   }
   Object.assign(e, {
     name, type, typeLabel: labels[type], tone: tones[type],
-    start: isDrive ? start : 'HLL HQ — Rotterdam', dest: isDrive ? dest : 'HLL HQ — Rotterdam',
+    start: isDrive ? start : 'GMN HQ — Rotterdam', dest: isDrive ? dest : 'GMN HQ — Rotterdam',
     path, distance: dist, duration: isDrive ? Math.round(dist / 65 * 60) : 60,
     date: when.toISOString(), meetTime: new Date(when.getTime() - 30 * 60000).toISOString(),
     maxSlots: +($('#ev-slots')?.value || 30), leaderId: g('ev-leader'),
@@ -7639,7 +7639,7 @@ function saveFleet(id) {
   }
   Object.assign(t, {
     make: g('fl-make'), model, hp: +($('#fl-hp')?.value || 500), chassis: g('fl-chassis'),
-    plate: g('fl-plate') || 'HLL ' + randI(100, 999) + 'X', year: +($('#fl-year')?.value || 2026),
+    plate: g('fl-plate') || 'GMN ' + randI(100, 999) + 'X', year: +($('#fl-year')?.value || 2026),
     livery: g('fl-livery'), status: g('fl-status'),
     mileage: Math.max(0, +($('#fl-mileage')?.value || 0)),
   });
@@ -8036,7 +8036,7 @@ async function discoverLocalService() {
     if (!ok) return false;
 
     window.HLL_SERVICE = LOCAL_SERVICE;
-    console.log('[HLL] company service found on ' + LOCAL_SERVICE);
+    console.log('[GMN] company service found on ' + LOCAL_SERVICE);
     return true;
 
   } catch (e) {
@@ -8126,7 +8126,7 @@ const Sync = {
     const db = Store.db;
     if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return;
     try { this.mergeInner(db, remote); }
-    catch (e) { console.warn('[HLL] the service sent something unusable', e); }
+    catch (e) { console.warn('[GMN] the service sent something unusable', e); }
   },
 
 mergeInner(db, remote) {
@@ -8322,7 +8322,7 @@ mergeInner(db, remote) {
       }
 
       if (!data) {
-        console.warn('[HLL] No company record found in Supabase.');
+        console.warn('[GMN] No company record found in Supabase.');
         return false;
       }
 
@@ -8358,7 +8358,7 @@ await this.absorbService();
 await Applications.pull();
 
       if (moved) {
-        console.log('[HLL] Company pulled from Supabase:', {
+        console.log('[GMN] Company pulled from Supabase:', {
           version: this.version,
           updated_at: data.updated_at,
           applications: Array.isArray(Store.db.applications)
@@ -8383,7 +8383,7 @@ await Applications.pull();
             await window.hllSupabase.auth.getUser();
 
           if (authError || !user) {
-            console.error('[HLL] Could not get Supabase user:', authError);
+            console.error('[GMN] Could not get Supabase user:', authError);
             return true;
           }
 
@@ -8395,7 +8395,7 @@ await Applications.pull();
               .maybeSingle();
 
           if (driverError || !driver) {
-            console.error('[HLL] Could not load Supabase driver:', driverError);
+            console.error('[GMN] Could not load Supabase driver:', driverError);
             return true;
           }
 
@@ -8411,7 +8411,7 @@ await Applications.pull();
           render();
 
         } catch (err) {
-          console.error('[HLL] Dashboard driver loading failed:', err);
+          console.error('[GMN] Dashboard driver loading failed:', err);
         }
       }
 
@@ -8424,7 +8424,7 @@ await Applications.pull();
 
       this.lastError = supabaseError(error);
 
-      console.error('[HLL] Company pull failed:', this.lastError, error);
+      console.error('[GMN] Company pull failed:', this.lastError, error);
 
       return false;
     }
@@ -8485,7 +8485,7 @@ await Applications.pull();
         this.lastError = supabaseError(e);
 
         /* the object as well as the reading of it, so the console has both */
-        console.error('[HLL] Company sync failed:', this.lastError, e);
+        console.error('[GMN] Company sync failed:', this.lastError, e);
     }
   },
 
@@ -8515,7 +8515,7 @@ await Applications.pull();
       return true;
 
     } catch (e) {
-      console.warn('[HLL] the company service did not answer:', e.message);
+      console.warn('[GMN] the company service did not answer:', e.message);
       return false;
 
     } finally {
@@ -8544,7 +8544,7 @@ await Applications.pull();
 
     } catch (e) {
       /* Not an error the person needs to see: the company itself saved. */
-      console.warn('[HLL] the company service did not take the update:', e.message);
+      console.warn('[GMN] the company service did not take the update:', e.message);
       return false;
     }
   },
@@ -8555,7 +8555,7 @@ await Applications.pull();
     if (this.starting) return false;
     this.starting = true;
 
-    console.log('[HLL] Company sync started.');
+    console.log('[GMN] Company sync started.');
 
     if (!window.hllSupabase) {
       this.status = 'off';
@@ -8574,7 +8574,7 @@ await Applications.pull();
     } catch (error) {
       this.status = 'error';
       this.lastError = error.message || String(error);
-      console.error('[HLL] Company sync start failed:', error);
+      console.error('[GMN] Company sync start failed:', error);
       return false;
     } finally {
       this.starting = false;
@@ -8587,7 +8587,7 @@ await Applications.pull();
     this.timer = null;
     this.pushTimer = null;
     this.status = 'off';
-    console.log('[HLL] Company sync stopped.');
+    console.log('[GMN] Company sync stopped.');
   }
 };
 
@@ -8653,7 +8653,7 @@ const Applications = {
       messages: (local && local.messages) || [],
 
       /* The drivers row this was filed by. applications.driver_id holds the
-         HLL driver code — setup.sql says so and the policy that lets a
+         GMN driver code — setup.sql says so and the policy that lets a
          driver read their own application is written against driver_code. */
       driverSupabaseId: row.driver_id != null
         ? String(row.driver_id)
@@ -8665,16 +8665,23 @@ const Applications = {
          This used to read the local record alone, so on a recruiter's
          machine — which has never seen the applicant — it came back null.
          approveApplication() then found no driver to approve and built a
-         NEW roster row with a new HLL id, released the download to that,
+         NEW roster row with a new GMN id, released the download to that,
          and left the real applicant waiting. From the recruiter's side the
          approval looked like it worked and nothing reached the driver,
          which is what sent people to the database to do it by hand.
 
-         An HLL code is what the column carries; anything else (an old row
+         A driver code is what the column carries; anything else (an old row
          filed with the bigint id) is not a code and is left alone rather
-         than guessed at. */
+         than guessed at.
+
+         BOTH prefixes, and this is the one place it genuinely matters. New
+         drivers are issued GMN codes; every driver who signed up before the
+         rename has an "HLL" one, and their application row still says so.
+         Matching only the new prefix would hide every existing application
+         from the person who filed it — the same failure as filing the
+         bigint, reached from the other direction. */
       submittedBy: (local && local.submittedBy)
-        || (/^HLL/i.test(String(row.driver_id || '')) ? String(row.driver_id) : null),
+        || (/^(HLL|GMN)/i.test(String(row.driver_id || '')) ? String(row.driver_id) : null),
     };
   },
 
@@ -8756,7 +8763,7 @@ async pull() {
     if (changed) {
       Store.save();
 
-      console.log('[HLL] Applications pulled from Supabase:', {
+      console.log('[GMN] Applications pulled from Supabase:', {
         rows: remoteRows.length,
         previous: previous.length,
         current: merged.length,
@@ -8780,7 +8787,7 @@ async pull() {
     this.lastError = supabaseError(error);
 
     console.error(
-      '[HLL] Applications pull failed:',
+      '[GMN] Applications pull failed:',
       this.lastError,
       error
     );
@@ -8797,7 +8804,7 @@ async pull() {
 
     if (!app.supabaseId) {
       /* filed before this table was connected, or filed offline */
-      console.warn('[HLL] Application has no Supabase row, status kept local:', app.id);
+      console.warn('[GMN] Application has no Supabase row, status kept local:', app.id);
       return false;
     }
 
@@ -8808,7 +8815,7 @@ async pull() {
       };
 
       /* reviewed_by is a foreign key onto drivers.id, so it takes the
-         Supabase uuid — not the HLL driver code the app is keyed on. */
+         Supabase uuid — not the GMN driver code the app is keyed on. */
       if (state.user && state.user.supabaseId) {
         patch.reviewed_by = state.user.supabaseId;
       }
@@ -8835,7 +8842,7 @@ async pull() {
          Reporting this as success is how a recruiter ends up believing the
          company was told when nothing left the browser. */
       if (!data || !data.length) {
-        console.warn('[HLL] The application status was not written:', {
+        console.warn('[GMN] The application status was not written:', {
           id: app.supabaseId,
           status,
           reason: 'the update matched no row — check the id, and check that '
@@ -8853,7 +8860,7 @@ async pull() {
       app.reviewedAt = patch.reviewed_at;
       app.reviewedBy = patch.reviewed_by || null;
 
-      console.log('[HLL] Application status written to Supabase:', data);
+      console.log('[GMN] Application status written to Supabase:', data);
 
       /* Read the table back, so the screen shows what was actually stored
          rather than what this browser hoped was stored. */
@@ -8865,7 +8872,7 @@ async pull() {
       this.status = 'error';
       this.lastError = supabaseError(error);
 
-      console.error('[HLL] Could not write the application status:',
+      console.error('[GMN] Could not write the application status:',
         this.lastError, error);
 
       /* The local record has already moved. Say so rather than letting the
@@ -10129,7 +10136,7 @@ const ServiceAuth = {
       HQLive.start();
       Messages.pullThreads().then(paintUnreadBadge);
     } catch (e) {
-      console.warn('[HLL] could not reopen the live channel:', e.message);
+      console.warn('[GMN] could not reopen the live channel:', e.message);
     }
   },
 
@@ -11414,7 +11421,7 @@ const Downloads = {
       const res = await fetch('/api/download-link', { method: 'GET', cache: 'no-store' });
 
       /* A GET is not how a link is minted, so the endpoint answers 405 —
-         as JSON. Every host here rewrites an unknown path to index.html
+         as JSON. Every host here rewrites an unknown path to login.html
          with a 200, so the status alone cannot tell the two apart and
          the content type has to. */
       if (/json/i.test(res.headers.get('Content-Type') || '')) {
@@ -11493,7 +11500,7 @@ const Downloads = {
 
        This is the part that was wrong. It only treated 404 as "no
        Function here", and every host this site is deployed to rewrites
-       unknown paths to index.html with a 200 — netlify.toml and
+       unknown paths to login.html with a 200 — netlify.toml and
        vercel.json both say so in as many words. So a site without the
        Function answered this POST with a page, res.ok was true,
        res.json() threw on the HTML, and the code reported "the download
@@ -11858,7 +11865,7 @@ function bindAuth() {
       ok = showErr(rf, 'country', country ? '' : 'Select your country.') && ok;
       ok = showErr(rf, 'pw', pw.length >= 8 ? '' : 'Use at least 8 characters.') && ok;
       ok = showErr(rf, 'pw2', pw && pw === pw2 ? '' : 'The two passwords do not match.') && ok;
-      ok = showErr(rf, 'agree', agreed ? '' : 'You must accept the HLL standards.') && ok;
+      ok = showErr(rf, 'agree', agreed ? '' : 'You must accept the GMN standards.') && ok;
       showErr(rf, 'form', '');
       if (!ok) return;
 
@@ -12067,7 +12074,7 @@ function bindViewForms() {
                 'agree',
                 d.agree
                     ? ''
-                    : 'You must accept the HLL standards to apply.'
+                    : 'You must accept the GMN standards to apply.'
             );
 
             if (!ok) return;
@@ -12120,7 +12127,7 @@ function bindViewForms() {
         // Keep local store synchronized
 // Keep local store synchronized
 
-// Notify HLL management
+// Notify GMN management
 notifyStaff('recruitment.manage', {
     type: 'info',
     icon: 'userPlus',
@@ -12155,7 +12162,7 @@ openModal({
             </div>
 
             <p class="t2 sm" style="text-align:center">
-                HLL management will review your application.
+                GMN management will review your application.
                 You will be notified when a decision is made.
             </p>
 
@@ -12513,7 +12520,7 @@ const Messages = {
 
     } catch (err) {
       this.error = null;
-      console.warn('[HLL] could not list conversations:', err.message);
+      console.warn('[GMN] could not list conversations:', err.message);
       return false;
     }
   },
@@ -12551,7 +12558,7 @@ const Messages = {
         this.error = null;
       }
     } catch (err) {
-      console.warn('[HLL] could not read the conversation:', err.message);
+      console.warn('[GMN] could not read the conversation:', err.message);
     }
     this.loading = false;
     paintMessages();
@@ -13772,11 +13779,11 @@ function render() {
   try {
     view.innerHTML = routeView();
   } catch (err) {
-    console.error('[HLL] the ' + state.route.name + ' page failed to draw', err);
+    console.error('[GMN] the ' + state.route.name + ' page failed to draw', err);
     view.innerHTML = pageErrorHTML(state.route.name, err);
   }
 
-  document.title = `${ROUTES[state.route.name]?.title || 'HLL'} · Gaming Nation`;
+  document.title = `${ROUTES[state.route.name]?.title || 'GMN'} · Gaming Nation`;
   try {
     enhanceA11y(view);
     animateCounts(view);
@@ -13784,7 +13791,7 @@ function render() {
     bindMagnetic(view);
     tickCountdowns();
   } catch (err) {
-    console.error('[HLL] finishing the page failed', err);
+    console.error('[GMN] finishing the page failed', err);
   }
 
   /* Leaflet needs a container that is already in the document, and it has to
@@ -13875,13 +13882,13 @@ function refreshPresence() {
 
 
 function boot() {
-  /* The driver terminal is the other thing in index.html.
+  /* The driver terminal is the other thing in login.html.
 
      driver-login.html and driver-dashboard.html were merged into that
      file, and on their routes they own the document outright: the shell
      they need is the same one, but everything below — the router, the
      company store, presence polling, the splash — belongs to the
-     website and would fight them for it. index.html decides which of
+     website and would fight them for it. login.html decides which of
      the two is being asked for before this script is even parsed. */
   if (window.HLL_TERMINAL) return;
 
@@ -13925,7 +13932,7 @@ function boot() {
   if (state.user && !Store.db.notifications.length) {
     const next = Store.upcomingEvents()[0];
     if (next) Store.notify(state.user.id, { type: 'info', icon: 'route', title: 'Convoy coming up', body: `${next.name} — ${fmt.dt(next.date)}` });
-    Store.notify(state.user.id, { type: 'ok', icon: 'megaphone', title: 'Welcome to the HLL command centre', body: 'Your driver record, convoys and fleet in one place.' });
+    Store.notify(state.user.id, { type: 'ok', icon: 'megaphone', title: 'Welcome to the GMN command centre', body: 'Your driver record, convoys and fleet in one place.' });
   }
 
   /* global delegated interactions */
@@ -13937,7 +13944,7 @@ function boot() {
     e.preventDefault();
     e.stopPropagation();
     try { handleAction(act, t, e); }
-    catch (err) { console.error('[HLL] action failed', act, err); toast('Something went wrong', 'danger', String(err.message || err)); }
+    catch (err) { console.error('[GMN] action failed', act, err); toast('Something went wrong', 'danger', String(err.message || err)); }
   });
 
   /* nav anchors close the mobile drawer */

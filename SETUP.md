@@ -74,7 +74,7 @@ one flow creates all four records:
 Supabase Auth user  ──┐
                       │  user.id
 drivers row  ─────────┘  auth_user_id, and hands back drivers.id
-applications row         driver_id, as the HLL driver code
+applications row         driver_id, as the GMN driver code
 local record             what the platform actually draws with
 ```
 
@@ -207,7 +207,7 @@ written but there is no `SELECT` policy letting the new user read it. Step 2.
 
 | Path | |
 |---|---|
-| `index.html` / `admin.html` | the website and the admin console |
+| `login.html` / `admin.html` | the website and the admin console |
 | `script.js` | the whole platform — routing, screens, sync |
 | `tracker.html` / `tracker.js` | the driver client |
 | `supabase-client.js` | the shared Supabase browser client |

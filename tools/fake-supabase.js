@@ -231,7 +231,7 @@ const SOURCE = `(function () {
     __channels: channels,
   };
 
-  console.log('[HLL TEST] Supabase stand-in installed — nothing leaves this page.');
+  console.log('[GMN TEST] Supabase stand-in installed — nothing leaves this page.');
 })();`;
 
 module.exports = { SOURCE };

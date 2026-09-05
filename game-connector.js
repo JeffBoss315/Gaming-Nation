@@ -70,7 +70,7 @@ function usage() {
   console.log(`
   Gaming Nation Game Connector
 
-    node game-connector.js --service <url> --driver <HLL id>
+    node game-connector.js --service <url> --driver <GMN id>
 
   Options
     --service <url>          the Gaming Nation company service, e.g. http://hll:7040
@@ -379,7 +379,7 @@ async function openJob(frame) {
   const res = await post('/api/jobs/id', {});
   if (res && res.status === 200 && res.body && res.body.id) id = res.body.id;
   if (!id) {
-    id = 'HLL-L' + Date.now().toString(36).toUpperCase().slice(-6);
+    id = 'GMN-L' + Date.now().toString(36).toUpperCase().slice(-6);
     log('could not get a job number from Gaming Nation — using ' + id + ' for now');
   }
 

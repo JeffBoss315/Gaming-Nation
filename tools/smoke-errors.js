@@ -14,7 +14,7 @@ const path = require('path');
 /* resolved, not taken as given: 'npm run smoke:*' passes '.', and a relative
    root turns require(ROOT + '/desktop-capture') into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
-const PAGES = process.argv[3] ? [process.argv[3]] : ['index.html', 'admin.html', 'tracker.html'];
+const PAGES = process.argv[3] ? [process.argv[3]] : ['login.html', 'admin.html', 'tracker.html'];
 
 app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-errors'));
 app.disableHardwareAcceleration();

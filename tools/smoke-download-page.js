@@ -6,7 +6,7 @@
    looked like a server fault:
 
      netlify.toml and vercel.json both rewrite every unknown path to
-     index.html with a 200. So on a host where the download Function is
+     login.html with a 200. So on a host where the download Function is
      not deployed, POST /api/download-link does not answer 404 — it
      answers 200 with a PAGE. Code that only checked the status believed
      the service had replied, failed to parse HTML as JSON, and told the
@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
     /* The readiness probe the page sends before anything is pressed —
        but ONLY where a Function exists. In 'spa' this path has to keep
        answering with a page, because that is the whole case it stands
-       for: a host that rewrites a missing endpoint into index.html. */
+       for: a host that rewrites a missing endpoint into login.html. */
     if (req.method === 'GET' && mode !== 'spa') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ gate: mode === 'halfbuilt' ? 'off' : 'on' }));
@@ -82,16 +82,16 @@ const server = http.createServer((req, res) => {
 
     /* 'spa' — exactly what the deploy configs do */
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    return res.end(fs.readFileSync(path.join(ROOT, 'index.html')));
+    return res.end(fs.readFileSync(path.join(ROOT, 'login.html')));
   }
 
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  const p = req.url === '/' ? '/login.html' : req.url.split('?')[0];
   const file = path.join(ROOT, decodeURIComponent(p));
 
   fs.readFile(file, (err, data) => {
     if (err) {   /* the same rewrite, for everything else */
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(fs.readFileSync(path.join(ROOT, 'index.html')));
+      return res.end(fs.readFileSync(path.join(ROOT, 'login.html')));
     }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
     res.end(data);
@@ -136,7 +136,7 @@ const DRIVE = `
 
 async function run(win, which) {
   mode = which;
-  await win.loadURL('http://127.0.0.1:' + PORT + '/index.html?m=' + which);
+  await win.loadURL('http://127.0.0.1:' + PORT + '/login.html?m=' + which);
   await wait(1500);
   return JSON.parse(await win.webContents.executeJavaScript(DRIVE, true));
 }

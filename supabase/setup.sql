@@ -18,7 +18,7 @@
 --
 -- Note the two different keys. drivers.id is a bigint identity,
 -- NOT a uuid; the only uuid on a driver is auth_user_id. And
--- applications.driver_id is text, holding the HLL driver code.
+-- applications.driver_id is text, holding the GMN driver code.
 -- ============================================================
 
 
@@ -75,7 +75,7 @@ alter table public.applications add column if not exists reviewed_at timestamptz
 -- 3. Keys and indexes
 --
 -- driver_code must be unique: Accounts.register() generates it
--- randomly (HLL + four digits) and nothing else stops a clash.
+-- randomly (GMN + four digits) and nothing else stops a clash.
 -- ------------------------------------------------------------
 
 do $$

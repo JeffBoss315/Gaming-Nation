@@ -1,5 +1,5 @@
 /* Drives the platform in a real Electron window and reports what happened.
-   Loads index.html, signs in as the owner, dispatches a load, credits a run,
+   Loads login.html, signs in as the owner, dispatches a load, credits a run,
    and reads the resulting screens back out. */
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
@@ -24,7 +24,7 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', (_e, level, msg) => {
     if (level >= 2) errors.push(msg);
   });
-  await win.loadFile(path.join(ROOT, 'index.html'));
+  await win.loadFile(path.join(ROOT, 'login.html'));
   await win.webContents.executeJavaScript(FAKE_SUPABASE);
   await new Promise((r) => setTimeout(r, 1800));
 
@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     try {
       /* 0. the driver terminal shares this document and must stay out of
             the way of it. driver-login.html and driver-dashboard.html were
-            merged into index.html, so on every ordinary route their markup
+            merged into login.html, so on every ordinary route their markup
             is present and has to be hidden, their scripts unrun, and the
             SPA has to have booted — which it does not if HLL_TERMINAL was
             wrongly set, leaving a blank page. */

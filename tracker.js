@@ -1,5 +1,5 @@
 /* ============================================================
-   HLL WORLD GAMING NATION TRUCKER — driver client
+   GMN WORLD GAMING NATION TRUCKER — driver client
    Watches the game, records deliveries, syncs them to Gaming Nation.
    Part 1 — utilities, icons, data, store
    ============================================================ */
@@ -1820,7 +1820,7 @@ const Launcher = {
     try {
       await api.setAutoLaunch(!!s.startWithWindows, !!s.startMinimized);
       await api.setTrayEnabled(!!s.minimiseToTray);
-    } catch (e) { console.warn('[HLL] could not apply OS preferences', e); }
+    } catch (e) { console.warn('[GMN] could not apply OS preferences', e); }
   },
 };
 
@@ -2140,7 +2140,7 @@ async function discoverLocalService() {
     if (!ok) return false;
 
     window.HLL_SERVICE = LOCAL_SERVICE;
-    console.log('[HLL] company service found on ' + LOCAL_SERVICE);
+    console.log('[GMN] company service found on ' + LOCAL_SERVICE);
     return true;
 
   } catch (e) {
@@ -2373,7 +2373,7 @@ async pull() {
     this.lastError = e.message;
 
     console.error(
-      '[HLL] Company service pull failed:',
+      '[GMN] Company service pull failed:',
       e
     );
 
@@ -2839,7 +2839,7 @@ function seed() {
       tmpExe: '',               /* TruckersMP launcher */
       autoStartTracking: true,  /* arm the link as soon as the game is launched */
       jobUpdateSec: 10,         /* how often a running job is written to disk */
-      heartbeatSec: 15,         /* how often we tell HLL we are alive */
+      heartbeatSec: 15,         /* how often we tell GMN we are alive */
       startMinimized: false,
       sirenEnabled: true,       /* audible alert over the limit */
       sirenSpeedLimit: 95,
@@ -2849,7 +2849,7 @@ function seed() {
       worldTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       worldAttribution: '&copy; OpenStreetMap contributors',
       worldGeo: {},             /* per-game: game metres -> real lat/lon, the one transform */
-      fleetUrl: '',             /* HLL fleet service; empty = own truck only */
+      fleetUrl: '',             /* GMN fleet service; empty = own truck only */
       fleetRate: 5000,
       showFleet: true,
       showRegions: true,       /* the coloured seams between map regions */
@@ -2894,7 +2894,7 @@ const Store = {
       .forEach((k) => { if (!Array.isArray(this.db[k])) { this.db[k] = []; added++; } });
     if (!this.db.conn || typeof this.db.conn !== 'object') { this.db.conn = fresh.conn; added++; }
     if (!this.db.stats || typeof this.db.stats !== 'object') { this.db.stats = fresh.stats; added++; }
-    if (added) console.info('[HLL] filled in ' + added + ' setting(s) this build added');
+    if (added) console.info('[GMN] filled in ' + added + ' setting(s) this build added');
 
     const s = this.db.settings;
     s.worldGeo = s.worldGeo || {};
@@ -2916,7 +2916,7 @@ const Store = {
        they should have been all along. */
     const d = this.db.driver;
     if (d && !d.authed) {
-      console.info('[HLL] clearing a leftover identity (' + (d.hllId || '?') + ') — sign in again');
+      console.info('[GMN] clearing a leftover identity (' + (d.hllId || '?') + ') — sign in again');
       this.db.driver = null;
       this.db.conn = { hll: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
       this.db.live = null;
@@ -3065,7 +3065,7 @@ const GameLink = {
     Store.save();
 
     if (db.settings.autoSubmit) {
-      Store.log('info', 'Auto-submit is on — sending delivery to HLL');
+      Store.log('info', 'Auto-submit is on — sending delivery to GMN');
       submitDelivery(record.id, true);
     } else {
       toast('Delivery complete — awaiting submission', 'ok');
@@ -3124,7 +3124,7 @@ function submitDelivery(id, silent) {
 
   if (db.conn.hll !== 'connected') {
     rec.status = 'waiting';
-    Store.log('warn', 'No HLL connection — ' + rec.id + ' held in the queue');
+    Store.log('warn', 'No GMN connection — ' + rec.id + ' held in the queue');
     Store.save();
     toast('Offline — delivery kept in the queue', 'warn');
     render();
@@ -3139,10 +3139,10 @@ function submitDelivery(id, silent) {
   db.stats.totalIncome += rec.income;
   const credited = creditToCompany(rec);
   Store.log(credited ? 'ok' : 'warn', credited
-    ? `${rec.id} submitted to HLL — ${fmt.km(rec.km)} credited`
+    ? `${rec.id} submitted to GMN — ${fmt.km(rec.km)} credited`
     : `${rec.id} logged here, but your Gaming Nation record could not be reached`);
   Store.save();
-  if (!silent) toast(credited ? 'Delivery submitted to HLL' : 'Logged locally — HLL not reachable',
+  if (!silent) toast(credited ? 'Delivery submitted to GMN' : 'Logged locally — GMN not reachable',
     credited ? 'ok' : 'warn');
   render();
 }
@@ -3226,9 +3226,9 @@ function syncUploads() {
   const db = Store.db;
   const queue = db.uploads.filter((u) => u.status !== 'done');
   if (!queue.length) { toast('Nothing to upload', 'info'); return; }
-  if (db.conn.hll !== 'connected') { toast('No connection to the HLL server', 'err'); return; }
+  if (db.conn.hll !== 'connected') { toast('No connection to the GMN server', 'err'); return; }
   queue.forEach((u) => { u.status = 'done'; u.uploaded = new Date().toISOString(); });
-  Store.log('ok', `Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'} to HLL storage`);
+  Store.log('ok', `Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'} to GMN storage`);
   Store.save();
   toast(`Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'}`, 'ok');
   render();
@@ -3423,12 +3423,12 @@ function launchBarHTML() {
         <span class="lt-2">${esc(profile || 'Waiting…')}</span></span>
     </button>
 
-    <button class="launch-tile" data-act="open-hll" data-href="index.html#/dashboard">
+    <button class="launch-tile" data-act="open-hll" data-href="login.html#/dashboard">
       <span class="lt-mark">${icon('grid')}</span>
       <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Dashboard</span></span>
     </button>
 
-    <button class="launch-tile" data-act="open-hll" data-href="index.html#/rankings">
+    <button class="launch-tile" data-act="open-hll" data-href="login.html#/rankings">
       <span class="lt-mark">${icon('trophy')}</span>
       <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Ranking</span></span>
     </button>
@@ -3912,7 +3912,7 @@ function viewProfile() {
   const db = Store.db, d = db.driver, s = db.stats;
   return `
   ${viewHead('Driver record', 'Synced with your Gaming Nation profile',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="index.html#/settings">${icon('link')}Edit on the web</button>`)}
+    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
 
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
@@ -3992,7 +3992,7 @@ function viewChats() {
         <div class="t3 xs">Convoy channels appear here when a convoy you are on
           is running. To message another driver directly &mdash; with photos,
           files or a call &mdash; open Messages on the platform.</div>
-        <button class="btn btn-sm mt-16" data-act="open-hll" data-href="index.html#/messages">
+        <button class="btn btn-sm mt-16" data-act="open-hll" data-href="login.html#/messages">
           ${icon('link')}Open Messages</button>
       </div>
     </div></section>`;
@@ -4178,11 +4178,11 @@ function viewMenu() {
         ${apps.length ? `<span class="pill brand">${apps.length}</span>` : '<span class="t3 xs">none waiting</span>'}
         ${icon('chevron', 'menu-chev')}
       </button>` : ''}
-      ${can('events.manage') ? `<button class="menu-row" data-act="open-hll" data-href="index.html#/events">
+      ${can('events.manage') ? `<button class="menu-row" data-act="open-hll" data-href="login.html#/events">
         <span class="menu-ico staff">${icon('route')}</span>
         <span class="grow">Convoy management</span>${icon('chevron', 'menu-chev')}
       </button>` : ''}
-      ${can('admin.view') ? `<button class="menu-row" data-act="open-hll" data-href="index.html#/admin">
+      ${can('admin.view') ? `<button class="menu-row" data-act="open-hll" data-href="login.html#/admin">
         <span class="menu-ico staff">${icon('grid')}</span>
         <span class="grow">Full admin console</span>${icon('chevron', 'menu-chev')}
       </button>` : ''}
@@ -4198,7 +4198,7 @@ function viewMenu() {
   <div class="menu-group">
     <div class="menu-label">Gaming Nation</div>
     <section class="card"><div class="card-body p-0">
-      <button class="menu-row" data-act="open-hll" data-href="index.html#/dashboard">
+      <button class="menu-row" data-act="open-hll" data-href="login.html#/dashboard">
         <span class="menu-ico">${icon('link')}</span><span class="grow">Open the web platform</span>
         ${icon('chevron', 'menu-chev')}</button>
       <button class="menu-row danger" data-act="logout">
@@ -4235,14 +4235,14 @@ function viewConvoy() {
         </div>
         ${signed ? `<div class="pill ok mt-12">${icon('check')}You are signed on</div>` : ''}
         <button class="btn btn-block mt-12" data-act="open-hll"
-          data-href="index.html#/convoy/${esc(e.id)}">${icon('link')}Open on the platform</button>
+          data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}Open on the platform</button>
       </div>
     </section>`;
   };
 
   return `
   ${viewHead('Convoys', events.length ? events.length + ' coming up' : 'Nothing on the schedule',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="index.html#/events">${icon('link')}All convoys</button>`)}
+    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
   ${events.length ? events.map(card).join('')
     : `<section class="card"><div class="card-body"><div class="empty">${icon('route')}
         <div>No convoys scheduled</div>
@@ -4293,9 +4293,9 @@ function viewLeaderboard() {
 
   return `
   ${viewHead('Standings', 'Fleet distance this season',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="index.html#/rankings">${icon('link')}Full table</button>`)}
+    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/rankings">${icon('link')}Full table</button>`)}
   ${roster.length ? '' : `<div class="card mb-16"><div class="card-body row gap-12">
-    ${icon('info')}<div class="t3 xs">Only your own record is on this device. Open the HLL
+    ${icon('info')}<div class="t3 xs">Only your own record is on this device. Open the GMN
       dashboard to see the whole fleet.</div></div></div>`}
   <section class="card"><div class="tbl-wrap"><table class="tbl">
     <thead><tr><th style="width:52px">#</th><th>Driver</th><th class="right">Distance</th><th class="right">Runs</th></tr></thead>
@@ -4520,10 +4520,10 @@ function viewAbout() {
     <div class="card-head"><span class="label">Gaming Nation on the web</span></div>
     <div class="card-body">
       <div class="row gap-8 wrap">
-        <button class="btn btn-sm" data-act="open-hll" data-href="index.html#/dashboard">${icon('grid')}Command centre</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="index.html#/convoys">${icon('truck')}Convoys</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="index.html#/rankings">${icon('trophy')}Rankings</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="index.html#/support">${icon('info')}Support</button>
+        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/dashboard">${icon('grid')}Command centre</button>
+        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/convoys">${icon('truck')}Convoys</button>
+        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/rankings">${icon('trophy')}Rankings</button>
+        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/support">${icon('info')}Support</button>
       </div>
       <div class="t3 xs mt-16" style="letter-spacing:.14em">DRIVE · DELIVER · DOMINATE</div>
     </div>
@@ -4818,7 +4818,7 @@ function render() {
   try {
     ($('#main')).innerHTML = (VIEWS[state.view] || viewDashboard)();
   } catch (err) {
-    console.error('[HLL] the ' + state.view + ' screen failed to draw', err);
+    console.error('[GMN] the ' + state.view + ' screen failed to draw', err);
     ($('#main')).innerHTML = screenErrorHTML(state.view, err);
   }
 
@@ -4875,7 +4875,7 @@ function driverMenu(anchor) {
   m.className = 'menu';
   m.innerHTML = `
     <button data-act="nav" data-view="profile">${icon('user')}Driver record</button>
-    <button data-act="open-hll" data-href="index.html#/dashboard">${icon('link')}Open web HQ</button>
+    <button data-act="open-hll" data-href="login.html#/dashboard">${icon('link')}Open web HQ</button>
     <button data-act="nav" data-view="settings">${icon('settings')}Settings</button>
     <div class="sep"></div>
     <button class="danger" data-act="logout">${icon('logout')}Sign out</button>`;
@@ -5207,7 +5207,7 @@ const Auth = {
   saveHqDb(db) {
     if (typeof Sync !== 'undefined' && Sync.on && Sync.on() && !Sync.applying) Sync.push();
     try { localStorage.setItem(HQ_DB, JSON.stringify(db)); return true; }
-    catch (e) { console.warn('[HLL] could not write the company record', e); return false; }
+    catch (e) { console.warn('[GMN] could not write the company record', e); return false; }
   },
   updateDriver(id, patch) {
     const db = this.hqDb();
@@ -5458,7 +5458,7 @@ const Auth = {
     /* driver_code is unique and this end cannot see what is taken, so a
        clash is a matter of time. Retry with a fresh code rather than
        stranding somebody whose random number came up twice. */
-    let code = meta.driver_code || ('HLL' + String(Math.floor(1000 + Math.random() * 9000)));
+    let code = meta.driver_code || ('GMN' + String(Math.floor(1000 + Math.random() * 9000)));
 
     for (let tries = 0; tries < 6; tries++) {
       const { data, error } = await window.hllSupabase
@@ -5479,11 +5479,11 @@ const Auth = {
       if (!error) return { driver: data };
 
       if (error.code === '23505') {            /* the code was taken */
-        code = 'HLL' + String(Math.floor(1000 + Math.random() * 9000));
+        code = 'GMN' + String(Math.floor(1000 + Math.random() * 9000));
         continue;
       }
 
-      console.warn('[HLL] could not provision a driver record:', error);
+      console.warn('[GMN] could not provision a driver record:', error);
       return { driver: null, error };
     }
 
@@ -5539,7 +5539,7 @@ const Auth = {
           await window.hllSupabase.auth.signOut();
           return {
             error: 'Your sign-in works, but no driver record could be made for it. '
-              + 'Sign in on the HLL website once, then come back.',
+              + 'Sign in on the GMN website once, then come back.',
           };
         }
         const row = lookup.data;
@@ -5563,7 +5563,7 @@ const Auth = {
     }
 
     if (!this.accounts().length) {
-      return { error: 'No Gaming Nation account exists on this device yet. Open the HLL dashboard to create one.' };
+      return { error: 'No Gaming Nation account exists on this device yet. Open the GMN dashboard to create one.' };
     }
     const account = this.find(handle);
     if (!account) return { error: 'No account found with those details.' };
@@ -5677,7 +5677,7 @@ const RANK_LADDER = [
   { km: 100000, name: 'Professional Driver' },
   { km: 175000, name: 'Elite Driver' },
   { km: 275000, name: 'Veteran Driver' },
-  { km: 400000, name: 'HLL Captain' },
+  { km: 400000, name: 'GMN Captain' },
 ];
 function rankNameFor(d) {
   const i = d && d.rankIdx;
@@ -5706,10 +5706,10 @@ function signInHTML() {
       ${none ? `<div class="si-note mt-16">
         ${icon('info')}
         <div><div class="b6">No Gaming Nation account on this device</div>
-          <div class="t3 xs mt-4">Accounts are created on the HLL dashboard. Open it, create yours,
+          <div class="t3 xs mt-4">Accounts are created on the GMN dashboard. Open it, create yours,
             then come back and sign in here.</div>
-          <button class="btn btn-sm mt-12" data-act="open-hll" data-href="index.html#/auth">
-            ${icon('link')}Open the HLL dashboard</button></div>
+          <button class="btn btn-sm mt-12" data-act="open-hll" data-href="login.html#/auth">
+            ${icon('link')}Open the GMN dashboard</button></div>
       </div>` : ''}
 
       <form id="signInForm" class="mt-20" novalidate>

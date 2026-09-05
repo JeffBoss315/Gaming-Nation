@@ -1,7 +1,7 @@
 # Gaming Nation Trucker
 
 The Gaming Nation driver client. It watches Euro Truck Simulator 2 over the
-telemetry link, records each run you finish, and syncs the result to your HLL driver
+telemetry link, records each run you finish, and syncs the result to your GMN driver
 record. Ships in four forms from the same source:
 
 | Form | What you get | Command |
@@ -11,7 +11,7 @@ record. Ships in four forms from the same source:
 | **Installable web app** | Home-screen icon, offline, iOS + desktop | `npm run serve`, then Install |
 | **Windows executable** | Packaged `.exe`, no browser involved | `npm run dist` |
 
-The companion web platform is `index.html` for the drivers' site and `admin.html` for the
+The companion web platform is `login.html` for the drivers' site and `admin.html` for the
 management console. Together with the client they make one **real-time VTC management
 platform**: a driver launches the game and the console shows them online, on a job, and
 how far along — with the run, the time at the wheel and the money it earned all recorded
@@ -26,7 +26,7 @@ ETS2 / ATS world, so it can tell on its own when a driver is **on the road deliv
 
 ### Set it up (once)
 
-This project also supports the HLL Telemetry Bridge plugin. The plugin writes
+This project also supports the GMN Telemetry Bridge plugin. The plugin writes
 SCS Protocol 6 frames to `Local\\HLLTelemetry`; the project-owned launcher
 starts a compatible adapter and exposes the same HTTP API used by the client.
 The adapter executable is intentionally separate because it owns the binary
@@ -566,7 +566,7 @@ JOB STARTED  HLL-000284
 ```
 
 If the service cannot be reached at that moment the run still starts, under a local number
-marked `HLL-L…` that says so, and still lands when the queue drains.
+marked `GMN-L…` that says so, and still lands when the queue drains.
 
 ### What it reads
 
@@ -829,11 +829,11 @@ It uses `System.Drawing` via Windows PowerShell, so there is nothing to install.
 | `tools/smoke-*.js` | the probes listed under *Checking it still works* |
 | `tools/android-network.js` | lets the app reach the LAN telemetry server |
 | `capacitor.config.json` | native shell config (app id, name, colours) |
-| `index.html` / `style.css` / `script.js` | the Gaming Nation web platform |
+| `login.html` / `style.css` / `script.js` | the Gaming Nation web platform |
 
 ### Where the telemetry comes from
 
 `Telemetry` in `tracker.js` polls the real telemetry server and is authoritative when it
 answers; `GameLink` is the simulator and stands down whenever live data is present, so the
-two never fight over a run. `submitDelivery()` and `syncUploads()` are where the HLL API
+two never fight over a run. `submitDelivery()` and `syncUploads()` are where the GMN API
 calls belong.

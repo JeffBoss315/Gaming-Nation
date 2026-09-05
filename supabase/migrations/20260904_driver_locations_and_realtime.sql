@@ -5,7 +5,7 @@
 -- safe on a fresh project and safe to re-run. Nothing here drops
 -- data.
 --
--- What this is for: the driver terminal (index.html, at
+-- What this is for: the driver terminal (login.html, at
 -- #/driver-terminal — it was driver-dashboard.html when this was
 -- written) inserts every GPS fix into public.driver_locations and
 -- subscribes to postgres_changes on public.drivers. Neither of those
