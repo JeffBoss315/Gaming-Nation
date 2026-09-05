@@ -159,12 +159,21 @@ if (!SITE_URL) {
     ],
   }, null, 2).split('\n').join('\n    ');
 
+  /* The address the site actually answers on, which is not the filename.
+     Cloudflare Pages strips .html: /login.html is a 308 to /login, and
+     /login is the 200. A canonical pointing at a redirect is a canonical
+     pointing away from the page, so every absolute URL below names the
+     extensionless form. Measured against the live host rather than
+     assumed — the root, meanwhile, is a 404 since the rename, which is
+     why nothing here points at it any more. */
+  const HOME = SITE_URL + '/login';
+
   const seo = [
     '<script>window.HLL_SITE_URL = ' + JSON.stringify(SITE_URL) + ';</script>',
     '',
-    '    <link rel="canonical" href="' + SITE_URL + '/login.html">',
+    '    <link rel="canonical" href="' + HOME + '">',
     '',
-    '    <meta property="og:url" content="' + SITE_URL + '/login.html">',
+    '    <meta property="og:url" content="' + HOME + '">',
     '    <meta property="og:image" content="' + SITE_URL + '/hll.jpg">',
     '    <meta name="twitter:image" content="' + SITE_URL + '/hll.jpg">',
     '',
@@ -217,6 +226,7 @@ if (!SITE_URL) {
     '# on whatever the host answers a missing asset with.',
     '',
     'User-agent: *',
+    'Allow: /login',
     'Allow: /login.html',
     '',
   ].concat(denied.map((d) => 'Disallow: ' + d)).concat([
@@ -255,7 +265,7 @@ if (!SITE_URL) {
     '     that do not exist as separate URLs. -->',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     '  <url>',
-    '    <loc>' + SITE_URL + '/login.html</loc>',
+    '    <loc>' + HOME + '</loc>',
     '    <lastmod>' + new Date().toISOString().slice(0, 10) + '</lastmod>',
     '    <changefreq>weekly</changefreq>',
     '    <priority>1.0</priority>',
