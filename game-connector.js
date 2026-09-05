@@ -54,10 +54,10 @@ try { file = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); }
 catch (e) { if (e.code !== 'ENOENT') console.warn('  config unreadable:', e.message); }
 
 const CFG = {
-  service: flag('service', file.service || process.env.HLL_SERVICE || ''),
-  driverId: flag('driver', file.driverId || process.env.HLL_DRIVER || ''),
-  name: flag('name', file.name || process.env.HLL_NAME || ''),
-  key: flag('key', file.key || process.env.HLL_API_KEY || ''),
+  service: flag('service', file.service || (process.env.GMN_SERVICE || process.env.HLL_SERVICE) || ''),
+  driverId: flag('driver', file.driverId || (process.env.GMN_DRIVER || process.env.HLL_DRIVER) || ''),
+  name: flag('name', file.name || (process.env.GMN_NAME || process.env.HLL_NAME) || ''),
+  key: flag('key', file.key || (process.env.GMN_API_KEY || process.env.HLL_API_KEY) || ''),
   game: (flag('game', file.game || 'ets2') === 'ats') ? 'ats' : 'ets2',
   telemetryHost: flag('telemetry-host', file.telemetryHost || 'localhost'),
   telemetryPort: flag('telemetry-port', file.telemetryPort || '25555'),

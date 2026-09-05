@@ -141,5 +141,5 @@ jobs:
           echo "          and https://heavyline.pages.dev"
           if [ -d functions ]; then
             echo "functions/ went with it — the download gate is live once"
-            echo "HLL_DOWNLOAD_SECRET and the R2 binding are set on the project."
+            echo "GMN_DOWNLOAD_SECRET and the R2 binding are set on the project."
           fi

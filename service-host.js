@@ -103,16 +103,16 @@ function startService(opts) {
       env: Object.assign({}, process.env, {
         /* run the Electron binary as plain node */
         ELECTRON_RUN_AS_NODE: '1',
-        HLL_COMPANY_FILE: path.join(dir, 'company.json'),
-        HLL_SESSION_FILE: path.join(dir, 'sessions.json'),
-        HLL_CHAT_FILE: path.join(dir, 'chat.json'),
-        HLL_DM_FILE: path.join(dir, 'dms.json'),
-        HLL_ROOM_READS_FILE: path.join(dir, 'room-reads.json'),
-        HLL_FILES_FILE: path.join(dir, 'files.json'),
-        HLL_FILES_DIR: path.join(dir, 'files'),
+        GMN_COMPANY_FILE: path.join(dir, 'company.json'),
+        GMN_SESSION_FILE: path.join(dir, 'sessions.json'),
+        GMN_CHAT_FILE: path.join(dir, 'chat.json'),
+        GMN_DM_FILE: path.join(dir, 'dms.json'),
+        GMN_ROOM_READS_FILE: path.join(dir, 'room-reads.json'),
+        GMN_FILES_FILE: path.join(dir, 'files.json'),
+        GMN_FILES_DIR: path.join(dir, 'files'),
         /* so another driver can open the site from this machine and have
            it joined up with no address to type */
-        HLL_SITE_DIR: path.dirname(script),
+        GMN_SITE_DIR: path.dirname(script),
       }),
       stdio: 'ignore',
       windowsHide: true,

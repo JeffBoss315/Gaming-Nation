@@ -22,7 +22,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const PORT = Number(process.env.HLL_SMOKE_PORT || 7092);
+const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7092);
 const COMPANY_FILE = path.join(os.tmpdir(), 'hll-auth-company.json');
 const SESSION_FILE = path.join(os.tmpdir(), 'hll-auth-sessions.json');
 const CHAT_FILE = path.join(os.tmpdir(), 'hll-auth-chat.jsonl');
@@ -69,9 +69,9 @@ function startServer() {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
       ELECTRON_RUN_AS_NODE: '1',
-      HLL_COMPANY_FILE: COMPANY_FILE,
-      HLL_SESSION_FILE: SESSION_FILE,
-      HLL_CHAT_FILE: CHAT_FILE,
+      GMN_COMPANY_FILE: COMPANY_FILE,
+      GMN_SESSION_FILE: SESSION_FILE,
+      GMN_CHAT_FILE: CHAT_FILE,
     }),
     stdio: 'ignore',
   });

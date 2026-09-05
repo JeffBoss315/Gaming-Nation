@@ -24,7 +24,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const DIR = path.join(ROOT, 'www');
-const PROJECT = process.env.HLL_CF_PROJECT || 'gaming-nation';
+const PROJECT = (process.env.GMN_CF_PROJECT || process.env.HLL_CF_PROJECT) || 'gaming-nation';
 
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID;

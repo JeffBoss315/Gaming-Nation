@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
   /* A port of its own: 7040 is the real one and a developer may well have
      it open, which would make this test pass against somebody else's
      service and prove nothing. */
-  const PORT = Number(process.env.HLL_HOST_SMOKE_PORT || 7089);
+  const PORT = Number((process.env.GMN_HOST_SMOKE_PORT || process.env.HLL_HOST_SMOKE_PORT) || 7089);
 
   try {
     /* ---- 1. is the service even shipped? ---- */

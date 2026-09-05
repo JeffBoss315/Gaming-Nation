@@ -91,7 +91,7 @@
             try {
 
                 // Check Supabase client
-                if (!window.hllSupabase) {
+                if (!window.gmnSupabase) {
 
                     throw new Error(
                         'Gaming Nation Supabase client was not initialized. Check supabase-client.js.'
@@ -102,7 +102,7 @@
                 result.textContent = 'Supabase client loaded. Testing drivers table...';
 
                 // Test database connection
-                const { data, error } = await window.hllSupabase
+                const { data, error } = await window.gmnSupabase
                     .from('drivers')
                     .select('*')
                     .limit(1);

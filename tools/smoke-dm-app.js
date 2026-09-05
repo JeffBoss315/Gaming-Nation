@@ -34,7 +34,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
-const PORT = Number(process.env.HLL_DMAPP_PORT || 7096);
+const PORT = Number((process.env.GMN_DMAPP_PORT || process.env.HLL_DMAPP_PORT) || 7096);
 const TMP = path.join(os.tmpdir(), 'hll-dmapp-smoke');
 
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* first run */ }
@@ -120,20 +120,20 @@ app.whenReady().then(async () => {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         ELECTRON_RUN_AS_NODE: '1',
-        HLL_COMPANY_FILE: path.join(TMP, 'company.json'),
-        HLL_SESSION_FILE: path.join(TMP, 'sessions.json'),
-        HLL_CHAT_FILE: path.join(TMP, 'chat.json'),
-        HLL_DM_FILE: path.join(TMP, 'dms.json'),
-        HLL_ROOM_READS_FILE: path.join(TMP, 'room-reads.json'),
-        HLL_FILES_FILE: path.join(TMP, 'files.json'),
-        HLL_FILES_DIR: path.join(TMP, 'files'),
-        HLL_SITE_DIR: ROOT,
+        GMN_COMPANY_FILE: path.join(TMP, 'company.json'),
+        GMN_SESSION_FILE: path.join(TMP, 'sessions.json'),
+        GMN_CHAT_FILE: path.join(TMP, 'chat.json'),
+        GMN_DM_FILE: path.join(TMP, 'dms.json'),
+        GMN_ROOM_READS_FILE: path.join(TMP, 'room-reads.json'),
+        GMN_FILES_FILE: path.join(TMP, 'files.json'),
+        GMN_FILES_DIR: path.join(TMP, 'files'),
+        GMN_SITE_DIR: ROOT,
         /* A relay the test never dials — what is under test is that the
            service hands it out and both clients take it, not that TURN
            works, which would need a real relay. */
-        HLL_TURN_URL: 'turn:relay.example.test:3478',
-        HLL_TURN_USER: 'crew',
-        HLL_TURN_PASS: 'secret',
+        GMN_TURN_URL: 'turn:relay.example.test:3478',
+        GMN_TURN_USER: 'crew',
+        GMN_TURN_PASS: 'secret',
       }),
       stdio: 'ignore',
     });
@@ -339,12 +339,12 @@ app.whenReady().then(async () => {
        chat" in front of a blank list. */
     const offline = await one.webContents.executeJavaScript(`(() => {
       const was = Store.db.settings.fleetUrl;
-      const wasSvc = window.HLL_SERVICE;
+      const wasSvc = window.GMN_SERVICE;
       Store.db.settings.fleetUrl = '';
-      window.HLL_SERVICE = '';
+      window.GMN_SERVICE = '';
       const html = dmOffline();
       Store.db.settings.fleetUrl = was;
-      window.HLL_SERVICE = wasSvc;
+      window.GMN_SERVICE = wasSvc;
       return html;
     })()`);
 

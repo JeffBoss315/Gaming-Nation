@@ -57,7 +57,7 @@ app.whenReady().then(async () => {
   const built = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'build-www.js')], {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
-      ELECTRON_RUN_AS_NODE: '1', HLL_SITE_OUT: SITE_OUT, HLL_APP_OUT: APP_OUT,
+      ELECTRON_RUN_AS_NODE: '1', GMN_SITE_OUT: SITE_OUT, GMN_APP_OUT: APP_OUT,
     }),
     encoding: 'utf8',
   });
@@ -71,12 +71,12 @@ app.whenReady().then(async () => {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
       ELECTRON_RUN_AS_NODE: '1',
-      HLL_COMPANY_FILE: path.join(TMP, 'company.json'),
-      HLL_SESSION_FILE: path.join(TMP, 'sessions.json'),
-      HLL_DM_FILE: path.join(TMP, 'dms.json'),
-      HLL_FILES_FILE: path.join(TMP, 'files.json'),
-      HLL_FILES_DIR: path.join(TMP, 'files'),
-      HLL_SITE_DIR: SITE_OUT,
+      GMN_COMPANY_FILE: path.join(TMP, 'company.json'),
+      GMN_SESSION_FILE: path.join(TMP, 'sessions.json'),
+      GMN_DM_FILE: path.join(TMP, 'dms.json'),
+      GMN_FILES_FILE: path.join(TMP, 'files.json'),
+      GMN_FILES_DIR: path.join(TMP, 'files'),
+      GMN_SITE_DIR: SITE_OUT,
     }),
     stdio: 'ignore',
   });

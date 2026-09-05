@@ -14,7 +14,7 @@ const fs = require('fs');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const OUT = path.resolve(process.argv[3] || path.join(ROOT, '.shots'));
-const BASE = process.env.HLL_SHOT_BASE || null;   /* http://host:port to shoot the served site */
+const BASE = (process.env.GMN_SHOT_BASE || process.env.HLL_SHOT_BASE) || null;   /* http://host:port to shoot the served site */
 
 app.setPath('userData', path.join(app.getPath('temp'), 'hll-shots'));
 app.disableHardwareAcceleration();
@@ -24,9 +24,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* Sign in as the owner so the console renders something worth looking at,
    rather than the signed-out landing page. */
-const ROUTE = process.env.HLL_SHOT_ROUTE || '#/dashboard';
+const ROUTE = (process.env.GMN_SHOT_ROUTE || process.env.HLL_SHOT_ROUTE) || '#/dashboard';
 const SIGN_IN = `(async () => {
-  const ROUTE = '${process.env.HLL_SHOT_ROUTE || "#/dashboard"}';
+  const ROUTE = '${(process.env.GMN_SHOT_ROUTE || process.env.HLL_SHOT_ROUTE) || "#/dashboard"}';
   try {
     const acc = Accounts.all().find(a => a.email === 'jeffboss730@gmail.com')
              || Accounts.all()[0];

@@ -26,7 +26,7 @@ const http = require('http');
 const fs = require('fs');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
-const PORT = Number(process.env.HLL_DLPAGE_PORT || 7099);
+const PORT = Number((process.env.GMN_DLPAGE_PORT || process.env.HLL_DLPAGE_PORT) || 7099);
 
 app.setPath('userData', path.join(app.getPath('temp'), 'hll-dlpage'));
 app.disableHardwareAcceleration();
@@ -103,7 +103,7 @@ const DRIVE = `
     var s = document.getElementById('splash'); if (s) s.classList.add('gone');
 
     /* a signed-in driver, which is what request() expects to find */
-    window.hllSupabase = { auth: { getSession: async () => ({
+    window.gmnSupabase = { auth: { getSession: async () => ({
       data: { session: { access_token: 'test-token' } } }) } };
 
     var toasts = [];

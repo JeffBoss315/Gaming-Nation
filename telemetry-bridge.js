@@ -6,10 +6,10 @@
    and verifies the HTTP contract consumed by the app.
 
    Adapter contract:
-     HLL_TELEMETRY_MAP       Local\\HLLTelemetry
-     HLL_TELEMETRY_PORT      25555
-     HLL_TELEMETRY_GAME      ets2
-     HLL_TELEMETRY_PLUGIN    installed DLL path
+     GMN_TELEMETRY_MAP       Local\\HLLTelemetry
+     GMN_TELEMETRY_PORT      25555
+     GMN_TELEMETRY_GAME      ets2
+     GMN_TELEMETRY_PLUGIN    installed DLL path
 
    The adapter must serve GET /api/ets2/telemetry as the JSON shape documented
    by the existing connector and tracker.
@@ -27,15 +27,15 @@ const flag = (name, fallback) => {
 };
 
 const game = flag('game', 'ets2') === 'ats' ? 'ats' : 'ets2';
-const port = Number(flag('port', process.env.HLL_TELEMETRY_PORT || 25555));
-const map = flag('map', process.env.HLL_TELEMETRY_MAP || 'Local\\HLLTelemetry');
-const adapter = flag('adapter', process.env.HLL_TELEMETRY_ADAPTER ||
+const port = Number(flag('port', (process.env.GMN_TELEMETRY_PORT || process.env.HLL_TELEMETRY_PORT) || 25555));
+const map = flag('map', (process.env.GMN_TELEMETRY_MAP || process.env.HLL_TELEMETRY_MAP) || 'Local\\HLLTelemetry');
+const adapter = flag('adapter', (process.env.GMN_TELEMETRY_ADAPTER || process.env.HLL_TELEMETRY_ADAPTER) ||
   path.join(__dirname, 'hll-telemetry-adapter.exe'));
-const plugin = flag('plugin', process.env.HLL_TELEMETRY_PLUGIN ||
+const plugin = flag('plugin', (process.env.GMN_TELEMETRY_PLUGIN || process.env.HLL_TELEMETRY_PLUGIN) ||
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
     'Steam', 'steamapps', 'common', 'Euro Truck Simulator 2',
     'bin', 'win_x64', 'plugins', 'hll-scs-telemetry.dll'));
-const metadata = flag('metadata', process.env.HLL_TELEMETRY_METADATA ||
+const metadata = flag('metadata', (process.env.GMN_TELEMETRY_METADATA || process.env.HLL_TELEMETRY_METADATA) ||
   path.join(path.dirname(plugin), 'hll-telemetry.json'));
 const timeoutMs = Number(flag('timeout', 15000));
 const endpoint = 'http://127.0.0.1:' + port + '/api/' + game + '/telemetry';
@@ -60,7 +60,7 @@ if (process.platform !== 'win32') {
   fail('the shared-memory adapter is supported on Windows only');
 } else if (!fs.existsSync(adapter)) {
   fail('adapter executable not found: ' + adapter +
-    '\nSet HLL_TELEMETRY_ADAPTER or pass --adapter <path>.');
+    '\nSet GMN_TELEMETRY_ADAPTER or pass --adapter <path>.');
 } else if (!fs.existsSync(plugin)) {
   fail('telemetry plugin not found: ' + plugin +
     '\nPass --plugin <path> if ETS2 is installed elsewhere.');
@@ -89,10 +89,10 @@ if (process.platform !== 'win32') {
     windowsHide: true,
     stdio: 'inherit',
     env: Object.assign({}, process.env, {
-      HLL_TELEMETRY_MAP: map,
-      HLL_TELEMETRY_PORT: String(port),
-      HLL_TELEMETRY_GAME: game,
-      HLL_TELEMETRY_PLUGIN: plugin,
+      GMN_TELEMETRY_MAP: map,
+      GMN_TELEMETRY_PORT: String(port),
+      GMN_TELEMETRY_GAME: game,
+      GMN_TELEMETRY_PLUGIN: plugin,
     }),
   });
   let ready = false;

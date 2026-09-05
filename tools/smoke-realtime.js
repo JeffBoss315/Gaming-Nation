@@ -17,10 +17,10 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const PORT = Number(process.env.HLL_SMOKE_PORT || 7099);
+const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7099);
 
 /* keep the real company file out of the way */
-process.env.HLL_COMPANY_FILE = path.join(os.tmpdir(), 'hll-smoke-company.json');
+process.env.GMN_COMPANY_FILE = path.join(os.tmpdir(), 'hll-smoke-company.json');
 process.argv = [process.argv[0], 'fleet-server.js', '--port', String(PORT)];
 
 /* the service prints a banner on listen; not wanted in test output */

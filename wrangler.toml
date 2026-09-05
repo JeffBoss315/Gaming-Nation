@@ -41,7 +41,7 @@ pages_build_output_dir = "www"
 #   3. Give the Function a signing secret. Any long random string; it
 #      never leaves Cloudflare, and changing it invalidates every link
 #      already handed out, which is the way to revoke them.
-#        npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=gaming-nation
+#        npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
 #
 #   4. Tell it where Supabase is. Not secrets — the anon key is public
 #      and is in supabase-client.js — but they belong in the environment

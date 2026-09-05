@@ -52,7 +52,7 @@
     <meta name="twitter:title" content="Gaming Nation — virtual trucking company">
     <meta name="twitter:description" content="Convoys, dispatch, live fleet tracking, driver rankings and achievements, in one command centre.">
 
-    <!-- HLL_SEO — the build injects canonical, og:url, image URLs and
+    <!-- GMN_SEO — the build injects canonical, og:url, image URLs and
          structured data here when site.config.json names a host. -->
 
     <!-- App icon -->
@@ -424,9 +424,9 @@
         - Admin console: admin.html
     -->
     <script>
-        window.HLL_SITE = 'drivers';
+        window.GMN_SITE = 'drivers';
 
-        window.HLL_PAGES = {
+        window.GMN_PAGES = {
             drivers: 'login.html',
             admin: 'admin.html'
         };
@@ -439,7 +439,7 @@
            The pathname cases are the old URLs. Every host here answers
            an unknown path with this file, so /driver-login.html still
            lands somewhere sensible for every link already written down. */
-        window.HLL_TERMINAL_VIEW = (function () {
+        window.GMN_TERMINAL_VIEW = (function () {
 
             var hash = String(location.hash || '').split('?')[0];
 
@@ -454,7 +454,7 @@
             return null;
         })();
 
-        window.HLL_TERMINAL = !!window.HLL_TERMINAL_VIEW;    </script>
+        window.GMN_TERMINAL = !!window.GMN_TERMINAL_VIEW;    </script>
 </head>
 
 <body>
@@ -639,7 +639,7 @@
     <!-- =========================================================
          DRIVER TERMINAL
 
-         Hidden, and inert, unless HLL_TERMINAL_VIEW asked for it. These
+         Hidden, and inert, unless GMN_TERMINAL_VIEW asked for it. These
          two sections are what driver-login.html and
          driver-dashboard.html used to be — markup unchanged apart from
          #toasts becoming #dt-toasts, because this document already had
@@ -1217,13 +1217,13 @@
         /* ----------------------------------------------------------
            Supabase has to actually be there
 
-           supabase-client.js leaves window.hllSupabase undefined when the
+           supabase-client.js leaves window.gmnSupabase undefined when the
            CDN bundle does not load — offline, or blocked. Saying so is the
            whole job here: a sign-in button that silently does nothing is
            the worst of the outcomes available.
         ---------------------------------------------------------- */
 
-        if (!window.hllSupabase) {
+        if (!window.gmnSupabase) {
 
             say('Cannot reach the account service. Check your connection and reload.', 'err');
 
@@ -1239,7 +1239,7 @@
            Already signed in? Do not make them do it twice.
         ---------------------------------------------------------- */
 
-        window.hllSupabase.auth.getSession().then(function (res) {
+        window.gmnSupabase.auth.getSession().then(function (res) {
 
             if (res && res.data && res.data.session) {
                 say('Session found — opening your dashboard.', 'ok');
@@ -1357,7 +1357,7 @@
                resolving with an error, so both paths need covering or a
                dropped connection leaves the button spinning for ever. */
             try {
-                result = await window.hllSupabase.auth.signInWithPassword({
+                result = await window.gmnSupabase.auth.signInWithPassword({
                     email: email,
                     password: password
                 });
@@ -1509,13 +1509,13 @@
            driver got a dashboard of dashes with nothing explaining why.
         ---------------------------------------------------------- */
 
-        if (!window.hllSupabase) {
+        if (!window.gmnSupabase) {
 
             halt('Cannot reach the account service. Check your connection and reload.');
             return;
         }
 
-        var db = window.hllSupabase;
+        var db = window.gmnSupabase;
 
         /* ----------------------------------------------------------
            Formatting
@@ -2014,7 +2014,7 @@
         'use strict';
 
         /* Nothing below should cost the ordinary site anything. */
-        if (!window.HLL_TERMINAL) return;
+        if (!window.GMN_TERMINAL) return;
 
         var root = document.getElementById('dt-root');
 
@@ -2090,7 +2090,7 @@
             location.reload();
         });
 
-        show(window.HLL_TERMINAL_VIEW);
+        show(window.GMN_TERMINAL_VIEW);
 
     })();
     </script>

@@ -26,8 +26,8 @@ const path = require('path');
 const http = require('http');
 
 const ROOT = path.join(__dirname, '..');
-const SERVICE_PORT = Number(process.env.HLL_PORT || 7040);
-const SITE_PORT = Number(process.env.HLL_SITE_PORT || 5173);
+const SERVICE_PORT = Number((process.env.GMN_PORT || process.env.HLL_PORT) || 7040);
+const SITE_PORT = Number((process.env.GMN_SITE_PORT || process.env.HLL_SITE_PORT) || 5173);
 
 const children = [];
 let stopping = false;

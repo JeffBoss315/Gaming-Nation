@@ -23,13 +23,13 @@
    release/ under the names the downloads page asks for. release/ is small,
    gitignored, and only ever written once per build.
 
-   HLL_DIST_DIR overrides this, for anyone whose checkout is not in a
+   GMN_DIST_DIR overrides this, for anyone whose checkout is not in a
    synced folder and would rather keep everything in one place.
 */
 const os = require('os');
 const path = require('path');
 
-const dir = process.env.HLL_DIST_DIR
+const dir = (process.env.GMN_DIST_DIR || process.env.HLL_DIST_DIR)
   || path.join(os.tmpdir(), 'hll-dist');
 
 process.stdout.write(dir);

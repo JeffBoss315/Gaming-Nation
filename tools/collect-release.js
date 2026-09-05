@@ -40,9 +40,9 @@ const RELEASE = path.join(ROOT, 'release');
    synced tree sidesteps it entirely:
 
      npx electron-builder --win --config.directories.output=<somewhere outside OneDrive>
-     HLL_DIST_DIR=<that same path> node tools/collect-release.js */
-const DIST = path.resolve(process.env.HLL_DIST_DIR || path.join(ROOT, 'dist'));
-const DIST_APK = path.resolve(process.env.HLL_DIST_APK_DIR || path.join(ROOT, 'dist-apk'));
+     GMN_DIST_DIR=<that same path> node tools/collect-release.js */
+const DIST = path.resolve((process.env.GMN_DIST_DIR || process.env.HLL_DIST_DIR) || path.join(ROOT, 'dist'));
+const DIST_APK = path.resolve((process.env.GMN_DIST_APK_DIR || process.env.HLL_DIST_APK_DIR) || path.join(ROOT, 'dist-apk'));
 const DRY = process.argv.includes('--dry-run');
 /* A build that produced only the Windows installers is a normal state —
    the APK needs an Android SDK, and most machines building the desktop app

@@ -99,10 +99,10 @@ if (r.status !== 0) process.exit(r.status);
    where to look. Passing it through the environment keeps the npm script
    readable and means nobody has to repeat the path. */
 console.log('\nbuilt. Collecting from ' + out);
-process.env.HLL_DIST_DIR = out;
+process.env.GMN_DIST_DIR = out;
 
 const collected = spawnSync(process.execPath,
   [path.join(__dirname, 'collect-release.js')],
-  { cwd: ROOT, stdio: 'inherit', env: Object.assign({}, process.env, { HLL_DIST_DIR: out }) });
+  { cwd: ROOT, stdio: 'inherit', env: Object.assign({}, process.env, { GMN_DIST_DIR: out }) });
 
 process.exit(collected.status || 0);

@@ -254,10 +254,10 @@ if (fs.existsSync(built)) {
   const strays = fs.readdirSync(built).filter((f) => /^tracker\./.test(f));
   strays.forEach((f) => fail('build', 'the built website contains a client file', 'www/' + f));
   const home = path.join(built, 'login.html');
-  if (fs.existsSync(home) && /HLL_SITE\s*=\s*'admin'/.test(fs.readFileSync(home, 'utf8'))) {
+  if (fs.existsSync(home) && /GMN_SITE\s*=\s*'admin'/.test(fs.readFileSync(home, 'utf8'))) {
     fail('build', 'the built website opens on the console', 'www/login.html');
   }
-  if (fs.existsSync(home) && !/HLL_SITE\s*=\s*'drivers'/.test(fs.readFileSync(home, 'utf8'))) {
+  if (fs.existsSync(home) && !/GMN_SITE\s*=\s*'drivers'/.test(fs.readFileSync(home, 'utf8'))) {
     fail('build', "the built website does not open on the drivers' site", 'www/login.html');
   }
   console.log('  www/ holds ' + fs.readdirSync(built).length + ' entries');

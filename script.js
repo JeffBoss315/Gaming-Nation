@@ -534,12 +534,12 @@ const Accounts = {
 
       const role = isOwner ? 'admin' : 'driver';
 
-      if (!window.hllSupabase) {
+      if (!window.gmnSupabase) {
         throw new Error('Supabase is not connected. Please try again.');
       }
 
       const { data: authData, error: authError } =
-        await window.hllSupabase.auth.signUp({
+        await window.gmnSupabase.auth.signUp({
           email: account.email,
           password: password,
 
@@ -602,7 +602,7 @@ const Accounts = {
       let driver = null;
       for (let tries = 0; tries < 5 && !driver; tries++) {
         if (tries) await new Promise((r) => setTimeout(r, 250));
-        const { data } = await window.hllSupabase
+        const { data } = await window.gmnSupabase
           .from('drivers')
           .select('*')
           .eq('auth_user_id', user.id)
@@ -619,7 +619,7 @@ const Accounts = {
          off — which is exactly the case where it used to work. */
       const { data: inserted, error: driverError } = driver
         ? { data: driver, error: null }
-        : await window.hllSupabase
+        : await window.gmnSupabase
           .from('drivers')
           .insert({
             /* Every column public.drivers actually has. country is not one
@@ -762,7 +762,7 @@ const Accounts = {
            needs later to move this application through the stages. An
            insert on its own returns no data. */
         const { data: savedApplication, error: applicationError } =
-          await window.hllSupabase
+          await window.gmnSupabase
             .from('applications')
             .insert({
               full_name: application.name,
@@ -809,7 +809,7 @@ const Accounts = {
              person is left half-registered: a driver record with no
              application, which the recruitment screen will never show and
              nobody will ever action. */
-          const { error: rollbackError } = await window.hllSupabase
+          const { error: rollbackError } = await window.gmnSupabase
             .from('drivers')
             .delete()
             .eq('id', driver.id);
@@ -1058,14 +1058,14 @@ fromRow(row, authUser) {
    they sign in, their application appears. */
 async ensureApplication(driver, opts) {
 
-    if (!window.hllSupabase || !driver || !driver.driver_code) return null;
+    if (!window.gmnSupabase || !driver || !driver.driver_code) return null;
 
     const o = opts || {};
 
     /* Staff are not applicants. An admin does not queue for approval. */
     if ((o.role || driver.role || 'driver') !== 'driver') return null;
 
-    const { data: existing, error: lookErr } = await window.hllSupabase
+    const { data: existing, error: lookErr } = await window.gmnSupabase
         .from('applications')
         .select('id')
         .eq('driver_id', driver.driver_code)
@@ -1087,7 +1087,7 @@ async ensureApplication(driver, opts) {
        lets a driver see their own application reads
          driver_id in (select driver_code from drivers where ...)
        so a bigint here files a row its owner cannot read. */
-    const { data: made, error: appError } = await window.hllSupabase
+    const { data: made, error: appError } = await window.gmnSupabase
         .from('applications')
         .insert({
             driver_id: driver.driver_code,
@@ -1117,7 +1117,7 @@ async ensureApplication(driver, opts) {
 
 async provision(user) {
 
-    if (!window.hllSupabase || !user) {
+    if (!window.gmnSupabase || !user) {
         return { driver: null, error: new Error('Not signed in.') };
     }
 
@@ -1137,7 +1137,7 @@ async provision(user) {
 
     for (let tries = 0; tries < 6 && !driver; tries++) {
 
-        const { data, error } = await window.hllSupabase
+        const { data, error } = await window.gmnSupabase
             .from('drivers')
             .insert({
                 auth_user_id: user.id,
@@ -1188,7 +1188,7 @@ async verify(handle, password) {
         }
 
         // Make sure Supabase is available
-        if (!window.hllSupabase) {
+        if (!window.gmnSupabase) {
             console.error('[GMN] Supabase client is missing.');
 
             return {
@@ -1198,7 +1198,7 @@ async verify(handle, password) {
 
         // Authenticate using Supabase Auth
         const { data, error } =
-            await window.hllSupabase.auth.signInWithPassword({
+            await window.gmnSupabase.auth.signInWithPassword({
                 email: email,
                 password: pass
             });
@@ -1229,7 +1229,7 @@ async verify(handle, password) {
 
         // Find the Gaming Nation driver linked to this Auth user
         let { data: driver, error: driverError } =
-            await window.hllSupabase
+            await window.gmnSupabase
                 .from('drivers')
                 .select('*')
                 .eq('auth_user_id', user.id)
@@ -1259,7 +1259,7 @@ async verify(handle, password) {
                 driverError
             );
 
-            await window.hllSupabase.auth.signOut();
+            await window.gmnSupabase.auth.signOut();
 
             /* 42501 here means the insert policy from setup.sql is not on
                the table, which is a thing only somebody with database
@@ -1301,7 +1301,7 @@ async verify(handle, password) {
             driver.status === 'suspended' ||
             driver.account_status === 'suspended'
         ) {
-            await window.hllSupabase.auth.signOut();
+            await window.gmnSupabase.auth.signOut();
 
             return {
                 error:
@@ -1337,7 +1337,7 @@ async verify(handle, password) {
             || record.role === 'management';
 
         if (!released) {
-            const { data: appRow, error: appError } = await window.hllSupabase
+            const { data: appRow, error: appError } = await window.gmnSupabase
                 .from('applications')
                 .select('status')
                 .eq('driver_id', driver.driver_code)
@@ -1427,10 +1427,10 @@ function recruiterDriver() {
 async function recruiterSupabaseId() {
   const local = recruiterDriver();
   if (local && local.supabaseId) return local.supabaseId;
-  if (!window.hllSupabase) return null;
+  if (!window.gmnSupabase) return null;
 
   try {
-    const { data, error } = await window.hllSupabase
+    const { data, error } = await window.gmnSupabase
       .from('drivers')
       .select('id')
       .eq('auth_user_id', RECRUITER_AUTH_ID)
@@ -1473,7 +1473,7 @@ const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
    dev server got an email pointing at localhost:3000, which is nothing at
    all on their machine.
 
-   tools/build-www.js writes window.HLL_SITE_URL into the pages it builds,
+   tools/build-www.js writes window.GMN_SITE_URL into the pages it builds,
    from site.config.json. Falling back to the origin keeps development
    working, where localhost really is the right answer.
 
@@ -1503,8 +1503,8 @@ function publicSiteUrl() {
   } catch (e) { /* no location worth trusting */ }
 
   try {
-    if (typeof window !== 'undefined' && window.HLL_SITE_URL) {
-      return trim(window.HLL_SITE_URL);
+    if (typeof window !== 'undefined' && window.GMN_SITE_URL) {
+      return trim(window.GMN_SITE_URL);
     }
   } catch (e) { /* nothing to go on */ }
 
@@ -1617,7 +1617,7 @@ async function changePassword() {
   if (next !== again) { toast('The two new passwords do not match', 'warn'); return; }
   if (next === cur) { toast('That is already your password', 'warn'); return; }
 
-  if (!window.hllSupabase) { toast('Supabase is not connected', 'danger'); return; }
+  if (!window.gmnSupabase) { toast('Supabase is not connected', 'danger'); return; }
 
   /* Reauthenticate before changing anything. Note this takes the account's
      email: passing state.user.id sends a driver code — HLL-1001 — to a call
@@ -1626,11 +1626,11 @@ async function changePassword() {
   if (!email) { toast('This account has no email on record', 'danger'); return; }
 
   const { error: authError } =
-    await window.hllSupabase.auth.signInWithPassword({ email, password: cur });
+    await window.gmnSupabase.auth.signInWithPassword({ email, password: cur });
   if (authError) { toast('Your current password is not right', 'danger'); return; }
 
   const { error: updateError } =
-    await window.hllSupabase.auth.updateUser({ password: next });
+    await window.gmnSupabase.auth.updateUser({ password: next });
   if (updateError) {
     console.error('[GMN] password update failed:', updateError);
     toast('Could not update the password', 'danger', updateError.message);
@@ -2799,7 +2799,7 @@ async function resetGamingNationPassword(email) {
         return false;
     }
 
-    if (!window.hllSupabase) {
+    if (!window.gmnSupabase) {
 
         console.error(
             'Supabase client is not available.'
@@ -2817,7 +2817,7 @@ async function resetGamingNationPassword(email) {
         const {
             error
         } =
-            await window.hllSupabase.auth
+            await window.gmnSupabase.auth
                 .resetPasswordForEmail(
                     email,
                     {
@@ -3090,9 +3090,9 @@ const state = {
    other so the two can link to each other. The bundle in www/ renames the
    drivers' site to hq.html (index.html there is the tracking client), and
    the build rewrites these declarations to match. */
-const SITE = window.HLL_SITE === 'admin' ? 'admin' : 'drivers';
+const SITE = window.GMN_SITE === 'admin' ? 'admin' : 'drivers';
 const PAGES = Object.assign({ drivers: 'login.html', admin: 'admin.html' },
-  window.HLL_PAGES || {});
+  window.GMN_PAGES || {});
 const isAdminSite = () => SITE === 'admin';
 
 /* Sends the browser to the other site, keeping the driver where they were
@@ -3672,8 +3672,8 @@ function signOutEverywhere() {
   Sync.driverKey = null;         /* the next person in gets their own row */
   window.currentDriver = null;
   ServiceAuth.logout();
-  if (window.hllSupabase) {
-    window.hllSupabase.auth.signOut()
+  if (window.gmnSupabase) {
+    window.gmnSupabase.auth.signOut()
       .catch((err) => console.warn('[GMN] Supabase sign-out failed', err));
   }
 }
@@ -3683,10 +3683,10 @@ function signOutEverywhere() {
    record outlives an expired or revoked one, which is how a signed-out browser
    keeps showing a dashboard. */
 async function restoreSupabaseSession() {
-  if (!window.hllSupabase) return;   /* offline or packaged: local record stands */
+  if (!window.gmnSupabase) return;   /* offline or packaged: local record stands */
 
   try {
-    const { data, error } = await window.hllSupabase.auth.getSession();
+    const { data, error } = await window.gmnSupabase.auth.getSession();
 
     if (error) {
       console.warn('[GMN] could not read the Supabase session:', error);
@@ -3701,7 +3701,7 @@ async function restoreSupabaseSession() {
     }
 
     const { data: row, error: rowError } =
-      await window.hllSupabase
+      await window.gmnSupabase
         .from('drivers')
         .select('*')
         .eq('auth_user_id', session.user.id)
@@ -8062,13 +8062,13 @@ function defaultServiceUrl() {
      on :5173, a static host, a file — and the cost was every legacy endpoint
      firing at that host and 404ing on a loop.
 
-     fleet-server.js now sets window.HLL_SERVICE in the pages it serves, so a
+     fleet-server.js now sets window.GMN_SERVICE in the pages it serves, so a
      company running the service is joined up with no configuration at all,
      and a page served by anything else stays quiet. An address set by hand
      in settings still overrides both. */
   try {
-    if (typeof window !== 'undefined' && window.HLL_SERVICE) {
-      return String(window.HLL_SERVICE).replace(/\/$/, '');
+    if (typeof window !== 'undefined' && window.GMN_SERVICE) {
+      return String(window.GMN_SERVICE).replace(/\/$/, '');
     }
   } catch (e) { /* nothing to go on */ }
 
@@ -8089,7 +8089,7 @@ function defaultServiceUrl() {
 async function discoverLocalService() {
   try {
     if (typeof window === 'undefined') return false;
-    if (window.HLL_SERVICE) return false;      /* already told where it is */
+    if (window.GMN_SERVICE) return false;      /* already told where it is */
     if (!isLocalPage()) return false;
     if (typeof fetch !== 'function') return false;
 
@@ -8106,7 +8106,7 @@ async function discoverLocalService() {
 
     if (!ok) return false;
 
-    window.HLL_SERVICE = LOCAL_SERVICE;
+    window.GMN_SERVICE = LOCAL_SERVICE;
     console.log('[GMN] company service found on ' + LOCAL_SERVICE);
     return true;
 
@@ -8147,7 +8147,7 @@ const Sync = {
   /* The company is in Supabase, not behind a fleet-service URL. Gating this
      on url() meant turning the legacy service off also turned the company
      sync off — pull() and sendNow() talk to Supabase and need nothing else. */
-  on() { return !!window.hllSupabase; },
+  on() { return !!window.gmnSupabase; },
 
   /* Having the library is not the same as being signed in.
 
@@ -8162,9 +8162,9 @@ const Sync = {
      getSession() reads what is already in local storage. It costs nothing
      and makes no request. */
   async signedIn() {
-    if (!window.hllSupabase) return false;
+    if (!window.gmnSupabase) return false;
     try {
-      const { data } = await window.hllSupabase.auth.getSession();
+      const { data } = await window.gmnSupabase.auth.getSession();
       return !!(data && data.session);
     } catch (e) {
       return false;
@@ -8382,7 +8382,7 @@ mergeInner(db, remote) {
       const {
         data,
         error
-      } = await window.hllSupabase
+      } = await window.gmnSupabase
         .from('company')
         .select('id, version, data, updated_at')
         .eq('id', 1)
@@ -8473,10 +8473,10 @@ await Applications.pull();
          and a full render() each time, which is where the repeating
          "Dashboard driver loaded" came from. driverKey is cleared on sign-out,
          so the next person to sign in is fetched fresh. */
-      if (state.user && window.hllSupabase && this.driverKey !== state.user.id) {
+      if (state.user && window.gmnSupabase && this.driverKey !== state.user.id) {
         try {
           const { data: { user } = {}, error: authError } =
-            await window.hllSupabase.auth.getUser();
+            await window.gmnSupabase.auth.getUser();
 
           if (authError || !user) {
             console.error('[GMN] Could not get Supabase user:', authError);
@@ -8484,7 +8484,7 @@ await Applications.pull();
           }
 
           const { data: driver, error: driverError } =
-            await window.hllSupabase
+            await window.gmnSupabase
               .from('drivers')
               .select('*')
               .eq('auth_user_id', user.id)
@@ -8557,11 +8557,11 @@ await Applications.pull();
         // Supabase is now the source of truth.
         // The old /api/company endpoint is no longer required.
 
-        if (!window.hllSupabase) {
+        if (!window.gmnSupabase) {
             throw new Error('Supabase client is not available.');
         }
 
-        const { error } = await window.hllSupabase
+        const { error } = await window.gmnSupabase
             .from('company')
             .upsert({
                 id: 1,
@@ -8653,7 +8653,7 @@ await Applications.pull();
 
     console.log('[GMN] Company sync started.');
 
-    if (!window.hllSupabase) {
+    if (!window.gmnSupabase) {
       this.status = 'off';
       this.lastError = 'Supabase client is not available.';
       this.starting = false;
@@ -8716,7 +8716,7 @@ const Applications = {
   COLUMNS: 'id, driver_id, full_name, email, country, status, created_at, '
     + 'reviewed_by, reviewed_at',
 
-  on() { return !!window.hllSupabase; },
+  on() { return !!window.gmnSupabase; },
 
   /* A row is not the shape the recruitment screen draws with. Identity comes
      from Supabase; everything with no column keeps coming from the local
@@ -8809,7 +8809,7 @@ async pull() {
   if (!(await Sync.signedIn())) return false;
 
   try {
-    const { data, error } = await window.hllSupabase
+    const { data, error } = await window.gmnSupabase
       .from('applications')
       .select(this.COLUMNS)
       .order('created_at', { ascending: false });
@@ -8922,7 +8922,7 @@ async pull() {
          answer is 406 Not Acceptable rather than an empty list. An update
          that changed nothing is a normal outcome here; it should not come
          back as a transport error. */
-      const { data, error } = await window.hllSupabase
+      const { data, error } = await window.gmnSupabase
         .from('applications')
         .update(patch)
         .eq('id', app.supabaseId)
@@ -11580,7 +11580,7 @@ const Downloads = {
 
     let token = null;
     try {
-      const { data } = await window.hllSupabase.auth.getSession();
+      const { data } = await window.gmnSupabase.auth.getSession();
       token = data && data.session ? data.session.access_token : null;
     } catch (e) { /* handled by the endpoint, or by the fallback */ }
 
@@ -11662,7 +11662,7 @@ function viewDownloads() {
             <p class="t2 sm mt-8">To put the gate in front of them: create the R2
               bucket, upload the builds with
               <span class="mono">npm run release:push</span>, and set
-              <span class="mono">HLL_DOWNLOAD_SECRET</span>. The three commands
+              <span class="mono">GMN_DOWNLOAD_SECRET</span>. The three commands
               are in <span class="mono">SETUP.md</span> section 6.</p>
             <p class="t3 xs mt-8">Only staff see this.</p>
           </div>
@@ -12853,7 +12853,7 @@ const FLEET_ROOM = '#fleet';
 
    Getting through those needs a TURN relay, which is a server somebody
    pays for. Whether this company has one is not a decision this file can
-   make, so it stops pretending and asks the service. Set HLL_TURN_URL
+   make, so it stops pretending and asks the service. Set GMN_TURN_URL
    there and every client picks it up — website, app and console — with
    no rebuild and nothing for a driver to configure.
 
@@ -14076,7 +14076,7 @@ function boot() {
      company store, presence polling, the splash — belongs to the
      website and would fight them for it. login.html decides which of
      the two is being asked for before this script is even parsed. */
-  if (window.HLL_TERMINAL) return;
+  if (window.GMN_TERMINAL) return;
 
   Store.load();
   normaliseCompany();

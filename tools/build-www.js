@@ -25,8 +25,8 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 /* Both destinations can be redirected, so a test can build somewhere
    disposable instead of overwriting the folder that is ready to deploy. */
-const SITE = path.resolve(process.env.HLL_SITE_OUT || path.join(ROOT, 'www'));
-const APP = path.resolve(process.env.HLL_APP_OUT || path.join(ROOT, 'app-www'));
+const SITE = path.resolve((process.env.GMN_SITE_OUT || process.env.HLL_SITE_OUT) || path.join(ROOT, 'www'));
+const APP = path.resolve((process.env.GMN_APP_OUT || process.env.HLL_APP_OUT) || path.join(ROOT, 'app-www'));
 
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
@@ -169,7 +169,7 @@ if (!SITE_URL) {
   const HOME = SITE_URL + '/login';
 
   const seo = [
-    '<script>window.HLL_SITE_URL = ' + JSON.stringify(SITE_URL) + ';</script>',
+    '<script>window.GMN_SITE_URL = ' + JSON.stringify(SITE_URL) + ';</script>',
     '',
     '    <link rel="canonical" href="' + HOME + '">',
     '',
@@ -182,11 +182,11 @@ if (!SITE_URL) {
     '    </script>',
   ].join('\n');
 
-  const marker = '<!-- HLL_SEO';
+  const marker = '<!-- GMN_SEO';
   let html = read('login.html');
   const at = html.indexOf(marker);
   if (at === -1) {
-    console.log('  WARNING: the HLL_SEO marker is gone from login.html — no tags injected');
+    console.log('  WARNING: the GMN_SEO marker is gone from login.html — no tags injected');
   } else {
     const end = html.indexOf('-->', at);
     html = html.slice(0, at) + seo + html.slice(end + 3);
@@ -282,7 +282,7 @@ if (!SITE_URL) {
      boots and the hash takes over.
 
      The INJECTED document, not the source. Reading the file again shipped
-     a 404.html that still had the literal HLL_SEO marker in its head and
+     a 404.html that still had the literal GMN_SEO marker in its head and
      none of the tags that replace it — so the fallback every deep link
      lands on was the one page on the site with no canonical. It also
      contradicted the sentence above: it was not the same document. The

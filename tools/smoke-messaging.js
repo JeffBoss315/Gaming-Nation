@@ -34,7 +34,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const PORT = Number(process.env.HLL_SMOKE_PORT || 7094);
+const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7094);
 const ROOT = path.join(__dirname, '..');
 const TMP = path.join(os.tmpdir(), 'hll-msg-smoke');
 
@@ -134,12 +134,12 @@ function startServer() {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
       ELECTRON_RUN_AS_NODE: '1',
-      HLL_COMPANY_FILE: COMPANY_FILE,
-      HLL_SESSION_FILE: SESSION_FILE,
-      HLL_CHAT_FILE: CHAT_FILE,
-      HLL_DM_FILE: DM_FILE,
-      HLL_FILES_FILE: FILES_FILE,
-      HLL_FILES_DIR: FILES_DIR,
+      GMN_COMPANY_FILE: COMPANY_FILE,
+      GMN_SESSION_FILE: SESSION_FILE,
+      GMN_CHAT_FILE: CHAT_FILE,
+      GMN_DM_FILE: DM_FILE,
+      GMN_FILES_FILE: FILES_FILE,
+      GMN_FILES_DIR: FILES_DIR,
     }),
     stdio: 'ignore',
   });

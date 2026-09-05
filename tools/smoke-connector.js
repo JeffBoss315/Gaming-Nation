@@ -18,14 +18,14 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-const FLEET_PORT = Number(process.env.HLL_SMOKE_PORT || 7096);
+const FLEET_PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7096);
 const GAME_PORT = 25598;
 const COMPANY_FILE = path.join(os.tmpdir(), 'hll-connector-smoke.json');
 const DRIVER = 'HLL-4242';
 
 try { fs.unlinkSync(COMPANY_FILE); } catch (e) { /* first run */ }
 
-process.env.HLL_COMPANY_FILE = COMPANY_FILE;
+process.env.GMN_COMPANY_FILE = COMPANY_FILE;
 process.argv = [process.argv[0], 'fleet-server.js', '--port', String(FLEET_PORT)];
 
 const say = console.log;

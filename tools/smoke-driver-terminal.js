@@ -79,7 +79,7 @@ const PASSWORD = 'terminal-test';
    instead, signed out, which is the state a sign-in form is for. */
 const SEED = `
 (function () {
-  var S = window.hllSupabase;
+  var S = window.gmnSupabase;
   var UID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
   var KEY = 'hll.smoke.session';
 
@@ -303,7 +303,7 @@ app.whenReady().then(async () => {
       'ONLINE');
 
     check('driver row says online',
-      await js("window.hllSupabase.__db.drivers[0].status"),
+      await js("window.gmnSupabase.__db.drivers[0].status"),
       'online');
 
     check('gps active',
@@ -318,12 +318,12 @@ app.whenReady().then(async () => {
       await js("document.getElementById('headingDir').textContent"),
       'ENE');
 
-    const rows = await js("(window.hllSupabase.__db.driver_locations||[]).length");
+    const rows = await js("(window.gmnSupabase.__db.driver_locations||[]).length");
     if (Number(rows) > 0) say('positions uploaded', rows);
     else fails.push('positions uploaded: expected at least 1, got ' + rows);
 
     check('upload carries the driver id',
-      await js("(window.hllSupabase.__db.driver_locations||[])[0].driver_id"),
+      await js("(window.gmnSupabase.__db.driver_locations||[])[0].driver_id"),
       '41');
 
     check('fix counter moved',

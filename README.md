@@ -39,7 +39,7 @@ folder, then run:
 npm run telemetry
 ```
 
-For an adapter installed elsewhere, set `HLL_TELEMETRY_ADAPTER` to its real
+For an adapter installed elsewhere, set `GMN_TELEMETRY_ADAPTER` to its real
 path or pass `--adapter "C:\\real\\path\\hll-telemetry-adapter.exe"`.
 The launcher verifies `hll-scs-telemetry.dll`, passes it the map name, and
 waits for `http://localhost:25555/api/ets2/telemetry` before reporting ready.
@@ -380,7 +380,7 @@ the roster too.
 
 This is backward compatible: with no token the older endpoints behave exactly as before, so
 the connector and existing clients are untouched. Only the endpoints that carry an identity
-require one. Signing in is the one write that cannot itself require the shared `HLL_API_KEY`
+require one. Signing in is the one write that cannot itself require the shared `GMN_API_KEY`
 — a driver's browser has nowhere safe to keep one.
 
 #### Chat is kept
@@ -592,7 +592,7 @@ connector can file a run worth money, that stops being good enough the moment it
 reachable from anywhere else.
 
 ```bash
-HLL_API_KEY=some-long-random-string npm run fleet
+GMN_API_KEY=some-long-random-string npm run fleet
 ```
 
 With a key set, every write must carry it (`X-HLL-Key`); reads stay open, because the pages
@@ -600,7 +600,7 @@ that use them have nowhere to keep a secret. Give the connector the same key wit
 With no key set the service behaves exactly as before, so a LAN setup keeps working with
 nothing to configure — the startup banner says which mode it is in.
 
-Writes are also rate limited per address (`HLL_RATE_CAP`, `HLL_RATE_PER_SEC`), so a client
+Writes are also rate limited per address (`GMN_RATE_CAP`, `GMN_RATE_PER_SEC`), so a client
 stuck in a loop is answered with `429` instead of taking the service down.
 
 This is a shared secret, not per-driver identity. It stops the service being written to by

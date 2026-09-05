@@ -41,27 +41,27 @@ const flag = (name) => {
 };
 
 const ROOT = __dirname;
-const PORT = Number(flag('--port') || process.env.HLL_PORT || 7040);
+const PORT = Number(flag('--port') || (process.env.GMN_PORT || process.env.HLL_PORT) || 7040);
 const HOST = args.includes('--lan') ? '0.0.0.0' : '127.0.0.1';
 
 /* The tests point these at a temp directory so a run never touches the
    real company. Same reason the paths are read here and not inlined. */
-const COMPANY_FILE = process.env.HLL_COMPANY_FILE || path.join(ROOT, 'hll-company.json');
-const SESSION_FILE = process.env.HLL_SESSION_FILE || path.join(ROOT, 'hll-sessions.json');
-const CHAT_FILE = process.env.HLL_CHAT_FILE || path.join(ROOT, 'hll-chat.json');
-const DM_FILE = process.env.HLL_DM_FILE || path.join(ROOT, 'hll-dms.json');
-const FILES_FILE = process.env.HLL_FILES_FILE || path.join(ROOT, 'hll-files.json');
+const COMPANY_FILE = (process.env.GMN_COMPANY_FILE || process.env.HLL_COMPANY_FILE) || path.join(ROOT, 'hll-company.json');
+const SESSION_FILE = (process.env.GMN_SESSION_FILE || process.env.HLL_SESSION_FILE) || path.join(ROOT, 'hll-sessions.json');
+const CHAT_FILE = (process.env.GMN_CHAT_FILE || process.env.HLL_CHAT_FILE) || path.join(ROOT, 'hll-chat.json');
+const DM_FILE = (process.env.GMN_DM_FILE || process.env.HLL_DM_FILE) || path.join(ROOT, 'hll-dms.json');
+const FILES_FILE = (process.env.GMN_FILES_FILE || process.env.HLL_FILES_FILE) || path.join(ROOT, 'hll-files.json');
 
 /* Attachments are written to disk rather than into the JSON beside the
    message. A photo of a delivery note base64'd into a message file turns a
    200 KB conversation into a 2 MB one that has to be parsed in full every
    time anybody says anything. */
-const FILES_DIR = process.env.HLL_FILES_DIR || path.join(ROOT, 'hll-files');
+const FILES_DIR = (process.env.GMN_FILES_DIR || process.env.HLL_FILES_DIR) || path.join(ROOT, 'hll-files');
 
 /* Big enough for a phone photo of a CMR note, small enough that one driver
    cannot fill the disk by holding the button down. */
-const MAX_UPLOAD = Number(process.env.HLL_MAX_UPLOAD || 25 * 1024 * 1024);
-const SITE_DIR = process.env.HLL_SITE_DIR || ROOT;
+const MAX_UPLOAD = Number((process.env.GMN_MAX_UPLOAD || process.env.HLL_MAX_UPLOAD) || 25 * 1024 * 1024);
+const SITE_DIR = (process.env.GMN_SITE_DIR || process.env.HLL_SITE_DIR) || ROOT;
 
 /* ---------------- how calls find each other ----------------
 
@@ -84,22 +84,22 @@ const SITE_DIR = process.env.HLL_SITE_DIR || ROOT;
    the app, the website and the console all ask. Set the three below and
    restart; leave them unset and calls work exactly as before, on STUN.
 
-     HLL_TURN_URL    turn:relay.example.com:3478
-     HLL_TURN_USER
-     HLL_TURN_PASS
+     GMN_TURN_URL    turn:relay.example.com:3478
+     GMN_TURN_USER
+     GMN_TURN_PASS
 
    Extra STUN servers are listed because they are free and a single one
    that is having a bad day should not be the reason a call fails. */
-const STUN = (process.env.HLL_STUN_URLS
+const STUN = ((process.env.GMN_STUN_URLS || process.env.HLL_STUN_URLS)
   || 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 const ICE_SERVERS = [{ urls: STUN }].concat(
-  process.env.HLL_TURN_URL
+  (process.env.GMN_TURN_URL || process.env.HLL_TURN_URL)
     ? [{
-      urls: process.env.HLL_TURN_URL.split(',').map((s) => s.trim()).filter(Boolean),
-      username: process.env.HLL_TURN_USER || undefined,
-      credential: process.env.HLL_TURN_PASS || undefined,
+      urls: (process.env.GMN_TURN_URL || process.env.HLL_TURN_URL).split(',').map((s) => s.trim()).filter(Boolean),
+      username: (process.env.GMN_TURN_USER || process.env.HLL_TURN_USER) || undefined,
+      credential: (process.env.GMN_TURN_PASS || process.env.HLL_TURN_PASS) || undefined,
     }]
     : []);
 
@@ -335,7 +335,7 @@ function serveFile(res, pathname) {
        the service says so itself, in the page it hands over. Nothing else
        sets this, so nothing else can be mistaken for the service. */
     if (type.indexOf('text/html') === 0) {
-      const marker = '<script>window.HLL_SERVICE = location.origin;</script>';
+      const marker = '<script>window.GMN_SERVICE = location.origin;</script>';
       let html = fs.readFileSync(file, 'utf8');
       html = html.indexOf('</head>') > -1
         ? html.replace('</head>', '  ' + marker + '\n</head>')
@@ -413,7 +413,7 @@ const FLEET_ROOM_NAME = 'Fleet room';
 
 const isRoom = (id) => String(id) === FLEET_ROOM;
 
-const ROOM_READS_FILE = process.env.HLL_ROOM_READS_FILE
+const ROOM_READS_FILE = (process.env.GMN_ROOM_READS_FILE || process.env.HLL_ROOM_READS_FILE)
   || path.join(ROOT, 'hll-room-reads.json');
 
 let roomReads = readJSON(ROOM_READS_FILE, null) || {};   /* driverId -> ISO */
@@ -1334,7 +1334,7 @@ server.listen(PORT, HOST, () => {
     console.log('  Call routing :  STUN only — no relay configured.');
     console.log('                  Calls connect on ordinary networks and fail');
     console.log('                  behind symmetric NAT or a UDP-blocking');
-    console.log('                  firewall. Set HLL_TURN_URL to fix that.');
+    console.log('                  firewall. Set GMN_TURN_URL to fix that.');
   }
   console.log('');
   console.log('  Company file :  ' + COMPANY_FILE);

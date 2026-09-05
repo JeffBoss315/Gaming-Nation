@@ -128,7 +128,7 @@ npx wrangler r2 bucket create gaming-nation-releases
 npm run release:push          # add -- --dry to see what would go
 
 # 3. the signing secret — any long random string
-npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=gaming-nation
+npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
 ```
 
 Then in the Cloudflare Pages dashboard → **Settings → Environment variables**:
@@ -152,7 +152,7 @@ an expired one, and asking while still pending.
 > them — the approval check is decorative again. It exists for local and
 > offline copies, which have no Functions and no bucket.
 
-Rotating `HLL_DOWNLOAD_SECRET` invalidates every link already handed out,
+Rotating `GMN_DOWNLOAD_SECRET` invalidates every link already handed out,
 which is how you revoke them.
 
 ---
@@ -230,14 +230,14 @@ npm run fleet -- --lan     # reachable from a phone on the same network
 ```
 
 It serves the website too, and a page it serves is joined up automatically —
-it sets `window.HLL_SERVICE` in the HTML it hands over, so no address has to
+it sets `window.GMN_SERVICE` in the HTML it hands over, so no address has to
 be typed anywhere. A page served by `npm run serve` or any other static host
 does not get that marker and stays quiet rather than firing `/api` calls at
 a host that has none.
 
 Three JSON files beside it hold the state: `hll-company.json`,
 `hll-sessions.json` and `hll-chat.json`. Override the paths with
-`HLL_COMPANY_FILE`, `HLL_SESSION_FILE` and `HLL_CHAT_FILE`;
+`GMN_COMPANY_FILE`, `GMN_SESSION_FILE` and `GMN_CHAT_FILE`;
 `http://localhost:8787/status` shows what it is doing.
 
 ### The app can run the service itself
@@ -288,9 +288,9 @@ If you have one — or rent one — the service hands it to every client, so the
 is nothing to configure per driver and nothing to rebuild:
 
 ```bash
-HLL_TURN_URL=turn:relay.example.com:3478 \
-HLL_TURN_USER=someuser \
-HLL_TURN_PASS=somepassword \
+GMN_TURN_URL=turn:relay.example.com:3478 \
+GMN_TURN_USER=someuser \
+GMN_TURN_PASS=somepassword \
 npm run fleet
 ```
 

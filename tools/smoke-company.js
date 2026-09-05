@@ -61,8 +61,8 @@ app.whenReady().then(async () => {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
       ELECTRON_RUN_AS_NODE: '1',
-      HLL_SITE_OUT: SITE_OUT,
-      HLL_APP_OUT: APP_OUT,
+      GMN_SITE_OUT: SITE_OUT,
+      GMN_APP_OUT: APP_OUT,
     }),
     encoding: 'utf8',
   });
@@ -76,8 +76,8 @@ app.whenReady().then(async () => {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
       ELECTRON_RUN_AS_NODE: '1',
-      HLL_COMPANY_FILE: COMPANY_FILE,
-      HLL_SITE_DIR: SITE_OUT,
+      GMN_COMPANY_FILE: COMPANY_FILE,
+      GMN_SITE_DIR: SITE_OUT,
     }),
     stdio: 'ignore',
   });

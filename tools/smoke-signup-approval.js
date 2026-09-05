@@ -88,10 +88,10 @@ app.whenReady().then(async () => {
     }
 
     check('auth user exists',
-      await js(`window.hllSupabase.__users.length`), '1');
+      await js(`window.gmnSupabase.__users.length`), '1');
 
     check('no driver row yet (RLS refused it)',
-      await js(`window.hllSupabase.__db.drivers.length`), '0');
+      await js(`window.gmnSupabase.__db.drivers.length`), '0');
 
     /* ---- 2. confirm, then sign in ------------------------------- */
 
@@ -114,20 +114,20 @@ app.whenReady().then(async () => {
     else say('first sign-in', 'ok');
 
     check('driver record provisioned',
-      await js(`window.hllSupabase.__db.drivers.length`), '1');
+      await js(`window.gmnSupabase.__db.drivers.length`), '1');
 
     check('provisioned as pending',
-      await js(`window.hllSupabase.__db.drivers[0].status`), 'pending');
+      await js(`window.gmnSupabase.__db.drivers[0].status`), 'pending');
 
     check('linked to the auth user',
-      await js(`window.hllSupabase.__db.drivers[0].auth_user_id === window.hllSupabase.__users[0].user.id`),
+      await js(`window.gmnSupabase.__db.drivers[0].auth_user_id === window.gmnSupabase.__users[0].user.id`),
       'true');
 
     check('application filed',
-      await js(`(window.hllSupabase.__db.applications||[]).length`), '1');
+      await js(`(window.gmnSupabase.__db.applications||[]).length`), '1');
 
     check('application keyed on the driver code',
-      await js(`(window.hllSupabase.__db.applications[0]||{}).driver_id === window.hllSupabase.__db.drivers[0].driver_code`),
+      await js(`(window.gmnSupabase.__db.applications[0]||{}).driver_id === window.gmnSupabase.__db.drivers[0].driver_code`),
       'true');
 
     /* ---- 2b. the driver row already exists ----------------------
@@ -143,7 +143,7 @@ app.whenReady().then(async () => {
        attempted. Signing in has to file it whoever made the driver. */
 
     const trigger = await js(`(async () => {
-      const S = window.hllSupabase;
+      const S = window.gmnSupabase;
 
       /* a second driver, made the way the trigger makes one: a drivers
          row and no application anywhere */
@@ -201,7 +201,7 @@ app.whenReady().then(async () => {
 
     /* ---- 4. approve -------------------------------------------- */
 
-    await js(`window.hllSupabase.__db.applications[0].status = 'approved';`);
+    await js(`window.gmnSupabase.__db.applications[0].status = 'approved';`);
 
     /* ---- 5. and now it opens ----------------------------------- */
 
@@ -231,7 +231,7 @@ app.whenReady().then(async () => {
        and what it is guarding is that approval did not mint a second
        driver for the person being approved. */
     check('still only one driver record for the applicant',
-      await js(`window.hllSupabase.__db.drivers
+      await js(`window.gmnSupabase.__db.drivers
         .filter(d => d.email === ${JSON.stringify(EMAIL)}).length`), '1');
 
   } catch (err) {

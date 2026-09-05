@@ -23,7 +23,7 @@ export async function onRequestGet({ request, params, env }) {
 
   if (!spec) return fail(404, 'There is no such build.');
 
-  const secret = env.HLL_DOWNLOAD_SECRET;
+  const secret = (env.GMN_DOWNLOAD_SECRET || env.HLL_DOWNLOAD_SECRET);
   if (!secret) return fail(500, 'The download service is not configured.');
 
   const bucket = env.RELEASES;

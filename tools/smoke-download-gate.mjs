@@ -68,7 +68,7 @@ function supabase({ role = 'driver', code = 'HLL0041', application = 'pending', 
    has to stand aside rather than refuse everybody. The tests that want
    the half-built state ask for it explicitly. */
 const ENV = (over = {}) => ({
-  HLL_DOWNLOAD_SECRET: SECRET,
+  GMN_DOWNLOAD_SECRET: SECRET,
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'anon',
   RELEASES: bucket(),
@@ -177,7 +177,7 @@ check('an unknown build — 404', res.status, 404);
    bucket: a gate answering "refused" to everybody is not a gate, it is
    an outage. It now reports gate: 'off' about itself and the page falls
    back to the public URL, exactly as where no Function is deployed. */
-res = await postLink('win-setup', 'Bearer good', ENV({ HLL_DOWNLOAD_SECRET: '' }));
+res = await postLink('win-setup', 'Bearer good', ENV({ GMN_DOWNLOAD_SECRET: '' }));
 check('no signing secret — stands aside', res.status, 200);
 check('and says so plainly', (await res.json()).gate, 'off');
 

@@ -126,7 +126,7 @@ const SOURCE = `(function () {
     return api;
   }
 
-  window.hllSupabase = {
+  window.gmnSupabase = {
     from: function (name) { return builder(name); },
 
     auth: {

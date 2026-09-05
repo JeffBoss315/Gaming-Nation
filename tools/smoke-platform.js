@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
             the way of it. driver-login.html and driver-dashboard.html were
             merged into login.html, so on every ordinary route their markup
             is present and has to be hidden, their scripts unrun, and the
-            SPA has to have booted — which it does not if HLL_TERMINAL was
+            SPA has to have booted — which it does not if GMN_TERMINAL was
             wrongly set, leaving a blank page. */
       const dt = document.getElementById('dt-root');
 
@@ -66,7 +66,7 @@ app.whenReady().then(async () => {
             for ever, fixing nothing at the source. The pull now repairs
             what it just read and sends it back, so the SECOND pull of the
             same record has nothing to do. */
-      const S = window.hllSupabase;
+      const S = window.gmnSupabase;
       if (S && S.__db && Array.isArray(S.__db.company)) {
         S.__db.company.length = 0;
         S.__db.company.push({

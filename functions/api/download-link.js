@@ -37,18 +37,18 @@ export async function onRequestPost({ request, env }) {
      URL exactly as it does where no Function is deployed at all. The
      staff banner on the downloads page still reports the gate as off,
      which is the honest description of a half-finished setup. */
-  const ready = !!env.HLL_DOWNLOAD_SECRET && !!env.RELEASES;
+  const ready = !!(env.GMN_DOWNLOAD_SECRET || env.HLL_DOWNLOAD_SECRET) && !!env.RELEASES;
 
   if (!ready) {
     return json({
       gate: 'off',
-      reason: !env.HLL_DOWNLOAD_SECRET
-        ? 'HLL_DOWNLOAD_SECRET is not set on this project.'
+      reason: !(env.GMN_DOWNLOAD_SECRET || env.HLL_DOWNLOAD_SECRET)
+        ? 'GMN_DOWNLOAD_SECRET is not set on this project.'
         : 'No R2 bucket is bound to this project as RELEASES.',
     }, 200);
   }
 
-  const secret = env.HLL_DOWNLOAD_SECRET;
+  const secret = (env.GMN_DOWNLOAD_SECRET || env.HLL_DOWNLOAD_SECRET);
 
   const who = await approvedDriver(env, request.headers.get('Authorization'));
 
@@ -71,6 +71,6 @@ export async function onRequestPost({ request, env }) {
    reports whether this deployment is actually able to gate. */
 export const onRequestGet = ({ env }) =>
   json({
-    gate: (env.HLL_DOWNLOAD_SECRET && env.RELEASES) ? 'on' : 'off',
+    gate: ((env.GMN_DOWNLOAD_SECRET || env.HLL_DOWNLOAD_SECRET) && env.RELEASES) ? 'on' : 'off',
     hint: 'POST here with a build and your session to get a download link.',
   }, 200);

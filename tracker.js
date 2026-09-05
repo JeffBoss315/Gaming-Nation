@@ -2158,13 +2158,13 @@ function defaultServiceUrl() {
      on :5173, a static host, a file — and the cost was every legacy endpoint
      firing at that host and 404ing on a loop.
 
-     fleet-server.js now sets window.HLL_SERVICE in the pages it serves, so a
+     fleet-server.js now sets window.GMN_SERVICE in the pages it serves, so a
      company running the service is joined up with no configuration at all,
      and a page served by anything else stays quiet. An address set by hand
      in settings still overrides both. */
   try {
-    if (typeof window !== 'undefined' && window.HLL_SERVICE) {
-      return String(window.HLL_SERVICE).replace(/\/$/, '');
+    if (typeof window !== 'undefined' && window.GMN_SERVICE) {
+      return String(window.GMN_SERVICE).replace(/\/$/, '');
     }
   } catch (e) { /* nothing to go on */ }
 
@@ -2186,7 +2186,7 @@ const LOCAL_SERVICE = 'http://localhost:7040';
 async function discoverLocalService() {
   try {
     if (typeof window === 'undefined') return false;
-    if (window.HLL_SERVICE) return false;
+    if (window.GMN_SERVICE) return false;
     if ((Store.db.settings.fleetUrl || '').trim()) return false;
     if (typeof fetch !== 'function') return false;
 
@@ -2203,7 +2203,7 @@ async function discoverLocalService() {
 
     if (!ok) return false;
 
-    window.HLL_SERVICE = LOCAL_SERVICE;
+    window.GMN_SERVICE = LOCAL_SERVICE;
     console.log('[GMN] company service found on ' + LOCAL_SERVICE);
     return true;
 
@@ -5483,7 +5483,7 @@ const Messages = {
 
    Getting through those needs a TURN relay, which is a server somebody
    pays for. Whether this company has one is not a decision this file can
-   make, so it stops pretending: the service is asked. Set HLL_TURN_URL
+   make, so it stops pretending: the service is asked. Set GMN_TURN_URL
    there and every client picks it up — app, website and console — with
    no rebuild and nothing for a driver to configure.
 
@@ -6989,7 +6989,7 @@ const Auth = {
      Everything it needs was put into the signUp metadata by the website's
      registration: full_name, driver_code, role and country. */
   async provision(user) {
-    if (!window.hllSupabase || !user) return { driver: null };
+    if (!window.gmnSupabase || !user) return { driver: null };
 
     const meta = user.user_metadata || {};
     const name = meta.full_name || (user.email || '').split('@')[0] || 'Driver';
@@ -7000,7 +7000,7 @@ const Auth = {
     let code = meta.driver_code || ('GMN' + String(Math.floor(1000 + Math.random() * 9000)));
 
     for (let tries = 0; tries < 6; tries++) {
-      const { data, error } = await window.hllSupabase
+      const { data, error } = await window.gmnSupabase
         .from('drivers')
         .insert({
           auth_user_id: user.id,
@@ -7036,9 +7036,9 @@ const Auth = {
 
     /* The website and the driver app must authenticate against the same
        Supabase account. Keep the local seed only for offline installations. */
-    if (window.hllSupabase && email.indexOf('@') > -1) {
+    if (window.gmnSupabase && email.indexOf('@') > -1) {
       try {
-        const result = await window.hllSupabase.auth.signInWithPassword({ email, password: pass });
+        const result = await window.gmnSupabase.auth.signInWithPassword({ email, password: pass });
         if (result.error) {
           /* Supabase says "Invalid login credentials" both for a wrong
              password and for an address with no account, deliberately —
@@ -7053,7 +7053,7 @@ const Auth = {
         }
         const user = result.data && result.data.user;
         if (!user) return { error: 'Login failed. No user was returned.' };
-        let lookup = await window.hllSupabase.from('drivers').select('*')
+        let lookup = await window.gmnSupabase.from('drivers').select('*')
           .eq('auth_user_id', user.id).maybeSingle();
 
         /* No driver record, but the password was right.
@@ -7075,7 +7075,7 @@ const Auth = {
         }
 
         if (lookup.error || !lookup.data) {
-          await window.hllSupabase.auth.signOut();
+          await window.gmnSupabase.auth.signOut();
           return {
             error: 'Your sign-in works, but no driver record could be made for it. '
               + 'Sign in on the GMN website once, then come back.',
@@ -7083,7 +7083,7 @@ const Auth = {
         }
         const row = lookup.data;
         if (row.status === 'suspended' || row.account_status === 'suspended') {
-          await window.hllSupabase.auth.signOut();
+          await window.gmnSupabase.auth.signOut();
           return { error: 'This account is suspended. Contact Gaming Nation management.' };
         }
         return {
