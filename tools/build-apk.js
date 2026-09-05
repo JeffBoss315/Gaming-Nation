@@ -19,7 +19,7 @@ const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const ANDROID = path.join(ROOT, 'android');
-const TOOLS = path.join(process.env.LOCALAPPDATA || os.homedir(), 'hll-android-tools');
+const TOOLS = path.join(process.env.LOCALAPPDATA || os.homedir(), 'gmn-android-tools');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 const isWin = process.platform === 'win32';
@@ -115,7 +115,7 @@ const run = (cmd, args, cwd, env) => {
 
 console.log('\n> building www/');
 run(node, [path.join('tools', 'build-www.js')]);
-/* Launcher icons are generated from hll.jpg by tools/make-brand-icons.ps1
+/* Launcher icons are generated from gmn.jpg by tools/make-brand-icons.ps1
    (npm run icons) and committed. Regenerating them here would overwrite the
    brand artwork with a placeholder. */
 const launcher = path.join(ANDROID, 'app', 'src', 'main', 'res', 'mipmap-xxxhdpi', 'ic_launcher.png');

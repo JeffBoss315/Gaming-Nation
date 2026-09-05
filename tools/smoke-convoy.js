@@ -31,7 +31,7 @@ const APP_OUT = path.join(ROOT, '.smoke-convoy-app');
 /* A fresh profile every run. Browser partitions persist between runs, so
    without this a second run starts with the previous run's localStorage and
    the assertions read state that this run did not create. */
-const USER_DATA = path.join(require('os').tmpdir(), 'hll-smoke-convoy');
+const USER_DATA = path.join(require('os').tmpdir(), 'gmn-smoke-convoy');
 fs.rmSync(USER_DATA, { recursive: true, force: true });
 app.setPath('userData', USER_DATA);
 app.disableHardwareAcceleration();
@@ -246,7 +246,7 @@ app.whenReady().then(async () => {
       path.join(ROOT, 'game-connector.js'),
       '--service', base, '--driver', DRIVER_ID, '--name', 'Convoy Driver',
       '--telemetry-port', String(GAME_PORT), '--poll', '300',
-      '--outbox', path.join(app.getPath('temp'), 'hll-convoy-outbox.json'),
+      '--outbox', path.join(app.getPath('temp'), 'gmn-convoy-outbox.json'),
     ], { env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }), stdio: 'ignore' });
 
     truck.speed = 78;

@@ -813,7 +813,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   content:'';position:absolute;
   top:11px;left:50%;transform:translateX(-50%);
   width:36px;height:36px;border-radius:50%;
-  background:url('hll.jpg') center/cover no-repeat;
+  background:url('gmn.jpg') center/cover no-repeat;
   box-shadow:0 0 0 1px rgba(255,255,255,.10), 0 2px 12px rgba(0,0,0,.6);
 }
 
@@ -1505,7 +1505,7 @@ tr[data-act="verify-job"]{cursor:pointer}
 /* ============================================================
    THE GAMING NATION EMBLEM
    ------------------------------------------------------------
-   hll.jpg is the company artwork every icon in the app is derived
+   gmn.jpg is the company artwork every icon in the app is derived
    from, used here as the company face: the way in, the top of the
    command centre, and on a convoy.
 

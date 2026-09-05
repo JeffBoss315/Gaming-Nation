@@ -34,7 +34,7 @@ const http = require('http');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-host'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-host'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 
@@ -106,7 +106,7 @@ app.whenReady().then(async () => {
        is not writable — a service that starts and then cannot save is the
        failure this guards. */
     check('and not beside the script',
-      !fs.existsSync(path.join(path.dirname(script), 'hll-company.json'))
+      !fs.existsSync(path.join(path.dirname(script), 'gmn-company.json'))
       || path.dirname(script) === ROOT,
       'checked');
 

@@ -17,7 +17,7 @@ const SHELL = [
   './manifest.webmanifest',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/leaflet.css',
-  './hll.jpg',
+  './gmn.jpg',
   './icons/mark.png',
   './icons/icon-192.png',
   './icons/icon-512.png',

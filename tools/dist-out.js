@@ -30,6 +30,6 @@ const os = require('os');
 const path = require('path');
 
 const dir = (process.env.GMN_DIST_DIR || process.env.HLL_DIST_DIR)
-  || path.join(os.tmpdir(), 'hll-dist');
+  || path.join(os.tmpdir(), 'gmn-dist');
 
 process.stdout.write(dir);

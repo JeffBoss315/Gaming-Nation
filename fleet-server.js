@@ -46,17 +46,17 @@ const HOST = args.includes('--lan') ? '0.0.0.0' : '127.0.0.1';
 
 /* The tests point these at a temp directory so a run never touches the
    real company. Same reason the paths are read here and not inlined. */
-const COMPANY_FILE = (process.env.GMN_COMPANY_FILE || process.env.HLL_COMPANY_FILE) || path.join(ROOT, 'hll-company.json');
-const SESSION_FILE = (process.env.GMN_SESSION_FILE || process.env.HLL_SESSION_FILE) || path.join(ROOT, 'hll-sessions.json');
-const CHAT_FILE = (process.env.GMN_CHAT_FILE || process.env.HLL_CHAT_FILE) || path.join(ROOT, 'hll-chat.json');
-const DM_FILE = (process.env.GMN_DM_FILE || process.env.HLL_DM_FILE) || path.join(ROOT, 'hll-dms.json');
-const FILES_FILE = (process.env.GMN_FILES_FILE || process.env.HLL_FILES_FILE) || path.join(ROOT, 'hll-files.json');
+const COMPANY_FILE = (process.env.GMN_COMPANY_FILE || process.env.HLL_COMPANY_FILE) || path.join(ROOT, 'gmn-company.json');
+const SESSION_FILE = (process.env.GMN_SESSION_FILE || process.env.HLL_SESSION_FILE) || path.join(ROOT, 'gmn-sessions.json');
+const CHAT_FILE = (process.env.GMN_CHAT_FILE || process.env.HLL_CHAT_FILE) || path.join(ROOT, 'gmn-chat.json');
+const DM_FILE = (process.env.GMN_DM_FILE || process.env.HLL_DM_FILE) || path.join(ROOT, 'gmn-dms.json');
+const FILES_FILE = (process.env.GMN_FILES_FILE || process.env.HLL_FILES_FILE) || path.join(ROOT, 'gmn-files.json');
 
 /* Attachments are written to disk rather than into the JSON beside the
    message. A photo of a delivery note base64'd into a message file turns a
    200 KB conversation into a 2 MB one that has to be parsed in full every
    time anybody says anything. */
-const FILES_DIR = (process.env.GMN_FILES_DIR || process.env.HLL_FILES_DIR) || path.join(ROOT, 'hll-files');
+const FILES_DIR = (process.env.GMN_FILES_DIR || process.env.HLL_FILES_DIR) || path.join(ROOT, 'gmn-files');
 
 /* Big enough for a phone photo of a CMR note, small enough that one driver
    cannot fill the disk by holding the button down. */
@@ -104,8 +104,36 @@ const ICE_SERVERS = [{ urls: STUN }].concat(
     : []);
 
 /* ---------------- small helpers ---------------- */
+/* The state files moved with the company name: hll-company.json is
+   gmn-company.json now. A file name is not a label — it is where the
+   company already is — so a service that only looked for the new name
+   would come up empty on a machine that has been running for weeks, with
+   the real record sitting beside it under a name nothing reads.
+
+   Read the old one when the new one is absent. The next save writes the
+   new name, so this happens once; the old file is left alone rather than
+   deleted, because an older build still expects to find it there and
+   losing a company to tidiness is a bad trade. */
+function legacyName(file) {
+  const dir = path.dirname(file);
+  const base = path.basename(file);
+  if (base.indexOf('gmn-') !== 0) return null;
+  return path.join(dir, 'hll-' + base.slice(4));
+}
+
 function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* try the old name */ }
+
+  const old = legacyName(file);
+  if (old) {
+    try {
+      const held = JSON.parse(fs.readFileSync(old, 'utf8'));
+      console.log('[gmn] carried ' + path.basename(old) + ' over to ' + path.basename(file));
+      return held;
+    } catch (e) { /* not there either */ }
+  }
+
+  return fallback;
 }
 
 /* Written to a neighbouring file and renamed, so a crash mid-write leaves
@@ -116,7 +144,7 @@ function writeJSON(file, value) {
     fs.writeFileSync(tmp, JSON.stringify(value));
     fs.renameSync(tmp, file);
   } catch (e) {
-    console.warn('[hll] could not write ' + path.basename(file) + ': ' + e.message);
+    console.warn('[gmn] could not write ' + path.basename(file) + ': ' + e.message);
   }
 }
 
@@ -414,7 +442,7 @@ const FLEET_ROOM_NAME = 'Fleet room';
 const isRoom = (id) => String(id) === FLEET_ROOM;
 
 const ROOM_READS_FILE = (process.env.GMN_ROOM_READS_FILE || process.env.HLL_ROOM_READS_FILE)
-  || path.join(ROOT, 'hll-room-reads.json');
+  || path.join(ROOT, 'gmn-room-reads.json');
 
 let roomReads = readJSON(ROOM_READS_FILE, null) || {};   /* driverId -> ISO */
 
@@ -979,7 +1007,7 @@ async function api(req, res, url) {
       fs.mkdirSync(FILES_DIR, { recursive: true });
       fs.writeFileSync(path.join(FILES_DIR, id + ext), buf);
     } catch (e) {
-      console.warn('[hll] could not store an upload: ' + e.message);
+      console.warn('[gmn] could not store an upload: ' + e.message);
       return json(res, 500, { error: 'the file could not be stored' });
     }
 
@@ -1267,7 +1295,7 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/api/call/signal' && req.method === 'POST') {
     return callSignal(req, res).catch((e) => {
-      console.warn('[hll] call signal: ' + e.message);
+      console.warn('[gmn] call signal: ' + e.message);
       try { json(res, 500, { error: 'the service failed on that' }); } catch (x) { /* gone */ }
     });
   }
@@ -1301,7 +1329,7 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname.startsWith('/api/')) {
     return api(req, res, url).catch((e) => {
-      console.warn('[hll] ' + url.pathname + ': ' + e.message);
+      console.warn('[gmn] ' + url.pathname + ': ' + e.message);
       try { json(res, 500, { error: 'the service failed on that' }); } catch (x) { /* gone */ }
     });
   }

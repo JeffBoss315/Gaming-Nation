@@ -55,7 +55,7 @@ function verifyPackagedAssets(root) {
     throw new Error('the app references files that will not be packaged:\n  '
       + missing.join('\n  ') + '\nAdd them to build.files in package.json.');
   }
-  console.log('[hll] afterPack: every referenced file is packaged ('
+  console.log('[gmn] afterPack: every referenced file is packaged ('
     + pages.length + ' page(s) checked)');
 }
 
@@ -72,7 +72,7 @@ exports.default = async function afterPack(context) {
 
   for (const [what, p] of [['rcedit', rcedit], ['icon', icon], ['exe', exe]]) {
     if (!fs.existsSync(p)) {
-      console.warn('[hll] afterPack: no ' + what + ' at ' + p + ' — icon not applied');
+      console.warn('[gmn] afterPack: no ' + what + ' at ' + p + ' — icon not applied');
       return;
     }
   }
@@ -88,5 +88,5 @@ exports.default = async function afterPack(context) {
     '--set-product-version', v,
   ], { stdio: 'inherit', windowsHide: true });
 
-  console.log('[hll] afterPack: Gaming Nation icon stamped onto ' + path.basename(exe));
+  console.log('[gmn] afterPack: Gaming Nation icon stamped onto ' + path.basename(exe));
 };

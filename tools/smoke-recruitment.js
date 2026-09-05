@@ -13,7 +13,7 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
    the stand-in and was never brought across. */
 const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-probe-driver'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-probe-driver'));
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });

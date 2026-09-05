@@ -20,7 +20,7 @@ const { spawn } = require('child_process');
 
 const FLEET_PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7096);
 const GAME_PORT = 25598;
-const COMPANY_FILE = path.join(os.tmpdir(), 'hll-connector-smoke.json');
+const COMPANY_FILE = path.join(os.tmpdir(), 'gmn-connector-smoke.json');
 const DRIVER = 'HLL-4242';
 
 try { fs.unlinkSync(COMPANY_FILE); } catch (e) { /* first run */ }
@@ -188,7 +188,7 @@ const req = (method, p, body) => new Promise((done, fail) => {
      Everything that matters goes through an outbox on disk and is only
      removed once Gaming Nation has taken it, so an empty outbox is the proof
      that the whole run actually landed. */
-  const outbox = path.join(__dirname, '..', 'hll-outbox.json');
+  const outbox = path.join(__dirname, '..', 'gmn-outbox.json');
   let queued = null;
   try { queued = JSON.parse(fs.readFileSync(outbox, 'utf8')); } catch (e) { queued = []; }
   check('nothing is left unsent', Array.isArray(queued) && queued.length === 0,

@@ -14,7 +14,7 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 /* A probe must never touch the profile the real app uses — it signs in, writes
    records and would leave them behind. Everything below happens in a scratch
    profile that is thrown away with the run. */
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-' + path.basename(__filename, '.js')));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-' + path.basename(__filename, '.js')));
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   /* the same handler the shipped shell registers */
@@ -44,7 +44,7 @@ app.whenReady().then(async () => {
       if (!acc) return R;
       Auth.signIn(acc, Auth.driverRecord(acc.driverId), false);
       render(); await wait(400);
-      say('signed in', Store.db.driver && Store.db.driver.authed ? Store.db.driver.hllId : 'NO');
+      say('signed in', Store.db.driver && Store.db.driver.authed ? Store.db.driver.gmnId : 'NO');
 
       /* the desktop bridge is present in this shell */
       say('desktop bridge', window.hllDesktop ? 'yes' : 'NO');
@@ -53,7 +53,7 @@ app.whenReady().then(async () => {
       /* a dispatched load reaches the client */
       const hq = Auth.hqDb();
       hq.assignments = hq.assignments || [];
-      hq.assignments.unshift({ id: 'ASG-' + RUN, driverId: Store.db.driver.hllId,
+      hq.assignments.unshift({ id: 'ASG-' + RUN, driverId: Store.db.driver.gmnId,
         from: 'Rotterdam', to: 'Hamburg', cargo: 'Steel coils', km: 480, payout: 4200,
         status: 'assigned', at: new Date().toISOString() });
       Auth.saveHqDb(hq);
@@ -68,7 +68,7 @@ app.whenReady().then(async () => {
       Store.db.conn.hll = 'connected';
       submitDelivery(rec.id, true); await wait(300);
       const hq2 = Auth.hqDb();
-      const me = hq2.drivers.find(d => d.id === Store.db.driver.hllId);
+      const me = hq2.drivers.find(d => d.id === Store.db.driver.gmnId);
       say('run on company record', (hq2.jobs || []).some(j => j.id === 'JOB-' + RUN) ? 'yes' : 'NO');
       say('driver km credited', me ? me.km : 'NO DRIVER');
       say('driver deliveries', me ? me.deliveries : '-');

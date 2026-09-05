@@ -48,7 +48,7 @@ const flag = (name, fallback) => {
 };
 const has = (name) => args.indexOf('--' + name) > -1;
 
-const CONFIG_FILE = flag('config', path.join(__dirname, 'hll-connector.json'));
+const CONFIG_FILE = flag('config', path.join(__dirname, 'gmn-connector.json'));
 let file = {};
 try { file = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); }
 catch (e) { if (e.code !== 'ENOENT') console.warn('  config unreadable:', e.message); }
@@ -62,7 +62,7 @@ const CFG = {
   telemetryHost: flag('telemetry-host', file.telemetryHost || 'localhost'),
   telemetryPort: flag('telemetry-port', file.telemetryPort || '25555'),
   pollMs: Number(flag('poll', file.pollMs || 400)),
-  outbox: flag('outbox', file.outbox || path.join(__dirname, 'hll-outbox.json')),
+  outbox: flag('outbox', file.outbox || path.join(__dirname, 'gmn-outbox.json')),
   quiet: has('quiet') || !!file.quiet,
 };
 

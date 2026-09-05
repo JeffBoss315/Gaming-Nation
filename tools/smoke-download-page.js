@@ -28,7 +28,7 @@ const fs = require('fs');
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const PORT = Number((process.env.GMN_DLPAGE_PORT || process.env.HLL_DLPAGE_PORT) || 7099);
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-dlpage'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-dlpage'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 

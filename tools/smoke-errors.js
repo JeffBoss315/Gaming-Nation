@@ -16,7 +16,7 @@ const path = require('path');
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const PAGES = process.argv[3] ? [process.argv[3]] : ['login.html', 'admin.html', 'tracker.html'];
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-errors'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-errors'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 

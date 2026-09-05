@@ -16,7 +16,7 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const OUT = path.resolve(process.argv[3] || path.join(ROOT, '.shots'));
 const BASE = (process.env.GMN_SHOT_BASE || process.env.HLL_SHOT_BASE) || null;   /* http://host:port to shoot the served site */
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-shots'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-shots'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 

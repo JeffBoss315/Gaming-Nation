@@ -178,7 +178,7 @@ function checkPublished(db, table) {
     };
 
     const ch = db
-      .channel('hll-check-' + table + '-' + Date.now())
+      .channel('gmn-check-' + table + '-' + Date.now())
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => {})
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') done(true, '');

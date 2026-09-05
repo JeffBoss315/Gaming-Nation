@@ -106,14 +106,14 @@ function icon(n, cls = '') {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || P.info}</svg>`;
 }
 
-/* The Gaming Nation emblem — hll.jpg, the company's own artwork and the source
+/* The Gaming Nation emblem — gmn.jpg, the company's own artwork and the source
    every icon in this client is derived from. Used where the company's face
    belongs and nowhere else, so it keeps meaning "Gaming Nation" rather than
    becoming decoration. The artwork is square; the box is square and crops
    rather than stretches. */
 function hllEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
-    <img src="hll.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
+    <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
 }
 
@@ -878,7 +878,7 @@ const Fleet = {
     if (!live) return null;
     const job = db.job;
     return {
-      id: db.driver.hllId,
+      id: db.driver.gmnId,
       name: db.driver.name,
       game: live.game,
       x: live.world.x, z: live.world.z,
@@ -941,7 +941,7 @@ const Fleet = {
     const job = db.job;
     const body = Object.assign({
       kind,
-      driverId: db.driver ? db.driver.hllId : '',
+      driverId: db.driver ? db.driver.gmnId : '',
       driver: db.driver ? db.driver.name : '',
       text: text || '',
       level: level || 'info',
@@ -966,7 +966,7 @@ const Fleet = {
   /* merge a batch of drivers in, rather than replacing the list: the stream
      sends only who moved, so anyone standing still must not vanish */
   absorb(list, replace) {
-    const mine = Store.db.driver ? Store.db.driver.hllId : null;
+    const mine = Store.db.driver ? Store.db.driver.gmnId : null;
     const by = new Map();
     if (!replace) this.drivers.forEach((d) => by.set(d.id, d));
     (list || []).forEach((d) => {
@@ -1161,7 +1161,7 @@ const Realtime = {
   WORTH_LOGGING: ['job.start', 'job.delivered', 'job.cancelled'],
 
   onEvent(ev) {
-    const mine = Store.db.driver && Store.db.driver.hllId;
+    const mine = Store.db.driver && Store.db.driver.gmnId;
     this.events.push(ev);
     if (this.events.length > 40) this.events = this.events.slice(-40);
 
@@ -2039,13 +2039,13 @@ const Sessions = {
   current() {
     const hq = Auth.hqDb();
     if (!hq || !Array.isArray(hq.sessions)) return null;
-    const me = Store.db.driver && Store.db.driver.hllId;
+    const me = Store.db.driver && Store.db.driver.gmnId;
     return hq.sessions.find((s) => s.driverId === me && !s.ended) || null;
   },
 
   open(game) {
     const db = Store.db;
-    const me = db.driver && db.driver.hllId;
+    const me = db.driver && db.driver.gmnId;
     if (!me) return;                      /* nobody signed in yet */
     const hq = Auth.hqDb();
     if (!hq) return;
@@ -2079,7 +2079,7 @@ const Sessions = {
 
   close() {
     const db = Store.db;
-    const me = db.driver && db.driver.hllId;
+    const me = db.driver && db.driver.gmnId;
     if (!me) return;
     const hq = Auth.hqDb();
     if (!hq || !Array.isArray(hq.sessions)) return;
@@ -2105,7 +2105,7 @@ const Sessions = {
 
   /* a delivered run belongs to the sitting it was driven in */
   credit(rec) {
-    const me = Store.db.driver && Store.db.driver.hllId;
+    const me = Store.db.driver && Store.db.driver.gmnId;
     if (!me) return;
     const hq = Auth.hqDb();
     if (!hq || !Array.isArray(hq.sessions)) return;
@@ -2400,7 +2400,7 @@ async pull() {
     if (Store.db.driver) {
 
       const rec = Auth.driverRecord(
-        Store.db.driver.hllId
+        Store.db.driver.gmnId
       );
 
       if (rec) {
@@ -2867,7 +2867,8 @@ function saveCalibrationPoint(mapKey) {
 }
 
 /* ---------------- store ---------------- */
-const LS = 'hllwjt.v3';
+const LS = 'gmnwjt.v3';
+migrateStorageKey('hllwjt.v3', LS);   /* the client store moved with the name */
 
 function seed() {
   /* A fresh client holds no identity and no history. The driver signs in with
@@ -2945,6 +2946,22 @@ const Store = {
   migrate() {
     if (!this.db) return;
 
+    /* driver.hllId became driver.gmnId. The driver record is persisted, so
+       a store written by an older build carries the old spelling — and
+       every screen reading gmnId would show a driver with no id: signed
+       in, apparently nameless, and unable to push a position.
+
+       The old name is spelled here in a way a blanket rename cannot
+       reach, because one already did: it rewrote both halves of this
+       check into `gmnId && !gmnId`, which is never true. A migration
+       that mentions the old name is exactly the code a rename of the old
+       name must not touch. Copied rather than moved, so an older build
+       opened afterwards still finds what it expects. */
+    const OLD_ID = 'h' + 'llId';
+    if (this.db.driver && this.db.driver[OLD_ID] && !this.db.driver.gmnId) {
+      this.db.driver.gmnId = this.db.driver[OLD_ID];
+    }
+
     /* A store written by an older build knows nothing about the settings added
        since, and every one of them would read back undefined — which is how a
        tile layer ends up being handed no URL at all. Fill in whatever is
@@ -2982,7 +2999,7 @@ const Store = {
        they should have been all along. */
     const d = this.db.driver;
     if (d && !d.authed) {
-      console.info('[GMN] clearing a leftover identity (' + (d.hllId || '?') + ') — sign in again');
+      console.info('[GMN] clearing a leftover identity (' + (d.gmnId || '?') + ') — sign in again');
       this.db.driver = null;
       this.db.conn = { hll: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
       this.db.live = null;
@@ -3228,7 +3245,7 @@ function submitDelivery(id, silent) {
    driver's totals, the fleet activity feed, and the run itself. Without this
    a delivery would only ever exist on the machine that drove it. */
 function creditToCompany(rec) {
-  const me = Store.db.driver && Store.db.driver.hllId;
+  const me = Store.db.driver && Store.db.driver.gmnId;
   const hq = Auth.hqDb();
   if (!me || !hq) return false;
   const d = (hq.drivers || []).find((x) => x.id === me);
@@ -3423,7 +3440,7 @@ function viewDashboard() {
   <section class="card">
     <div class="card-head">
       <span class="label">Active run</span>
-      <span class="label">${esc(db.driver.hllId)}</span>
+      <span class="label">${esc(db.driver.gmnId)}</span>
     </div>
     <div class="card-body" id="runCard">${runCardInner()}</div>
   </section>
@@ -3553,7 +3570,7 @@ function liveDot() {
    down with it. fleetRows() was called from two places and defined in none. */
 function fleetRows() {
   const db = Store.db;
-  const mine = db.driver ? db.driver.hllId : null;
+  const mine = db.driver ? db.driver.gmnId : null;
 
   const self = db.live ? [{
     id: mine || 'local',
@@ -3717,7 +3734,7 @@ const markerPos = (pct) => clamp(pct, 0, 100);
    company record so the client shows the same list the platform does. */
 function myAssignments() {
   const db = Auth.hqDb();
-  const me = Store.db.driver ? Store.db.driver.hllId : null;
+  const me = Store.db.driver ? Store.db.driver.gmnId : null;
   if (!db || !Array.isArray(db.assignments) || !me) return [];
   return db.assignments
     .filter((a) => a.driverId === me && (a.status === 'assigned' || a.status === 'accepted'))
@@ -4012,7 +4029,7 @@ function viewProfile() {
       ${avatarFace(d, 'lg me')}
       <div class="grow">
         <div class="lg b7">${esc(d.name)}</div>
-        <div class="t2 sm mt-4">${esc(d.rank)} · <span class="mono">${esc(d.hllId)}</span></div>
+        <div class="t2 sm mt-4">${esc(d.rank)} · <span class="mono">${esc(d.gmnId)}</span></div>
         <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
       </div>
     </div>
@@ -4299,7 +4316,7 @@ function dmComposer(placeholder) {
 
 function viewMessages() {
   const notices = Store.db.messages;
-  const me = String((Store.db.driver && Store.db.driver.hllId) || '');
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
   const open = Messages.open;
 
   /* Management first, then everyone the service says we have talked to. */
@@ -4393,7 +4410,7 @@ function viewMessages() {
 function viewChats() {
   const chats = Store.db.chats;
   const inRoom = Messages.open === FLEET_ROOM;
-  const me = String((Store.db.driver && Store.db.driver.hllId) || '');
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
   const onCall = RoomCall.live || RoomCall.joining;
   const waiting = RoomCall.known.length;
 
@@ -4500,7 +4517,7 @@ function openAdminDrivers() {
             Store.log('ok', 'Set ' + id + ' to ' + roleName(sel.value));
             toast(roleName(sel.value), 'ok', id + ' role updated');
             /* changing your own rank changes what you can see */
-            if (Store.db.driver && Store.db.driver.hllId === id) {
+            if (Store.db.driver && Store.db.driver.gmnId === id) {
               Store.db.driver.role = sel.value;
               Store.save();
             }
@@ -4515,7 +4532,7 @@ function adminSuspend(id) {
   if (!can('drivers.manage')) { toast('You do not have the rank for that', 'err'); return; }
   const d = Auth.driverRecord(id);
   if (!d) return;
-  if (Store.db.driver && Store.db.driver.hllId === id) {
+  if (Store.db.driver && Store.db.driver.gmnId === id) {
     toast('You cannot suspend your own account', 'warn');
     return;
   }
@@ -4599,7 +4616,7 @@ function viewMenu() {
   };
 
   return `
-  ${viewHead('Menu', staff ? roleName(myRole()) + ' · ' + esc(d.hllId) : esc(d.rank || 'Driver') + ' · ' + esc(d.hllId))}
+  ${viewHead('Menu', staff ? roleName(myRole()) + ' · ' + esc(d.gmnId) : esc(d.rank || 'Driver') + ' · ' + esc(d.gmnId))}
 
   ${staff ? `
   <div class="menu-group">
@@ -4652,7 +4669,7 @@ function viewConvoy() {
   const events = Auth.events()
     .filter((e) => e.status !== 'completed')
     .sort((a, b) => new Date(a.date) - new Date(b.date));
-  const mine = Store.db.driver ? Store.db.driver.hllId : null;
+  const mine = Store.db.driver ? Store.db.driver.gmnId : null;
 
   const card = (e) => {
     const live = e.status === 'live';
@@ -4721,12 +4738,12 @@ function viewLeaderboard() {
   const me = Store.db.driver;
   const roster = Auth.roster();
   const rows = roster
-    .map((d) => ({ name: d.name, id: d.id, km: d.km || 0, jobs: d.deliveries || 0, me: d.id === me.hllId }))
+    .map((d) => ({ name: d.name, id: d.id, km: d.km || 0, jobs: d.deliveries || 0, me: d.id === me.gmnId }))
     .sort((a, b) => b.km - a.km);
 
   /* a client that cannot see the platform's records still knows its own figures */
   if (!rows.length) {
-    rows.push({ name: me.name, id: me.hllId, km: Store.db.stats.totalKm, jobs: Store.db.stats.totalJobs, me: true });
+    rows.push({ name: me.name, id: me.gmnId, km: Store.db.stats.totalKm, jobs: Store.db.stats.totalJobs, me: true });
   }
 
   return `
@@ -5024,7 +5041,7 @@ function railFootHTML() {
     ${avatarFace(d, 'me')}
     <span class="driver-text grow" style="min-width:0">
       <span class="b6 trunc" style="display:block">${esc(d.name)}</span>
-      <span class="t3 xs mono">${esc(d.hllId)}</span>
+      <span class="t3 xs mono">${esc(d.gmnId)}</span>
     </span>
     ${icon('chevron', 'chev')}
   </button>`;
@@ -5170,7 +5187,49 @@ const Platform = {
      RoomCall      one-to-one, and the mesh for the crew room.
    ============================================================ */
 
-const SERVICE_TOKEN_KEY = 'hll.trk.service.v1';
+/* Storage keys moved with the company name.
+
+   A key is not a label: it is where somebody's data already is. Renaming
+   `hll.db.v1` to `gmn.db.v1` and walking away would leave every existing
+   install looking at an empty company — signed out, no roster, no
+   settings — with the real data still sitting in the browser under a name
+   nothing reads any more. Uninstalling and reinstalling would not fix it
+   either, because nothing was lost; it was orphaned.
+
+   So the old key is read once and carried over. Cheap, silent, and it
+   only ever happens on the first load after an upgrade: after that the
+   new key exists and this does nothing.
+
+   Deliberately does NOT delete the old key. If somebody opens an older
+   build — a portable copy on a stick, a machine that has not updated —
+   their data is still where that build expects to find it. The two are
+   only out of step from the moment they start writing to different
+   places, and losing a week of a driver's records to tidiness is a bad
+   trade for a few bytes of localStorage. */
+function migrateStorageKey(from, to) {
+  try {
+    if (localStorage.getItem(to) !== null) return;
+    const held = localStorage.getItem(from);
+    if (held !== null) localStorage.setItem(to, held);
+  } catch (e) {
+    /* private mode, or storage disabled. Nothing to carry and nowhere to
+       carry it to; the caller reads the new key and finds nothing, which
+       is the same as a fresh install. */
+  }
+}
+
+[
+  ['hll.accounts.v1', 'gmn.accounts.v1'],
+  ['hll.db.v1', 'gmn.db.v1'],
+  ['hll.session.v1', 'gmn.session.v1'],
+  ['hll.token.v1', 'gmn.token.v1'],
+  ['hll.resetToOwner.v2', 'gmn.resetToOwner.v2'],
+  ['hll.lastDriverEmail', 'gmn.lastDriverEmail'],
+  ['hll.trk.session.v1', 'gmn.trk.session.v1'],
+  ['hll.trk.service.v1', 'gmn.trk.service.v1'],
+].forEach(([from, to]) => migrateStorageKey(from, to));
+
+const SERVICE_TOKEN_KEY = 'gmn.trk.service.v1';
 
 /* ---------------- who the service thinks we are ----------------
 
@@ -5441,7 +5500,7 @@ const Messages = {
   arrive(d) {
     if (!d || !d.message) return;
     const m = d.message;
-    const mine = String(m.driverId) === String(Store.db.driver && Store.db.driver.hllId);
+    const mine = String(m.driverId) === String(Store.db.driver && Store.db.driver.gmnId);
 
     /* Is it for the conversation on screen? For the room, everything is;
        for a person, either end of the pair counts. */
@@ -6419,7 +6478,7 @@ function handle(act, t) {
     case 'assignment-state': {
       const hq = Auth.hqDb();
       const a = hq && (hq.assignments || []).find((x) => x.id === t.dataset.id);
-      if (!a || a.driverId !== (Store.db.driver && Store.db.driver.hllId)) {
+      if (!a || a.driverId !== (Store.db.driver && Store.db.driver.gmnId)) {
         toast('That load is not yours', 'err'); return;
       }
       a.status = t.dataset.v;
@@ -6720,9 +6779,9 @@ function windowControl(kind) {
    the same store. A machine that has never seen the platform has no
    accounts on it yet, which is what the sign-in screen says.
    ============================================================ */
-const HQ_ACCOUNTS = 'hll.accounts.v1';
-const HQ_DB = 'hll.db.v1';
-const LS_TRK_SESSION = 'hll.trk.session.v1';
+const HQ_ACCOUNTS = 'gmn.accounts.v1';
+const HQ_DB = 'gmn.db.v1';
+const LS_TRK_SESSION = 'gmn.trk.session.v1';
 
 const Auth = {
   accounts() {
@@ -6883,7 +6942,7 @@ const Auth = {
      the same records as the platform, so it does the same tidy-up — a phone
      or a desktop that was signed into during testing starts clean. */
   resetToOwner() {
-    const STAMP = 'hll.resetToOwner.v2';
+    const STAMP = 'gmn.resetToOwner.v2';
     try { if (localStorage.getItem(STAMP)) return 0; } catch (e) { return 0; }
 
     const keepId = this.OWNER.driverId;
@@ -7125,7 +7184,7 @@ const Auth = {
     db.driver = {
       name: (driver && driver.name) || account.name,
       display: (driver && driver.name) || account.name,
-      hllId: account.driverId,
+      gmnId: account.driverId,
       rank: driver ? rankNameFor(driver) : 'Driver',
       joined: (driver && driver.joined) || account.created,
       truck: '', plate: '', trailer: '',
@@ -7141,7 +7200,7 @@ const Auth = {
     } else {
       try { localStorage.removeItem(LS_TRK_SESSION); } catch (e) {}
     }
-    Store.log('ok', 'Signed in as ' + db.driver.name + ' (' + db.driver.hllId + ')');
+    Store.log('ok', 'Signed in as ' + db.driver.name + ' (' + db.driver.gmnId + ')');
     Store.save();
   },
 

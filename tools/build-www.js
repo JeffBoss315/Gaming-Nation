@@ -107,9 +107,9 @@ for (const f of ['style.css', 'script.js', 'supabase-client.js', 'map-data.js'])
   site.log.push(f);
 }
 
-if (fs.existsSync(path.join(ROOT, 'hll.jpg'))) {
-  site.copy(path.join(ROOT, 'hll.jpg'), 'hll.jpg');
-  site.log.push('hll.jpg           (brand mark)');
+if (fs.existsSync(path.join(ROOT, 'gmn.jpg'))) {
+  site.copy(path.join(ROOT, 'gmn.jpg'), 'gmn.jpg');
+  site.log.push('gmn.jpg           (brand mark)');
 }
 
 /* ---------------- being found ----------------
@@ -145,7 +145,7 @@ if (!SITE_URL) {
         alternateName: CFG.shortName || 'GMN',
         url: SITE_URL + '/',
         logo: SITE_URL + '/icons/icon-512.png',
-        image: SITE_URL + '/hll.jpg',
+        image: SITE_URL + '/gmn.jpg',
         description: CFG.tagline || '',
       },
       {
@@ -174,8 +174,8 @@ if (!SITE_URL) {
     '    <link rel="canonical" href="' + HOME + '">',
     '',
     '    <meta property="og:url" content="' + HOME + '">',
-    '    <meta property="og:image" content="' + SITE_URL + '/hll.jpg">',
-    '    <meta name="twitter:image" content="' + SITE_URL + '/hll.jpg">',
+    '    <meta property="og:image" content="' + SITE_URL + '/gmn.jpg">',
+    '    <meta name="twitter:image" content="' + SITE_URL + '/gmn.jpg">',
     '',
     '    <script type="application/ld+json">',
     '    ' + ld,
@@ -378,9 +378,9 @@ for (const f of ['tracker.css', 'tracker.js', 'map-data.js', 'style.css', 'scrip
   app.log.push(f);
 }
 
-if (fs.existsSync(path.join(ROOT, 'hll.jpg'))) {
-  app.copy(path.join(ROOT, 'hll.jpg'), 'hll.jpg');
-  app.log.push('hll.jpg           (brand mark)');
+if (fs.existsSync(path.join(ROOT, 'gmn.jpg'))) {
+  app.copy(path.join(ROOT, 'gmn.jpg'), 'gmn.jpg');
+  app.log.push('gmn.jpg           (brand mark)');
 }
 app.log.push('vendor/           (' + app.copyTree('vendor') + ' files)');
 app.log.push('icons/            (' + app.copyTree('icons') + ' files)');
@@ -393,7 +393,7 @@ app.log.push('icons/            (' + app.copyTree('icons') + ' files)');
    and it had sat at v1.0.0-r1 through every change since it was written.
    Nobody bumps a constant by hand on the way past.
 
-   It matters for the assets the worker serves cache-first — hll.jpg, the
+   It matters for the assets the worker serves cache-first — gmn.jpg, the
    icons, Leaflet. Code is network-first and lands on its own, but an
    installed client kept showing the OLD app icon and the OLD brand mark
    for as long as the name stayed the same, which is precisely the thing

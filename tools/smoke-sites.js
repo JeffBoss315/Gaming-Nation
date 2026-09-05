@@ -19,7 +19,7 @@ const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
    root turns require(ROOT + '/desktop-capture') into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-sites'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-sites'));
 app.disableHardwareAcceleration();
 /* closing the first window would otherwise quit before the second loads */
 app.on('window-all-closed', () => {});

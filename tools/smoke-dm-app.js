@@ -35,12 +35,12 @@ const { spawn } = require('child_process');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const PORT = Number((process.env.GMN_DMAPP_PORT || process.env.HLL_DMAPP_PORT) || 7096);
-const TMP = path.join(os.tmpdir(), 'hll-dmapp-smoke');
+const TMP = path.join(os.tmpdir(), 'gmn-dmapp-smoke');
 
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* first run */ }
 fs.mkdirSync(TMP, { recursive: true });
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-dm-app'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-dm-app'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 
@@ -79,8 +79,8 @@ const COMPANY = {
    Supabase, which this test has no business touching, and what is under
    test starts at "a driver is signed in". */
 const SEED = (who) => `(async () => {
-  localStorage.setItem('hll.accounts.v1', ${JSON.stringify(JSON.stringify(COMPANY.accounts))});
-  localStorage.setItem('hll.db.v1', ${JSON.stringify(JSON.stringify({ drivers: COMPANY.drivers }))});
+  localStorage.setItem('gmn.accounts.v1', ${JSON.stringify(JSON.stringify(COMPANY.accounts))});
+  localStorage.setItem('gmn.db.v1', ${JSON.stringify(JSON.stringify({ drivers: COMPANY.drivers }))});
 
   Store.db.settings.fleetUrl = 'http://localhost:${PORT}';
   Store.save();
@@ -96,7 +96,7 @@ const SEED = (who) => `(async () => {
     serviceAuth: ok,
     token: !!ServiceAuth.token,
     status: ServiceAuth.status,
-    me: Store.db.driver ? Store.db.driver.hllId : null,
+    me: Store.db.driver ? Store.db.driver.gmnId : null,
     stream: Realtime.status,
   };
 })()`;

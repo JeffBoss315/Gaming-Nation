@@ -35,7 +35,7 @@ const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
    root turns a require into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-driver-terminal'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-driver-terminal'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 
@@ -60,7 +60,7 @@ function check(what, got, want) {
    It carries a seeded driver on top of the plain stand-in, because the
    dashboard's job starts from a driver that already exists.
 ------------------------------------------------------------------ */
-const EMAIL = 'driver@heavyline.test';
+const EMAIL = 'driver@gamingnation.test';
 const PASSWORD = 'terminal-test';
 
 /* The seeded driver, and a session that survives a reload.
@@ -162,7 +162,7 @@ const CLIENT = FAKE_SUPABASE + '\n' + SEED;
 
 app.whenReady().then(async () => {
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hll-terminal-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gmn-terminal-'));
   const clientFile = path.join(tmp, 'fake-supabase-client.js');
   fs.writeFileSync(clientFile, CLIENT, 'utf8');
 

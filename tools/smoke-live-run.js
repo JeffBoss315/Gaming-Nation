@@ -40,7 +40,7 @@ const APP_OUT = path.join(ROOT, '.smoke-live-app');
    deliveries and reported nine failures that were nothing but yesterday's
    arithmetic. COMPANY_FILE is already deleted for exactly this reason; the
    profile behind it was missed. */
-const USER_DATA = path.join(app.getPath('temp'), 'hll-smoke-live-run');
+const USER_DATA = path.join(app.getPath('temp'), 'gmn-smoke-live-run');
 fs.rmSync(USER_DATA, { recursive: true, force: true });
 app.setPath('userData', USER_DATA);
 app.disableHardwareAcceleration();
@@ -187,7 +187,7 @@ app.whenReady().then(async () => {
       render();
       await wait(2500);
 
-      R.id = Store.db.driver.hllId;
+      R.id = Store.db.driver.gmnId;
       R.name = Store.db.driver.name;
       R.telemetry = Telemetry.mode;
       R.stream = Realtime.status;
@@ -329,7 +329,7 @@ app.whenReady().then(async () => {
     /* ---- the money and the session ---- */
     const banked = await driver.webContents.executeJavaScript(`(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const id = Store.db.driver.hllId;
+      const id = Store.db.driver.gmnId;
       /* the run is queued; submitting is what credits the company */
       const rec = Store.db.pending[Store.db.pending.length - 1];
       Store.db.conn.hll = 'connected';
@@ -372,7 +372,7 @@ app.whenReady().then(async () => {
     await until(driver, 'GameWatch.running === false && !Sessions.current()');
 
     const closed = await driver.webContents.executeJavaScript(`(() => {
-      const id = Store.db.driver.hllId;
+      const id = Store.db.driver.gmnId;
       const hq = Auth.hqDb();
       const ses = (hq.sessions || []).filter(s => s.driverId === id)
         .sort((a, b) => new Date(b.started) - new Date(a.started))[0];

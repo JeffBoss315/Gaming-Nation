@@ -711,7 +711,7 @@
                                 autocomplete="username"
                                 autocapitalize="none"
                                 spellcheck="false"
-                                placeholder="driver@heavyline.net"
+                                placeholder="driver@gamingnation.gg"
                                 required
                             >
                         </div>
@@ -1258,7 +1258,7 @@
         ---------------------------------------------------------- */
 
         try {
-            var last = localStorage.getItem('hll.lastDriverEmail');
+            var last = localStorage.getItem('gmn.lastDriverEmail');
 
             if (last) {
                 emailEl.value = last;
@@ -1388,7 +1388,7 @@
             }
 
             try {
-                localStorage.setItem('hll.lastDriverEmail', email);
+                localStorage.setItem('gmn.lastDriverEmail', email);
             } catch (e) {
                 /* Private mode. Not worth failing a good sign-in over. */
             }

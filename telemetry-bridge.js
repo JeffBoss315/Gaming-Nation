@@ -36,7 +36,7 @@ const plugin = flag('plugin', (process.env.GMN_TELEMETRY_PLUGIN || process.env.H
     'Steam', 'steamapps', 'common', 'Euro Truck Simulator 2',
     'bin', 'win_x64', 'plugins', 'hll-scs-telemetry.dll'));
 const metadata = flag('metadata', (process.env.GMN_TELEMETRY_METADATA || process.env.HLL_TELEMETRY_METADATA) ||
-  path.join(path.dirname(plugin), 'hll-telemetry.json'));
+  path.join(path.dirname(plugin), 'gmn-telemetry.json'));
 const timeoutMs = Number(flag('timeout', 15000));
 const endpoint = 'http://127.0.0.1:' + port + '/api/' + game + '/telemetry';
 

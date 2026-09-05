@@ -27,7 +27,7 @@ const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
 /* resolved, not taken as given: 'npm run smoke:*' passes '.' */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-signup'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-signup'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 
@@ -41,7 +41,7 @@ function check(what, got, want) {
   else fails.push(what + ': expected ' + want + ', got ' + got);
 }
 
-const EMAIL = 'newdriver@heavyline.test';
+const EMAIL = 'newdriver@gamingnation.test';
 const PASSWORD = 'a-good-password';
 
 app.whenReady().then(async () => {

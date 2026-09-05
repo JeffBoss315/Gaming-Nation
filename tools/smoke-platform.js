@@ -16,7 +16,7 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 /* A probe must never touch the profile the real app uses — it signs in, writes
    records and would leave them behind. Everything below happens in a scratch
    profile that is thrown away with the run. */
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-' + path.basename(__filename, '.js')));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-' + path.basename(__filename, '.js')));
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });

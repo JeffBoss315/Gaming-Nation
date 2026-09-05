@@ -23,14 +23,14 @@ const { spawn, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const PORT = 7099;
-const TMP = path.join(os.tmpdir(), 'hll-dmweb-smoke');
+const TMP = path.join(os.tmpdir(), 'gmn-dmweb-smoke');
 const SITE_OUT = path.join(ROOT, '.smoke-dm-site');
 const APP_OUT = path.join(ROOT, '.smoke-dm-app');
 
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
 fs.mkdirSync(TMP, { recursive: true });
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-dm-web'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-dm-web'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 

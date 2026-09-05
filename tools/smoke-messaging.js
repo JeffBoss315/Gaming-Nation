@@ -36,7 +36,7 @@ const { spawn } = require('child_process');
 
 const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7094);
 const ROOT = path.join(__dirname, '..');
-const TMP = path.join(os.tmpdir(), 'hll-msg-smoke');
+const TMP = path.join(os.tmpdir(), 'gmn-msg-smoke');
 
 const COMPANY_FILE = path.join(TMP, 'company.json');
 const SESSION_FILE = path.join(TMP, 'sessions.json');

@@ -248,7 +248,10 @@ const TRUCK_MODELS = [
   { make: 'Renault', model: 'T High 520',    hp: 520, cab: 'T High',    gearbox: 'Optidriver 12-spd', chassis: '4x2' },
 ];
 const LIVERIES = [
-  { key: 'heavyline',  name: 'Gaming Nation Signature', a: '#8bd62b', b: '#141b26' },
+  /* Renamed with the company. A truck saved with the old key still draws
+     correctly: rigSvg() falls back to LIVERIES[0], which is this entry, so
+     the colours it lands on are the ones it already had. */
+  { key: 'signature',  name: 'Gaming Nation Signature', a: '#8bd62b', b: '#141b26' },
   { key: 'midnight',   name: 'Midnight Steel',      a: '#b9e87a', b: '#0f1721' },
   { key: 'gold',       name: 'Gold Standard',       a: '#9db8ff', b: '#1b1508' },
   { key: 'arctic',     name: 'Arctic Haul',         a: '#e6edf6', b: '#1a2230' },
@@ -432,7 +435,49 @@ function achProgress(a, d) {
    is NOT a substitute for server-side authentication. When the GMN
    backend exists, Accounts.verify() is the single call to replace.
    ============================================================ */
-const LS_ACCOUNTS = 'hll.accounts.v1';
+/* Storage keys moved with the company name.
+
+   A key is not a label: it is where somebody's data already is. Renaming
+   `hll.db.v1` to `gmn.db.v1` and walking away would leave every existing
+   install looking at an empty company — signed out, no roster, no
+   settings — with the real data still sitting in the browser under a name
+   nothing reads any more. Uninstalling and reinstalling would not fix it
+   either, because nothing was lost; it was orphaned.
+
+   So the old key is read once and carried over. Cheap, silent, and it
+   only ever happens on the first load after an upgrade: after that the
+   new key exists and this does nothing.
+
+   Deliberately does NOT delete the old key. If somebody opens an older
+   build — a portable copy on a stick, a machine that has not updated —
+   their data is still where that build expects to find it. The two are
+   only out of step from the moment they start writing to different
+   places, and losing a week of a driver's records to tidiness is a bad
+   trade for a few bytes of localStorage. */
+function migrateStorageKey(from, to) {
+  try {
+    if (localStorage.getItem(to) !== null) return;
+    const held = localStorage.getItem(from);
+    if (held !== null) localStorage.setItem(to, held);
+  } catch (e) {
+    /* private mode, or storage disabled. Nothing to carry and nowhere to
+       carry it to; the caller reads the new key and finds nothing, which
+       is the same as a fresh install. */
+  }
+}
+
+[
+  ['hll.accounts.v1', 'gmn.accounts.v1'],
+  ['hll.db.v1', 'gmn.db.v1'],
+  ['hll.session.v1', 'gmn.session.v1'],
+  ['hll.token.v1', 'gmn.token.v1'],
+  ['hll.resetToOwner.v2', 'gmn.resetToOwner.v2'],
+  ['hll.lastDriverEmail', 'gmn.lastDriverEmail'],
+  ['hll.trk.session.v1', 'gmn.trk.session.v1'],
+  ['hll.trk.service.v1', 'gmn.trk.service.v1'],
+].forEach(([from, to]) => migrateStorageKey(from, to));
+
+const LS_ACCOUNTS = 'gmn.accounts.v1';
 
 const Accounts = {
   all() {
@@ -1657,8 +1702,8 @@ async function changePassword() {
 }
 
 /* ---------------- 5. Store (localStorage-backed, API-shaped) ---------------- */
-const LS_DB = 'hll.db.v1';
-const LS_SESSION = 'hll.session.v1';
+const LS_DB = 'gmn.db.v1';
+const LS_SESSION = 'gmn.session.v1';
 
 const Store = {
   db: null,
@@ -1858,7 +1903,7 @@ function normaliseCompany() {
 
    The owner is left as a full driver as well as the administrator, so the
    same login runs the company and drives for it. */
-const RESET_STAMP = 'hll.resetToOwner.v2';
+const RESET_STAMP = 'gmn.resetToOwner.v2';
 
 /* Empties the company back to its owner. Only records belonging to someone
    else go — the owner's own tickets, applications and history survive, so a
@@ -2052,7 +2097,7 @@ function notifyStaff(perm, payload, exceptId) {
 
 /* ---------------- 6. Small chrome components ---------------- */
 /* ---------------- the Gaming Nation emblem ----------------
-   hll.jpg is the company's own artwork and the source every icon in the app
+   gmn.jpg is the company's own artwork and the source every icon in the app
    is derived from. It is used as the emblem — the company's face — where a
    company's face belongs: the way in, the top of the command centre, and on
    a convoy, which is the company acting as one.
@@ -2065,7 +2110,7 @@ function notifyStaff(perm, payload, exceptId) {
    object-fit: cover, so it can never be stretched however it is placed. */
 function hllEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
-    <img src="hll.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
+    <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
 }
 
@@ -3860,7 +3905,7 @@ function serviceWarningHTML() {
   }
 
   if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol) &&
-      (location.port === '7040' || location.hostname === 'hll-host')) {
+      (location.port === '7040' || location.hostname === 'gmn-host')) {
     return location.origin;
   }
   return '';
@@ -9466,7 +9511,7 @@ const LiveMap = {
             </span>
             <span class="ft-card">
               <span class="ft-who">
-                <img class="ft-mark" src="hll.jpg" alt="" width="14" height="14">
+                <img class="ft-mark" src="gmn.jpg" alt="" width="14" height="14">
                 <b>${esc(d.name || d.id)}</b>
                 <em>${Math.round(d.speed || 0)}<i>km/h</i></em>
               </span>
@@ -10195,7 +10240,7 @@ function hqLiveFeedInner() {
    still runs — they simply cannot use the parts that need a
    proven identity, and those parts say so rather than pretending.
    ============================================================ */
-const AUTH_TOKEN_KEY = 'hll.token.v1';
+const AUTH_TOKEN_KEY = 'gmn.token.v1';
 
 const ServiceAuth = {
   token: null,

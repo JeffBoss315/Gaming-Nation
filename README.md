@@ -764,7 +764,7 @@ them, set `CSC_LINK`/`CSC_KEY_PASSWORD` and remove `win.signAndEditExecutable: f
 
 ```bash
 npm start              # run the desktop shell without packaging
-npm run icons          # regenerate every icon from hll.jpg
+npm run icons          # regenerate every icon from gmn.jpg
 npm run fleet          # the company service
 npm run www            # rebuild the www/ payload
 ```
@@ -803,11 +803,11 @@ npm run smoke:recruit     # an application end to end
 
 ### Branding
 
-`hll.jpg` in the project root is the single source of every icon. `npm run icons` derives
+`gmn.jpg` in the project root is the single source of every icon. `npm run icons` derives
 from it: the PWA icons, the maskable variant, the Apple touch icon, the Android launcher and
 adaptive icons, the source art electron-builder turns into the Windows `.ico`, and
 `icons/mark.png` — a crop of just the truck, used wherever the mark appears small enough
-that the wordmark would be unreadable. Replace `hll.jpg` and re-run it to rebrand everything.
+that the wordmark would be unreadable. Replace `gmn.jpg` and re-run it to rebrand everything.
 
 It uses `System.Drawing` via Windows PowerShell, so there is nothing to install.
 
@@ -821,8 +821,8 @@ It uses `System.Drawing` via Windows PowerShell, so there is nothing to install.
 | `serve.js` | dependency-free static server for local install/testing |
 | `fleet-server.js` | the company service: the shared record, live positions and the push stream (`npm run fleet`) |
 | `electron-main.js` / `preload.js` | desktop shell + window controls |
-| `hll.jpg` | brand artwork — the source for every icon |
-| `tools/make-brand-icons.ps1` | derives all icons from `hll.jpg` |
+| `gmn.jpg` | brand artwork — the source for every icon |
+| `tools/make-brand-icons.ps1` | derives all icons from `gmn.jpg` |
 | `tools/build-www.js` | assembles `www/` (the APK payload / deploy folder) |
 | `tools/build-apk.js` | one-command Android build |
 | `game-connector.js` | the Game Connector (`npm run connector`) |

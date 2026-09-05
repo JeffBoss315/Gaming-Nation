@@ -24,7 +24,7 @@ const COMPANY_FILE = path.join(ROOT, 'hll-company.smoke.json');
 const SITE_OUT = path.join(ROOT, '.smoke-site');
 const APP_OUT = path.join(ROOT, '.smoke-app');
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-company'));
+app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-company'));
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 

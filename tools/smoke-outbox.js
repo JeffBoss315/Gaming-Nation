@@ -21,8 +21,8 @@ const { spawn } = require('child_process');
 const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7095);
 const GAME_PORT = 25597;
 const DRIVER = 'HLL-7788';
-const COMPANY_FILE = path.join(os.tmpdir(), 'hll-outbox-smoke.json');
-const OUTBOX = path.join(os.tmpdir(), 'hll-outbox-smoke-queue.json');
+const COMPANY_FILE = path.join(os.tmpdir(), 'gmn-outbox-smoke.json');
+const OUTBOX = path.join(os.tmpdir(), 'gmn-outbox-smoke-queue.json');
 
 [COMPANY_FILE, OUTBOX].forEach((f) => { try { fs.unlinkSync(f); } catch (e) {} });
 
