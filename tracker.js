@@ -4144,6 +4144,79 @@ const HostedService = {
   },
 };
 
+
+/* Ask for the password once, and get a session the service will accept.
+
+   The banner used to say "sign out and back in". That is advice, not a
+   fix, and worse it is advice that often cannot work: the commonest
+   reason for having no session is that the service was started AFTER
+   signing in, so it had never heard of the account and refused the
+   attempt. Signing out and in again would have been refused the same way
+   until something told the service who exists.
+
+   ServiceAuth.login() now uploads the company before its second attempt,
+   so this really does resolve it — and doing it from here means the
+   driver never has to guess that a sign-in cycle was the ritual. */
+function connectToService() {
+  const db = Store.db;
+  const email = (db.driver && db.driver.email) || '';
+
+  if (!Sync.url()) {
+    toast('No company service is set', 'warn');
+    return;
+  }
+
+  modal({
+    title: 'Connect this device',
+    body: `
+      <p class="t2" style="margin:0 0 14px;line-height:1.6">
+        The company service keeps its own sign-in. Enter the password for
+        <b>${esc(email || 'your account')}</b> once and this device holds
+        the session from then on.
+      </p>
+      <div class="field"><label for="svcPw">Password</label>
+        <input class="input" id="svcPw" type="password" autocomplete="current-password"></div>
+      <div class="t3 xs mt-8" id="svcWhy"></div>`,
+    foot: `<button class="btn" data-close>Cancel</button>
+           <button class="btn btn-primary" id="svcGo">${icon('link')}Connect</button>`,
+    onMount: (w) => {
+      const pw = $('#svcPw', w);
+      const go = $('#svcGo', w);
+      const why = $('#svcWhy', w);
+      if (pw) pw.focus();
+
+      const attempt = async () => {
+        const value = pw ? pw.value : '';
+        if (!value) { why.textContent = 'Enter your password.'; return; }
+
+        go.disabled = true;
+        go.textContent = 'Connecting…';
+        why.textContent = '';
+
+        const ok = await ServiceAuth.login(email, value);
+
+        if (!ok) {
+          go.disabled = false;
+          go.innerHTML = icon('link') + 'Connect';
+          why.textContent = ServiceAuth.status === 'rejected'
+            ? 'The service did not accept that password.'
+            : 'Could not reach the company service.';
+          return;
+        }
+
+        w.remove();
+        toast('Connected to the company service', 'ok');
+        Messages.pullThreads();
+        RoomCall.poll();
+        render();
+      };
+
+      if (go) go.onclick = attempt;
+      if (pw) pw.onkeydown = (e) => { if (e.key === 'Enter') attempt(); };
+    },
+  });
+}
+
 /* Why the screen is empty, said at the top rather than discovered.
 
    Driver-to-driver messages and calls run through the company service.
@@ -4171,14 +4244,19 @@ function dmOffline() {
       : 'Messages and calls between drivers go through Gaming Nation\'s own '
         + 'service. Run it on the company machine, or put its address in '
         + 'Settings. Announcements from management still arrive without it.')
-    : 'Sign out and back in — the service issues its own session, and this '
-      + 'device does not hold one.';
+    : 'The service issues its own session and this device does not hold '
+      + 'one — which is normal if it was started after you signed in. '
+      + 'Connecting asks for your password once and keeps the session.';
 
   return `<div class="dm-offline">${icon('alert')}<div class="grow">
     <div class="b6">${noService
       ? 'Driver chat needs the company service'
       : 'This device has no session with the service'}</div>
     <div class="t3 xs mt-4">${body}</div>
+    ${!noService ? `<div class="dm-offline-acts">
+      <button class="btn btn-sm btn-primary" data-act="service-connect">
+        ${icon('link')}Connect this device</button>
+    </div>` : ''}
     ${canHost ? `<div class="dm-offline-acts">
       <button class="btn btn-sm btn-primary" data-act="host-service">
         ${icon('bolt')}Run it on this machine</button>
@@ -5138,7 +5216,7 @@ const ServiceAuth = {
 
   /* Called from the sign-in path, which is the one moment the password
      is in hand. A driver never types it twice. */
-  async login(handle, password) {
+  async login(handle, password, retried) {
     const base = Sync.url();
     if (!base) { this.status = 'off'; return false; }
 
@@ -5148,6 +5226,25 @@ const ServiceAuth = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: handle, password }),
       });
+
+      /* A 401 usually is not a wrong password.
+
+         The service authenticates against the accounts in the company
+         record IT holds, and it starts out holding nothing. A driver who
+         signs in before the service has ever been told about the company
+         — which is the ordinary case when the app starts it — is refused
+         by a service that has simply never heard of them.
+
+         So teach it, once, and ask again. Sync.sendNow() uploads the
+         roster and the accounts with it. If the second attempt is refused
+         too, the password really was wrong. */
+      if (res.status === 401 && !retried) {
+        try {
+          await Sync.sendNow();
+          await new Promise((r) => setTimeout(r, 400));
+        } catch (e) { /* the retry will report it */ }
+        return this.login(handle, password, true);
+      }
 
       if (res.status === 401) { this.status = 'rejected'; return false; }
       if (!res.ok) { this.status = 'unreachable'; return false; }
@@ -5219,7 +5316,7 @@ const Messages = {
      saying "unavailable" for both helps nobody. */
   reason() {
     if (!Sync.url()) return 'No company service is set. Settings has the address.';
-    if (!ServiceAuth.on()) return 'Sign in again — this device has no session with the service.';
+    if (!ServiceAuth.on()) return 'This device has no session with the service — use Connect this device above.';
     return '';
   },
 
@@ -6493,6 +6590,8 @@ function handle(act, t) {
       return;
 
     case 'map-call': Calls.start(t.dataset.id, t.dataset.name); return;
+
+    case 'service-connect': connectToService(); return;
 
     case 'host-service': HostedService.start(false); return;
     case 'host-service-lan': HostedService.start(true); return;

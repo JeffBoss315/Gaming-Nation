@@ -182,6 +182,39 @@ app.whenReady().then(async () => {
       ice.relay && /relay.example.test/.test(ice.urls),
       ice.relay ? 'TURN from the service' : 'STUN ONLY — ' + ice.urls.slice(0, 60));
 
+    /* ---- 1b. signing in before the service knows anything ----
+
+       The service authenticates against the accounts in the company
+       record it holds, and a freshly started one holds nothing. Signing
+       in first — which is the ordinary order when the app starts the
+       service itself — was refused by a service that had never heard of
+       the account, and the screen then said "sign out and back in",
+       which would have been refused exactly the same way.
+
+       login() uploads the company and asks again, so this resolves
+       itself. Tested against a service with an EMPTY company. */
+    const cold = await one.webContents.executeJavaScript(`(async () => {
+      /* wipe the service back to knowing nobody */
+      await fetch(Sync.url() + '/api/company', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: 0, data: { drivers: [], accounts: [] } }),
+      }).catch(() => {});
+
+      ServiceAuth.token = null;
+      ServiceAuth.driver = null;
+      ServiceAuth.keep();
+
+      const ok = await ServiceAuth.login(${JSON.stringify(ANNA.email)}, ${JSON.stringify(PW)});
+      return { ok, status: ServiceAuth.status, token: !!ServiceAuth.token };
+    })()`);
+
+    check('a session even when the service knew nobody',
+      cold.ok && cold.token,
+      cold.ok ? 'taught the service, then signed in' : 'REFUSED (' + cold.status + ')');
+
+    await wait(800);
+
     /* ---- 2. a message, one client to the other ---- */
 
     await one.webContents.executeJavaScript(
