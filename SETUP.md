@@ -240,6 +240,41 @@ Three JSON files beside it hold the state: `hll-company.json`,
 `HLL_COMPANY_FILE`, `HLL_SESSION_FILE` and `HLL_CHAT_FILE`;
 `http://localhost:8787/status` shows what it is doing.
 
+### Calls: two things that will bite you
+
+Drivers can call each other and join a crew call, from the website and from
+the client. Both are peer-to-peer — no server carries the audio, which is why
+there is nothing to run and nothing to pay for. Two consequences follow, and
+neither is a bug you can fix by reinstalling anything.
+
+**A browser will not hand out a microphone on a plain `http://` address.**
+That is the browser's rule, not ours. Calling therefore works in the desktop
+app, in the Android app, and on `https://` or `localhost` — and does not work
+for somebody who opens the client on `http://192.168.1.50:8787` from another
+machine on the network. The app now says exactly that instead of blaming the
+device; the fix is to use the desktop app, or to put the service behind HTTPS.
+
+**Without a relay, calls fail on some networks.** STUN tells each end what its
+own public address is, which is enough almost everywhere. Behind symmetric NAT
+or a firewall that drops UDP, both ends learn addresses they still cannot
+reach: the call rings, both sides say connecting, and nothing happens.
+
+Getting through those needs a TURN relay, which is a server somebody pays for.
+If you have one — or rent one — the service hands it to every client, so there
+is nothing to configure per driver and nothing to rebuild:
+
+```bash
+HLL_TURN_URL=turn:relay.example.com:3478 \
+HLL_TURN_USER=someuser \
+HLL_TURN_PASS=somepassword \
+npm run fleet
+```
+
+`http://localhost:8787/api/call/ice` is what the clients ask (signed in only —
+TURN credentials are credentials). The service prints which of the two modes
+it is in at startup, so you are not guessing. Leave the three unset and calls
+behave exactly as they always have, on public STUN.
+
 ### Builds and old versions
 
 ```bash

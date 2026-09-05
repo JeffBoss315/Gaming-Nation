@@ -128,6 +128,12 @@ app.whenReady().then(async () => {
         HLL_FILES_FILE: path.join(TMP, 'files.json'),
         HLL_FILES_DIR: path.join(TMP, 'files'),
         HLL_SITE_DIR: ROOT,
+        /* A relay the test never dials — what is under test is that the
+           service hands it out and both clients take it, not that TURN
+           works, which would need a real relay. */
+        HLL_TURN_URL: 'turn:relay.example.test:3478',
+        HLL_TURN_USER: 'crew',
+        HLL_TURN_PASS: 'secret',
       }),
       stdio: 'ignore',
     });
@@ -164,6 +170,17 @@ app.whenReady().then(async () => {
     ];
     check('the live channel carries the identity',
       streams.every((s) => s === 'live'), streams.join(' / '));
+
+    /* The relay comes from the service, so a company that has one does
+       not have to rebuild two clients to use it. Both ends must take it,
+       or one of them quietly cannot reach the other. */
+    const ice = await one.webContents.executeJavaScript(`(async () => {
+      await Ice.load();
+      return { relay: Ice.relay, urls: JSON.stringify(Ice.config().iceServers) };
+    })()`);
+    check('the relay is served, not hard-coded',
+      ice.relay && /relay.example.test/.test(ice.urls),
+      ice.relay ? 'TURN from the service' : 'STUN ONLY — ' + ice.urls.slice(0, 60));
 
     /* ---- 2. a message, one client to the other ---- */
 
@@ -225,6 +242,82 @@ app.whenReady().then(async () => {
       return t ? (t.name || '#fleet') : 'NOT LISTED';
     })()`);
     say('and it is listed as a thread', badge);
+
+    /* ---- 3b. reaching a driver from the live map ---- */
+
+    /* Marek reports a position, the way a driver with the game open does.
+
+       Injecting one into Fleet.drivers directly does not survive: the next
+       'fleet' frame off the live channel calls absorb(list, true), which
+       replaces the list wholesale, and the fake is gone before the screen
+       is read. Going through the service is both more honest and stable. */
+    await two.webContents.executeJavaScript(`(async () => {
+      Store.db.live = {
+        game: 'ets2',
+        speed: 62,
+        heading: 90,
+        world: { x: 1000, z: 2000 },
+        truck: 'Scania S 730',
+      };
+      Store.db.activityState = 'driving';
+      Fleet.pushNow();
+      await new Promise(r => setTimeout(r, 400));
+    })()`);
+
+    await wait(1500);
+
+    const onMap = await one.webContents.executeJavaScript(`(async () => {
+      try {
+        /* The list of drivers on the road is on the dashboard; the live
+           map draws them as pins with a popup. Both are "the map" as far
+           as a driver is concerned, so both are checked. */
+        state.view = 'dashboard';
+        render();
+        await new Promise(r => setTimeout(r, 600));
+
+        const rows = document.querySelectorAll('.fleetrow').length;
+        const message = !!document.querySelector('[data-act="map-message"]');
+        const call = !!document.querySelector('[data-act="map-call"]');
+        const onSelf = document.querySelectorAll('.fleetrow.me [data-act="map-call"]').length;
+
+        /* and the pin popup the live map builds for the same driver */
+        Store.db.settings.showFleet = true;
+        state.view = 'livemap';
+        render();
+        await new Promise(r => setTimeout(r, 900));
+        const pins = document.querySelectorAll('.fleet-pin').length;
+
+        return { rows, message, call, onSelf, pins };
+      } catch (e) {
+        return { err: e.message };
+      }
+    })()`);
+
+    if (onMap.err) fail('the map screen threw: ' + onMap.err);
+
+    check('a driver on the map can be reached from it',
+      onMap.message && onMap.call && onMap.onSelf === 0,
+      onMap.rows + ' row(s), ' + onMap.pins + ' pin(s); '
+        + (onMap.message && onMap.call ? 'message + call' : 'BUTTONS MISSING')
+        + (onMap.onSelf ? ', BUT ALSO ON YOURSELF' : ', and not on your own row'));
+
+    /* And the screen says why when it cannot, rather than looking empty —
+       which is how this was reported: not as an error, as "still cannot
+       chat" in front of a blank list. */
+    const offline = await one.webContents.executeJavaScript(`(() => {
+      const was = Store.db.settings.fleetUrl;
+      const wasSvc = window.HLL_SERVICE;
+      Store.db.settings.fleetUrl = '';
+      window.HLL_SERVICE = '';
+      const html = dmOffline();
+      Store.db.settings.fleetUrl = was;
+      window.HLL_SERVICE = wasSvc;
+      return html;
+    })()`);
+
+    check('and says so when the service is missing',
+      /company service/i.test(offline) && /npm run fleet/.test(offline),
+      offline ? 'names the service and how to start it' : 'SAYS NOTHING');
 
     /* ---- 4. a call ---- */
 

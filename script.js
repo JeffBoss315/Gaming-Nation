@@ -10135,6 +10135,10 @@ const ServiceAuth = {
       HQLive.stop();
       HQLive.start();
       Messages.pullThreads().then(paintUnreadBadge);
+      /* Asked now rather than when somebody presses Call: the answer says
+         whether this company has a relay, and finding that out mid-ring
+         adds a round trip to the one moment nobody wants to wait. */
+      Ice.load();
     } catch (e) {
       console.warn('[GMN] could not reopen the live channel:', e.message);
     }
@@ -11360,10 +11364,10 @@ const CLIENT_RELEASE = {
       size: '80.8 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
       file: 'release/Gaming-Nation-Trucker-1.0.0-windows-portable.exe',
-      size: '80.3 MB', note: 'No installation — just run it. Good for a USB stick.' },
+      size: '80.4 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
       file: 'release/Gaming-Nation-Trucker-1.0.0-android.apk',
-      size: '6.7 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
+      size: '6.9 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
 
@@ -12742,6 +12746,99 @@ const Messages = {
    it is not a driver code, so nothing can collide with it. */
 const FLEET_ROOM = '#fleet';
 
+/* ---------------- how a call reaches the other end ----------------
+
+   Two ends of a call have to find a path between them. STUN tells each
+   one what its own public address is, which is enough on an ordinary
+   network and enough on none of the awkward ones: behind symmetric NAT,
+   or a firewall that drops UDP, both ends learn addresses they still
+   cannot reach. The call rings, both sides say connecting, and nothing
+   happens.
+
+   Getting through those needs a TURN relay, which is a server somebody
+   pays for. Whether this company has one is not a decision this file can
+   make, so it stops pretending and asks the service. Set HLL_TURN_URL
+   there and every client picks it up — website, app and console — with
+   no rebuild and nothing for a driver to configure.
+
+   Falls back to the same public STUN that was hard-coded in two places
+   here before, so a service too old to answer behaves as it always did. */
+const Ice = {
+  servers: null,
+  relay: false,
+  loading: false,
+
+  FALLBACK: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+
+  config() {
+    return { iceServers: this.servers || this.FALLBACK };
+  },
+
+  /* Asked once, before the first call rather than during it: fetching
+     while the phone is already ringing adds a round trip to the one
+     moment nobody wants to wait. */
+  async load() {
+    /* Guarded on having an answer, not on having asked.
+
+       It was the second of those, and boot calls this before anybody has
+       signed in — so the one call that could have worked, straight after
+       sign-in, returned early against a flag the failed attempt had
+       already set. The relay was served correctly and silently never
+       collected, which looks exactly like not having one. */
+    if (this.servers || this.loading) return;
+
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+
+    this.loading = true;
+    try {
+      const res = await fetch(base + '/api/call/ice',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      if (Array.isArray(body.iceServers) && body.iceServers.length) {
+        this.servers = body.iceServers;
+        this.relay = !!body.relay;
+      }
+    } catch (e) {
+      /* the fallback is a working configuration, not a stub */
+    } finally {
+      this.loading = false;
+    }
+  },
+
+  whyFailed() {
+    return this.relay
+      ? 'The two ends could not reach each other, even through the relay.'
+      : 'This network will not let the two ends connect directly, and the '
+        + 'company has no relay set up. A different network usually works.';
+  },
+};
+
+/* Why calling is unavailable, or null when it is not.
+
+   This used to be a bare can() behind the message "It needs a microphone
+   and a secure connection", which names both possibilities and neither
+   cause. navigator.mediaDevices is simply undefined on an insecure
+   origin, so somebody on a plain http:// address got a sentence about
+   microphones when the problem was the URL. */
+function callBlocker() {
+  if (typeof RTCPeerConnection === 'undefined') {
+    return 'This browser has no support for calling.';
+  }
+
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return 'Calling needs a secure address — https:// or localhost. A browser '
+      + 'will not hand out the microphone on a plain http:// address.';
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return 'This browser will not give Gaming Nation a microphone.';
+  }
+
+  return null;
+}
+
 /* ---------------- the group call ----------------
 
    A mesh: every participant holds one peer connection to every other one.
@@ -12771,7 +12868,6 @@ const RoomCall = {
      silently ruining the call for everyone already in it. */
   MAX: 8,
 
-  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
 
   count() { return Object.keys(this.peers).length + (this.live ? 1 : 0); },
 
@@ -12804,7 +12900,7 @@ const RoomCall = {
   peerFor(id, name) {
     if (this.peers[id]) return this.peers[id];
 
-    const pc = new RTCPeerConnection(this.config);
+    const pc = new RTCPeerConnection(Ice.config());
 
     pc.onicecandidate = (e) => {
       if (e.candidate) this.signalOut('ice', id, { candidate: e.candidate });
@@ -12842,8 +12938,7 @@ const RoomCall = {
     if (this.live || this.joining) return;
 
     if (!Calls.can()) {
-      toast('This browser cannot make calls', 'warn',
-        'It needs a microphone and a secure connection.');
+      toast('Calling is unavailable', 'warn', callBlocker());
       return;
     }
     if (Calls.state !== 'idle') {
@@ -13048,12 +13143,8 @@ const Calls = {
   /* Public STUN only. A relay would need a server the company does not
      have; without one a call still connects on any normal network and
      fails on a strict corporate one, which is the honest trade here. */
-  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
 
-  can() {
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia
-      && typeof RTCPeerConnection !== 'undefined');
-  },
+  can() { return !callBlocker(); },
 
   async media(video) {
     return navigator.mediaDevices.getUserMedia({
@@ -13080,7 +13171,7 @@ const Calls = {
   },
 
   peer() {
-    const pc = new RTCPeerConnection(this.config);
+    const pc = new RTCPeerConnection(Ice.config());
 
     pc.onicecandidate = (e) => {
       if (e.candidate) this.signalOut('ice', { candidate: e.candidate });
@@ -13101,9 +13192,9 @@ const Calls = {
     pc.onconnectionstatechange = () => {
       if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
         if (this.state !== 'idle') {
-          toast('The call ended', 'info',
-            pc.connectionState === 'failed'
-              ? 'The two ends could not reach each other.' : '');
+          toast(pc.connectionState === 'failed' ? 'The call could not connect' : 'The call ended',
+            pc.connectionState === 'failed' ? 'danger' : 'info',
+            pc.connectionState === 'failed' ? Ice.whyFailed() : '');
           this.teardown();
         }
       }
@@ -13115,8 +13206,7 @@ const Calls = {
 
   async start(driverId, name, video) {
     if (!this.can()) {
-      toast('This browser cannot make calls', 'warn',
-        'It needs a microphone and a secure connection.');
+      toast('Calling is unavailable', 'warn', callBlocker());
       return;
     }
     if (this.state !== 'idle') { toast('You are already on a call', 'warn'); return; }

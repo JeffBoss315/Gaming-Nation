@@ -63,6 +63,46 @@ const FILES_DIR = process.env.HLL_FILES_DIR || path.join(ROOT, 'hll-files');
 const MAX_UPLOAD = Number(process.env.HLL_MAX_UPLOAD || 25 * 1024 * 1024);
 const SITE_DIR = process.env.HLL_SITE_DIR || ROOT;
 
+/* ---------------- how calls find each other ----------------
+
+   Both clients used to carry the same hard-coded line:
+
+     { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+
+   STUN only tells each end what its own public address is. That is
+   enough on most networks and enough on none of the awkward ones: behind
+   symmetric NAT, or a firewall that blocks UDP, the two ends learn each
+   other's addresses and still cannot reach them. The call rings, both
+   sides say connecting, and nothing happens.
+
+   Fixing that needs a TURN relay, which is a server, which is a cost.
+   What can be fixed for free is that the address of one was welded into
+   four places across two files — so a company that DID have a relay had
+   no way to say so without a code change and a rebuild.
+
+   It is configured here instead, once, and served to every client:
+   the app, the website and the console all ask. Set the three below and
+   restart; leave them unset and calls work exactly as before, on STUN.
+
+     HLL_TURN_URL    turn:relay.example.com:3478
+     HLL_TURN_USER
+     HLL_TURN_PASS
+
+   Extra STUN servers are listed because they are free and a single one
+   that is having a bad day should not be the reason a call fails. */
+const STUN = (process.env.HLL_STUN_URLS
+  || 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
+const ICE_SERVERS = [{ urls: STUN }].concat(
+  process.env.HLL_TURN_URL
+    ? [{
+      urls: process.env.HLL_TURN_URL.split(',').map((s) => s.trim()).filter(Boolean),
+      username: process.env.HLL_TURN_USER || undefined,
+      credential: process.env.HLL_TURN_PASS || undefined,
+    }]
+    : []);
+
 /* ---------------- small helpers ---------------- */
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
@@ -1209,6 +1249,22 @@ const server = http.createServer((req, res) => {
     return json(res, 200, { room: FLEET_ROOM, peers: roomCallList() });
   }
 
+  /* How to reach the other end. Signed in only: TURN credentials are
+     credentials, and handing them to anyone who asks is how a relay
+     somebody is paying for becomes a relay everybody is using.
+
+     `relay` is reported so a client can say WHY a call failed. Without a
+     relay, a failure on a hostile network is expected and the driver
+     should be told that rather than left thinking the app is broken. */
+  if (url.pathname === '/api/call/ice' && req.method === 'GET') {
+    if (!whoami(req)) return json(res, 401, { error: 'no identity' });
+    return json(res, 200, {
+      iceServers: ICE_SERVERS,
+      relay: ICE_SERVERS.some((s) => /^turns?:/i.test(
+        Array.isArray(s.urls) ? (s.urls[0] || '') : String(s.urls || ''))),
+    });
+  }
+
   if (url.pathname === '/api/call/signal' && req.method === 'POST') {
     return callSignal(req, res).catch((e) => {
       console.warn('[hll] call signal: ' + e.message);
@@ -1267,6 +1323,19 @@ server.listen(PORT, HOST, () => {
   console.log('  Fleet room   :  ' + base + '/api/dm/%23fleet   (group chat)');
   console.log('  Group call   :  ' + base + '/api/call/room');
   console.log('  Status       :  ' + base + '/status');
+  console.log('');
+
+  /* Said out loud, because the failure it predicts happens on somebody
+     else's network days later and looks like a broken app. */
+  if (ICE_SERVERS.some((s) => /^turns?:/i.test(
+    Array.isArray(s.urls) ? (s.urls[0] || '') : String(s.urls || '')))) {
+    console.log('  Call routing :  STUN + your TURN relay');
+  } else {
+    console.log('  Call routing :  STUN only — no relay configured.');
+    console.log('                  Calls connect on ordinary networks and fail');
+    console.log('                  behind symmetric NAT or a UDP-blocking');
+    console.log('                  firewall. Set HLL_TURN_URL to fix that.');
+  }
   console.log('');
   console.log('  Company file :  ' + COMPANY_FILE);
   if (HOST === '127.0.0.1') {

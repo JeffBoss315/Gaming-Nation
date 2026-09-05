@@ -41,4 +41,28 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        Calling.
+
+        Drivers can call each other and join the crew call from the phone,
+        and none of that can work without this: Android refuses
+        getUserMedia({ audio: true }) outright when RECORD_AUDIO is not
+        declared, whatever the person taps. The failure arrives in the
+        WebView as a plain permission denial, which reads exactly like the
+        driver having said no.
+
+        MODIFY_AUDIO_SETTINGS is what lets the call route to the earpiece
+        or a headset rather than always the speaker — which matters when
+        the phone is in a cradle in a cab.
+
+        The WebView asks for both at the point of the first call, not at
+        install, so nobody is asked for a microphone until they use one.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- A phone with no microphone should still install: this is a fleet
+         app that happens to make calls, not a telephone. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>

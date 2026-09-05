@@ -1605,10 +1605,31 @@ const TileMap = {
       });
       const job = d.job ? d.job.from + ' \u2192 ' + d.job.to + (d.job.cargo ? ' (' + d.job.cargo + ')' : '') : 'no load';
       const truck = d.truck || 'Truck unavailable';
+      /* Reaching them from the pin.
+
+         Finding somebody on the map and then having to go and look their
+         name up on another screen to say anything to them is the long way
+         round for the commonest thing you would want to do with a map of
+         where everybody is. The popup lives inside #app, so the delegated
+         data-act handler picks these up with no binding of their own.
+
+         Left off when the service is unreachable: the map still draws
+         from the last frame it had, and a button that cannot work is
+         worse than no button. */
+      const reach = Messages.on()
+        ? '<div class="pin-reach">'
+          + '<button class="btn btn-sm" data-act="map-message" data-id="' + esc(d.id) + '">'
+          + icon('chat') + 'Message</button>'
+          + '<button class="btn btn-sm" data-act="map-call" data-id="' + esc(d.id) + '"'
+          + ' data-name="' + esc(d.name || d.id) + '">' + icon('phone') + 'Call</button>'
+          + '</div>'
+        : '';
+
       const details = '<b>' + esc(d.name || d.id) + '</b>'
         + '<br><span>Truck: ' + esc(truck) + '</span>'
         + '<br><span>Job: ' + esc(job) + '</span>'
-        + '<br><span>Speed: ' + (d.speed || 0) + ' km/h</span>';
+        + '<br><span>Speed: ' + (d.speed || 0) + ' km/h</span>'
+        + reach;
       L.marker(ll, { icon, title: d.name || d.id, keyboard: true })
         .bindTooltip('<b>' + esc(d.name || d.id) + '</b>',
           { direction: 'top', offset: [0, -10], permanent: true, className: 'fleet-name-label' })
@@ -3619,6 +3640,22 @@ function liveDriversInner() {
         <span class="fr-word"><i class="beat"></i>${word}</span>
         <span class="fr-speed">${Math.round(d.speed || 0)}<em>km/h</em></span>
       </div>
+
+      ${/* Reach them from here.
+
+            This is the screen where you find out somebody is forty
+            minutes ahead of you on the same road, and until now the only
+            thing you could do about it was remember the name and go
+            looking for it on another screen. Not offered against your own
+            row, and not offered when the service is down — a button that
+            cannot work is worse than no button. */''}
+      ${!d.self && Messages.on() ? `<div class="fr-reach">
+        <button class="btn btn-sm" title="Message ${esc(d.name || d.id)}"
+          data-act="map-message" data-id="${esc(d.id)}">${icon('chat')}</button>
+        <button class="btn btn-sm" title="Call ${esc(d.name || d.id)}"
+          data-act="map-call" data-id="${esc(d.id)}"
+          data-name="${esc(d.name || d.id)}">${icon('phone')}</button>
+      </div>` : ''}
     </div>`;
   }).join('')}</div>
 
@@ -4028,6 +4065,32 @@ function dmLine(m, mine) {
     ${m.text ? esc(m.text) : ''}${file}</div>`;
 }
 
+/* Why the screen is empty, said at the top rather than discovered.
+
+   Driver-to-driver messages and calls run through the company service.
+   With none reachable the thread list holds management and nothing else,
+   which looks exactly like having no friends rather than like a service
+   that is not running — and that is precisely how it was reported: not
+   as an error, but as "still cannot chat". */
+function dmOffline() {
+  if (Messages.on()) return '';
+
+  const noService = !Sync.url();
+
+  return `<div class="dm-offline">${icon('alert')}<div>
+    <div class="b6">${noService
+      ? 'Driver chat needs the company service'
+      : 'This device has no session with the service'}</div>
+    <div class="t3 xs mt-4">${noService
+      ? 'Messages and calls between drivers go through Gaming Nation\x27s own '
+        + 'service. Start it with <span class="mono">npm run fleet</span> on the '
+        + 'company machine, or put its address in Settings. Announcements from '
+        + 'management still arrive without it.'
+      : 'Sign out and back in — the service issues its own session, and this '
+        + 'device does not hold one.'}</div>
+  </div></div>`;
+}
+
 /* The composer, and the reason it is not there when it is not. */
 function dmComposer(placeholder) {
   if (!Messages.on()) {
@@ -4096,6 +4159,7 @@ function viewMessages() {
   return `
   ${viewHead('Messages', 'Talk to another driver, or read what management sent',
     `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
+  ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -4167,6 +4231,7 @@ function viewChats() {
       ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
       : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
     `${callBtn}<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
+  ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -4985,6 +5050,7 @@ const ServiceAuth = {
          call never rings at all. */
       this.reopenStream();
       Messages.pullThreads();
+      Ice.load();
       return true;
     } catch (e) {
       this.status = 'unreachable';
@@ -5194,6 +5260,108 @@ const Messages = {
   },
 };
 
+/* ---------------- how a call reaches the other end ----------------
+
+   Two ends of a call have to find a path between them. STUN tells each
+   one what its own public address is, which is enough on an ordinary
+   home or office network and enough on none of the awkward ones: behind
+   symmetric NAT, or a firewall that drops UDP, both ends learn addresses
+   they still cannot reach. The call rings, both sides say connecting,
+   and nothing happens.
+
+   Getting through those needs a TURN relay, which is a server somebody
+   pays for. Whether this company has one is not a decision this file can
+   make, so it stops pretending: the service is asked. Set HLL_TURN_URL
+   there and every client picks it up — app, website and console — with
+   no rebuild and nothing for a driver to configure.
+
+   Cached, because it changes when the service restarts and not between
+   two calls. Falls back to the same public STUN that was hard-coded here
+   before, so a service too old to answer behaves exactly as it used to. */
+const Ice = {
+  servers: null,
+  relay: false,
+  loading: false,
+
+  FALLBACK: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+
+  config() {
+    return { iceServers: this.servers || this.FALLBACK };
+  },
+
+  /* Asked once, before the first call rather than during it: fetching
+     while the phone is already ringing adds a round trip to the one
+     moment nobody wants to wait. */
+  async load() {
+    /* Guarded on having an answer, not on having asked.
+
+       It was the second of those, and boot calls this before anybody has
+       signed in — so the one call that could have worked, straight after
+       sign-in, returned early against a flag the failed attempt had
+       already set. The relay was served correctly and silently never
+       collected, which looks exactly like not having one. */
+    if (this.servers || this.loading) return;
+
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+
+    this.loading = true;
+    try {
+      const res = await fetch(base + '/api/call/ice',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      if (Array.isArray(body.iceServers) && body.iceServers.length) {
+        this.servers = body.iceServers;
+        this.relay = !!body.relay;
+      }
+    } catch (e) {
+      /* the fallback is a working configuration, not a stub */
+    } finally {
+      this.loading = false;
+    }
+  },
+
+  /* What to tell somebody whose call just failed to connect. The cause is
+     almost always the network rather than either device, and saying so
+     stops a driver reinstalling the app over a firewall rule. */
+  whyFailed() {
+    return this.relay
+      ? 'The two ends could not reach each other, even through the relay.'
+      : 'This network will not let the two ends connect directly, and the '
+        + 'company has no relay set up. A different network usually works.';
+  },
+};
+
+/* Why calling is unavailable, or null when it is not.
+
+   This used to be a bare can() that answered true or false, and the
+   screen said "This device cannot make calls" — which blames the device
+   for what is nearly always the address. navigator.mediaDevices is
+   simply undefined on an insecure origin, so a driver opening the client
+   over http:// on a LAN address hit exactly that message and had no way
+   to know a URL was the problem. */
+function callBlocker() {
+  if (typeof RTCPeerConnection === 'undefined') {
+    return 'This browser has no support for calling.';
+  }
+
+  /* file:// in the desktop build and localhost in the phone app are both
+     trustworthy; a plain http:// LAN address is not, and that is the case
+     worth naming. */
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return 'Calling needs a secure address. Open Gaming Nation from the '
+      + 'desktop app, or over https:// or localhost — a browser will not '
+      + 'hand out the microphone on a plain http:// address.';
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return 'This browser will not give Gaming Nation a microphone.';
+  }
+
+  return null;
+}
+
 /* ---------------- calling ----------------
 
    Public STUN only. A relay would need a server the company does not
@@ -5216,12 +5384,8 @@ const Calls = {
   startedAt: 0,
   timer: null,
 
-  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
 
-  can() {
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia
-      && typeof RTCPeerConnection !== 'undefined');
-  },
+  can() { return !callBlocker(); },
 
   media() {
     return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -5240,7 +5404,7 @@ const Calls = {
   },
 
   peer() {
-    const pc = new RTCPeerConnection(this.config);
+    const pc = new RTCPeerConnection(Ice.config());
 
     pc.onicecandidate = (e) => {
       if (e.candidate) this.signalOut('ice', { candidate: e.candidate });
@@ -5262,8 +5426,9 @@ const Calls = {
       if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
         if (this.state !== 'idle') {
           toast(pc.connectionState === 'failed'
-            ? 'The call failed — the two ends could not reach each other'
-            : 'The call ended', 'info');
+            ? Ice.whyFailed()
+            : 'The call ended',
+          pc.connectionState === 'failed' ? 'err' : 'info');
           this.teardown();
         }
       }
@@ -5275,7 +5440,7 @@ const Calls = {
 
   async start(driverId, name) {
     if (!this.can()) {
-      toast('This device cannot make calls', 'warn');
+      toast(callBlocker(), 'warn');
       return;
     }
     if (this.state !== 'idle') { toast('You are already on a call', 'warn'); return; }
@@ -5482,7 +5647,6 @@ const RoomCall = {
 
   MAX: 8,
 
-  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
 
   count() { return Object.keys(this.peers).length + (this.live ? 1 : 0); },
 
@@ -5515,7 +5679,7 @@ const RoomCall = {
   peerFor(id, name) {
     if (this.peers[id]) return this.peers[id];
 
-    const pc = new RTCPeerConnection(this.config);
+    const pc = new RTCPeerConnection(Ice.config());
 
     pc.onicecandidate = (e) => {
       if (e.candidate) this.signalOut('ice', id, { candidate: e.candidate });
@@ -5550,7 +5714,7 @@ const RoomCall = {
   async join() {
     if (this.live || this.joining) return;
 
-    if (!Calls.can()) { toast('This device cannot make calls', 'warn'); return; }
+    if (!Calls.can()) { toast(callBlocker(), 'warn'); return; }
     if (Calls.state !== 'idle') { toast('End your call before joining the crew call', 'warn'); return; }
     if (!Messages.on()) { toast(Messages.reason(), 'warn'); return; }
 
@@ -6204,6 +6368,16 @@ function handle(act, t) {
     }
 
     case 'open-room': Messages.openThread(FLEET_ROOM); return;
+
+    /* From the live map. Opening the conversation means going to the
+       screen it is on, or the thread loads behind the map and nothing
+       appears to happen. */
+    case 'map-message':
+      state.view = 'messages';
+      Messages.openThread(t.dataset.id);
+      return;
+
+    case 'map-call': Calls.start(t.dataset.id, t.dataset.name); return;
 
     case 'call-driver': Calls.start(t.dataset.id, t.dataset.name); return;
     case 'call-accept': Calls.accept(); return;
@@ -7058,6 +7232,7 @@ function startServices() {
   ServiceAuth.load();
   Messages.pullThreads();
   RoomCall.poll();
+  Ice.load();
   clearInterval(startServices.roomTimer);
   startServices.roomTimer = setInterval(() => RoomCall.poll(), 20000);
 
@@ -7069,12 +7244,36 @@ function startServices() {
   /* If the service is running on this machine, everything above should be
      using it. Started again once we know, rather than left off because the
      answer had not arrived yet when boot ran. */
-  discoverLocalService().then((found) => {
+  /* Looked for again, not just once at boot.
+
+     The service and the client are two things a person starts in whatever
+     order they think of them, and starting the client first used to mean
+     no messaging until it was restarted — with nothing on screen saying
+     so. Now it keeps looking, and joins up the moment the service appears.
+     The probe is one request to localhost with a 1.2s deadline, so a
+     minute between attempts costs nothing worth measuring. */
+  const findService = () => discoverLocalService().then((found) => {
     if (!found) return;
+
+    clearInterval(startServices.findTimer);
+    startServices.findTimer = null;
+
     Sync.start();
     Fleet.start();
+
+    /* The service was not there when we signed in, so none of this ran. */
+    ServiceAuth.load();
+    Messages.pullThreads();
+    RoomCall.poll();
+    Ice.load();
+
+    Store.log('ok', 'Company service found — messages and calls are available');
     render();
   });
+
+  findService();
+  clearInterval(startServices.findTimer);
+  startServices.findTimer = setInterval(findService, 60000);
 
   if (Store.db.settings.liveTelemetry) {
     Telemetry.start();

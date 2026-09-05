@@ -1713,3 +1713,44 @@ body.can-install .install-cta{display:inline-flex}
     .call-bar{gap:10px;padding:10px 12px}
     .call-timer{display:none}
 }
+
+/* Said at the top of Messages and Crew chat when the company service is
+   not reachable. The screen is otherwise indistinguishable from having
+   nobody to talk to, which is how "still cannot chat" got reported as a
+   bug in the app rather than as a service that was not running. */
+.dm-offline{
+    display:flex;align-items:flex-start;gap:11px;
+    margin-bottom:14px;
+    padding:12px 14px;
+    border-radius:var(--r);
+    border:1px solid rgba(240,180,60,.30);
+    background:rgba(240,180,60,.08);
+}
+.dm-offline svg{width:17px;height:17px;flex:none;margin-top:1px;color:var(--warn)}
+.dm-offline .mono{
+    padding:1px 5px;
+    border-radius:5px;
+    background:var(--panel-3);
+    border:1px solid var(--line);
+    font-size:11.5px;
+}
+
+/* Message and call, on a driver's row in the live fleet list. Held to the
+   right of the speed so the row still reads as a row of facts with two
+   actions at the end, rather than as a toolbar. */
+.fr-reach{display:flex;gap:6px;flex:none;align-items:center}
+.fr-reach .btn{padding:6px 8px}
+.fr-reach svg{width:15px;height:15px}
+@media (max-width:720px){
+    .fr-reach{gap:4px}
+    .fr-reach .btn{padding:6px}
+}
+
+/* Message and call inside a driver's pin popup on the live map. */
+.pin-reach{
+    display:flex;gap:6px;margin-top:9px;
+    padding-top:9px;
+    border-top:1px solid var(--line);
+}
+.pin-reach .btn{flex:1;justify-content:center;padding:6px 8px;font-size:11.5px}
+.pin-reach svg{width:14px;height:14px}

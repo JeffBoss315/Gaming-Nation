@@ -246,6 +246,17 @@ app.whenReady().then(async () => {
     check('the run opens its own timeline', !!started && started.events.length > 0,
       started ? (started.events[0] || 'none') : '-');
 
+    /* Wait for the CONSOLE, not for the driver.
+
+       The poll above returns the instant the driver has the run, which is
+       sooner than the fixed sleep it replaced — and the slack that sleep
+       happened to give the dispatcher went with it. Every driver-side
+       check passed and every console-side one failed, which reads like a
+       broken live channel and was really this test reading one end at the
+       speed of the other. Each end is waited for on its own terms now. */
+    await until(console2,
+      `LiveMap.drivers.some(x => x.id === ${JSON.stringify(setup.id)} && x.job)`);
+
     /* did it reach the dispatcher, without either side polling for it? */
     const seen = await console2.webContents.executeJavaScript(`(() => {
       const d = LiveMap.drivers.find(x => x.id === ${JSON.stringify(setup.id)});
@@ -279,6 +290,10 @@ app.whenReady().then(async () => {
       half.avg > 0, (half.avg || 0) + ' km/h');
     check('the halfway mark goes on the timeline',
       half.events.some((t) => /50%/.test(t)), half.events.join(' | '));
+
+    await until(console2,
+      `(() => { const d = LiveMap.drivers.find(x => x.id === ${JSON.stringify(setup.id)});
+        return d && d.job && Math.round(d.job.progress) === 50; })()`);
 
     const moved = await console2.webContents.executeJavaScript(`(() => {
       const d = LiveMap.drivers.find(x => x.id === ${JSON.stringify(setup.id)});

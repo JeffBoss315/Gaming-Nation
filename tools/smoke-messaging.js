@@ -328,6 +328,21 @@ const login = async (email) => {
     { to: 'HLL-2002', kind: 'drop-tables', callId: 'CALL-1' }, anna);
   check('an unknown signal is refused', nonsense.status === 400, 'HTTP ' + nonsense.status);
 
+  /* How the two ends find each other. Served rather than hard-coded, so a
+     company with a TURN relay can use it without rebuilding two clients —
+     and refused to anybody without a session, because TURN credentials
+     are credentials and a relay handed to all comers is a relay somebody
+     else is using at your expense. */
+  const iceAnon = await req('GET', '/api/call/ice');
+  check('the call configuration needs a session',
+    iceAnon.status === 401, 'HTTP ' + iceAnon.status);
+
+  const ice = await req('GET', '/api/call/ice', null, anna);
+  const servers = (ice.body && ice.body.iceServers) || [];
+  check('and describes how to reach the other end',
+    ice.status === 200 && servers.length > 0,
+    servers.length + ' server(s), relay ' + ((ice.body || {}).relay ? 'yes' : 'no'));
+
   /* ---------- 5b. the fleet room ----------
 
      The opposite requirement to a direct message, and worth stating as
