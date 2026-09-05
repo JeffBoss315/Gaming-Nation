@@ -383,7 +383,7 @@ blocked, and it is free:
 
 1. [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
    Create → Pages → Connect to Git
-2. Pick `JeffBoss315/heavyline`
+2. Pick `JeffBoss315/Gaming-Nation`
 3. Build command: `node tools/build-www.js` — **not** `npm run www`, which
    runs the release audit and fails on a clean checkout
 4. Output directory: `www`

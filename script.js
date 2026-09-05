@@ -11305,7 +11305,7 @@ function saveFleetService() {
    back to the release/ folder next to the site, which is what a local
    checkout has and what npm run dist writes. */
 const CLIENT_DOWNLOAD_BASE =
-  'https://github.com/JeffBoss315/heavyline/releases/download/v';
+  'https://github.com/JeffBoss315/Gaming-Nation/releases/download/v';
 
 /* the file, wherever it is: a full URL when one is configured, otherwise
    the relative path this page has always used */
