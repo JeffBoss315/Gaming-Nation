@@ -600,9 +600,9 @@
     ========================================================== -->
 
     <script>
-        window.__hllSplashAt = Date.now();
+        window.__gmnSplashAt = Date.now();
 
-        window.__hllSplash = setTimeout(function () {
+        window.__gmnSplash = setTimeout(function () {
 
             var splash = document.getElementById('splash');
 
@@ -2029,7 +2029,7 @@
         /* The splash belongs to the SPA, which is not booting. */
         var splash = document.getElementById('splash');
         if (splash) splash.remove();
-        if (window.__hllSplash) clearTimeout(window.__hllSplash);
+        if (window.__gmnSplash) clearTimeout(window.__gmnSplash);
 
         var app = document.getElementById('app');
         if (app) app.hidden = true;

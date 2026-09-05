@@ -205,7 +205,7 @@ function sendTo(driverId, kind, data) {
   if (!driverId) return 0;
   let n = 0;
   listeners.forEach((res) => {
-    if (res.hllDriverId === String(driverId)) { send(res, kind, data); n++; }
+    if (res.gmnDriverId === String(driverId)) { send(res, kind, data); n++; }
   });
   return n;
 }
@@ -214,7 +214,7 @@ function sendTo(driverId, kind, data) {
    call. Ringing a driver who is not connected would ring nowhere. */
 function isOnline(driverId) {
   let live = false;
-  listeners.forEach((res) => { if (res.hllDriverId === String(driverId)) live = true; });
+  listeners.forEach((res) => { if (res.gmnDriverId === String(driverId)) live = true; });
   return live;
 }
 
@@ -223,7 +223,7 @@ function isOnline(driverId) {
    room's member count and the group call have to count them as one. */
 function onlineDrivers() {
   const ids = new Set();
-  listeners.forEach((res) => { if (res.hllDriverId) ids.add(res.hllDriverId); });
+  listeners.forEach((res) => { if (res.gmnDriverId) ids.add(res.gmnDriverId); });
   return Array.from(ids);
 }
 
@@ -232,7 +232,7 @@ function onlineDrivers() {
 function sendToOthers(exceptId, kind, data) {
   let n = 0;
   listeners.forEach((res) => {
-    if (res.hllDriverId && res.hllDriverId !== String(exceptId)) {
+    if (res.gmnDriverId && res.gmnDriverId !== String(exceptId)) {
       send(res, kind, data); n++;
     }
   });
@@ -1204,15 +1204,15 @@ const server = http.createServer((req, res) => {
        it never leaves this service. */
     const streamToken = url.searchParams.get('token') || '';
     const streamSession = streamToken ? sessions[streamToken] : null;
-    res.hllDriverId = streamSession ? String(streamSession.driverId) : null;
+    res.gmnDriverId = streamSession ? String(streamSession.driverId) : null;
 
     listeners.add(res);
 
     /* Somebody who was ringing while this driver was away has long since
        given up, so the arrival is announced rather than the backlog
        replayed: the people talking to them can see they are back. */
-    if (res.hllDriverId) {
-      broadcast('presence', { driverId: res.hllDriverId, online: true });
+    if (res.gmnDriverId) {
+      broadcast('presence', { driverId: res.gmnDriverId, online: true });
     }
 
     /* whoever just arrived gets the picture as it stands, not only what
@@ -1233,8 +1233,8 @@ const server = http.createServer((req, res) => {
       listeners.delete(res);
       /* Only once the last window closes — a driver moving between the
          client and a browser has not gone offline. */
-      if (res.hllDriverId && !isOnline(res.hllDriverId)) {
-        broadcast('presence', { driverId: res.hllDriverId, online: false });
+      if (res.gmnDriverId && !isOnline(res.gmnDriverId)) {
+        broadcast('presence', { driverId: res.gmnDriverId, online: false });
       }
     };
     req.on('close', drop);

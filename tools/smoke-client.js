@@ -47,8 +47,8 @@ app.whenReady().then(async () => {
       say('signed in', Store.db.driver && Store.db.driver.authed ? Store.db.driver.gmnId : 'NO');
 
       /* the desktop bridge is present in this shell */
-      say('desktop bridge', window.hllDesktop ? 'yes' : 'NO');
-      say('capture available', window.hllDesktop && window.hllDesktop.captureScreen ? 'yes' : 'NO');
+      say('desktop bridge', window.gmnDesktop ? 'yes' : 'NO');
+      say('capture available', window.gmnDesktop && window.gmnDesktop.captureScreen ? 'yes' : 'NO');
 
       /* a dispatched load reaches the client */
       const hq = Auth.hqDb();
@@ -76,7 +76,7 @@ app.whenReady().then(async () => {
       say('assignment auto-closed', (hq2.assignments.find(a => a.id === 'ASG-' + RUN) || {}).status);
 
       /* a real capture, through the bridge */
-      const shot = window.hllDesktop && await window.hllDesktop.captureScreen();
+      const shot = window.gmnDesktop && await window.gmnDesktop.captureScreen();
       say('screen capture', shot && shot.dataUrl ? Math.round(shot.bytes / 1024) + ' KB' : 'null (headless)');
 
       /* every screen renders */

@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
   try {
     /* The stand-in, with email confirmation ON — the state a new Supabase
        project ships in and the one this whole test is about. */
-    await js('window.__hllConfirmEmail = true;');
+    await js('window.__gmnConfirmEmail = true;');
     await js(FAKE_SUPABASE);
     await js("var s=document.getElementById('splash'); if(s) s.classList.add('gone');");
     await wait(600);
@@ -97,7 +97,7 @@ app.whenReady().then(async () => {
 
     /* Confirming the address is what releases the session; from the
        browser's side that is simply "signInWithPassword now works". */
-    await js('window.__hllConfirmEmail = false;');
+    await js('window.__gmnConfirmEmail = false;');
 
     const signIn = await js(`
       Accounts.verify('${EMAIL}', '${PASSWORD}')

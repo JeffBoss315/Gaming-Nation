@@ -1,9 +1,9 @@
 /* Bridges the desktop-only capabilities to the renderer.
-   tracker.js feature-detects window.hllDesktop and falls back to a
+   tracker.js feature-detects window.gmnDesktop and falls back to a
    browser-friendly explanation when a call is not available. */
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('hllDesktop', {
+contextBridge.exposeInMainWorld('gmnDesktop', {
   isDesktop: true,
 
   /* window chrome */

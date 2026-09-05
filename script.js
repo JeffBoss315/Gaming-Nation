@@ -2108,7 +2108,7 @@ function notifyStaff(perm, payload, exceptId) {
 
    The artwork is square (1410x1414). Every size below is a square box with
    object-fit: cover, so it can never be stretched however it is placed. */
-function hllEmblem(size = 'md', cls = '') {
+function gmnEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
     <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
@@ -3430,7 +3430,7 @@ function viewAuth() {
   <div class="auth">
     <section class="auth-vis">
       <div class="row gap-16" style="position:relative">
-        ${hllEmblem('lg', 'framed')}
+        ${gmnEmblem('lg', 'framed')}
         <div><div class="brand-name" style="font-size:17px">GAMING NATION</div>
         <div class="brand-sub">Digital Headquarters</div>
         <div class="brand-strap">Virtual logistics · Real drivers · Real-time operations</div></div>
@@ -4858,7 +4858,7 @@ function viewConvoy(id) {
         ${convoyActivityHTML(e)}
 
         <div class="card reveal d2"><div class="card-head"><div class="card-title">${icon('flag')}Convoy control</div>
-          ${hllEmblem('sm')}</div>
+          ${gmnEmblem('sm')}</div>
           <div class="card-body">
             ${leader ? `<div class="row gap-12" data-act="go" data-href="#/driver/${leader.id}" style="cursor:pointer">
               ${avatar(leader, 52, true)}<div style="min-width:0">
@@ -11104,7 +11104,7 @@ function viewOps() {
   <div class="page">
     <div class="page-head">
       <div class="row gap-14">
-        ${hllEmblem('md', 'framed')}
+        ${gmnEmblem('md', 'framed')}
         <div><div class="eyebrow">Gaming Nation Command Center</div>
           <h1 class="page-title">Live Operations</h1>
           <p class="page-sub">Every driver, every run, as it happens</p></div>
@@ -14061,8 +14061,8 @@ function render() {
 function dismissSplash() {
   const s = document.getElementById('splash');
   if (!s || s.classList.contains('gone')) return;
-  clearTimeout(window.__hllSplash);
-  const shown = Date.now() - (window.__hllSplashAt || Date.now());
+  clearTimeout(window.__gmnSplash);
+  const shown = Date.now() - (window.__gmnSplashAt || Date.now());
   const wait = Math.max(0, 1500 - shown);
   setTimeout(() => {
     s.classList.add('gone');

@@ -67,8 +67,8 @@ const listeners = new Set();
 const CLIENT = [
   '<script>',
   '(function () {',
-  '  if (window.__hllReload) return;',
-  '  window.__hllReload = true;',
+  '  if (window.__gmnReload) return;',
+  '  window.__gmnReload = true;',
   '  var es = new EventSource(' + JSON.stringify(RELOAD_PATH) + ');',
   '  es.onmessage = function (e) {',
   '    if (e.data === "css") {',

@@ -111,7 +111,7 @@ function icon(n, cls = '') {
    belongs and nowhere else, so it keeps meaning "Gaming Nation" rather than
    becoming decoration. The artwork is square; the box is square and crops
    rather than stretches. */
-function hllEmblem(size = 'md', cls = '') {
+function gmnEmblem(size = 'md', cls = '') {
   return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
     <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
@@ -1796,7 +1796,7 @@ function saveTileSource() {
    degrades to an explanation rather than a dead button.
    ============================================================ */
 const Launcher = {
-  api() { return (window.hllDesktop && window.hllDesktop.isDesktop) ? window.hllDesktop : null; },
+  api() { return (window.gmnDesktop && window.gmnDesktop.isDesktop) ? window.gmnDesktop : null; },
 
   label(kind) {
     return kind === 'tmp' ? 'TruckersMP launcher'
@@ -2946,7 +2946,7 @@ const Store = {
   migrate() {
     if (!this.db) return;
 
-    /* driver.hllId became driver.gmnId. The driver record is persisted, so
+    /* driver.gmnId became driver.gmnId. The driver record is persisted, so
        a store written by an older build carries the old spelling — and
        every screen reading gmnId would show a driver with no id: signed
        in, apparently nameless, and unable to push a position.
@@ -3187,7 +3187,7 @@ const GameLink = {
    than inventing one. */
 async function captureDeliveryPhoto(jobId) {
   const db = Store.db;
-  const D = window.hllDesktop;
+  const D = window.gmnDesktop;
   if (!D || !D.captureScreen) {
     Store.log('info', 'No delivery photo — the browser cannot read the screen');
     return;
@@ -4102,13 +4102,13 @@ const HostedService = {
   /* Only the desktop build can do this: a browser cannot start a server,
      and the phone app has nowhere to run one. */
   can() {
-    return !!(typeof window !== 'undefined' && window.hllDesktop && window.hllDesktop.startService);
+    return !!(typeof window !== 'undefined' && window.gmnDesktop && window.gmnDesktop.startService);
   },
 
   async refresh() {
     if (!this.can()) return;
     try {
-      this.status = await window.hllDesktop.serviceStatus();
+      this.status = await window.gmnDesktop.serviceStatus();
       render();
     } catch (e) { /* the button simply stays as it was */ }
   },
@@ -4119,7 +4119,7 @@ const HostedService = {
   async start(lan) {
     if (!this.can()) return;
 
-    const res = await window.hllDesktop.startService({ port: 7040, lan: !!lan });
+    const res = await window.gmnDesktop.startService({ port: 7040, lan: !!lan });
     this.status = Object.assign({}, this.status, res, { available: true });
 
     if (res && res.error) {
@@ -4153,7 +4153,7 @@ const HostedService = {
 
   async stop() {
     if (!this.can()) return;
-    try { this.status = await window.hllDesktop.stopService(); } catch (e) { /* going anyway */ }
+    try { this.status = await window.gmnDesktop.stopService(); } catch (e) { /* going anyway */ }
     Store.db.settings.hostService = false;
     Store.save();
     toast('Company service stopped', 'info');
@@ -4951,7 +4951,7 @@ function viewAbout() {
   ${viewHead('About', 'Gaming Nation Trucker · build ' + APP_VERSION)}
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
-      ${hllEmblem('lg', 'framed')}
+      ${gmnEmblem('lg', 'framed')}
       <div>
         <div class="lg b7">Gaming Nation Trucker</div>
         <div class="t2 sm mt-4">Gaming Nation driver client</div>
@@ -5051,15 +5051,15 @@ function railFootHTML() {
 function statusBarHTML() {
   const c = Store.db.conn;
   const db = Store.db;
-  const hllOn = c.hll === 'connected';
+  const gmnOn = c.hll === 'connected';
   const ets2On = c.ets2 === 'running';
   const linkOn = c.link === 'connected';
   const queued = db.pending.length + db.uploads.filter((u) => u.status !== 'done').length;
 
   return `
-    <button class="sb-item btn-like ${hllOn ? 'on' : ''}" data-act="toggle-server"
+    <button class="sb-item btn-like ${gmnOn ? 'on' : ''}" data-act="toggle-server"
       title="Check the company service now">
-      <span class="sb-dot ${hllOn ? 'ok' : 'err'}"></span>${hllOn ? 'Gaming Nation online' : 'Gaming Nation offline'}</button>
+      <span class="sb-dot ${gmnOn ? 'ok' : 'err'}"></span>${gmnOn ? 'Gaming Nation online' : 'Gaming Nation offline'}</button>
     <span class="sb-sep"></span>
     <span class="sb-item ${ets2On ? 'on' : ''}">
       <span class="sb-dot ${ets2On ? 'ok' : ''}"></span>${ets2On ? 'ETS2 running' : 'ETS2 closed'}</span>
@@ -5093,7 +5093,7 @@ function statusBarHTML() {
    ============================================================ */
 const Platform = {
   installPrompt: null,
-  isDesktopShell: () => !!(window.hllDesktop && window.hllDesktop.isDesktop),
+  isDesktopShell: () => !!(window.gmnDesktop && window.gmnDesktop.isDesktop),
   isStandalone: () => window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: window-controls-overlay)').matches ||
     window.navigator.standalone === true,
@@ -6759,7 +6759,7 @@ function handle(act, t) {
 function closeMenus() { $$('.menu').forEach((m) => m.remove()); }
 /* window controls — real in the desktop shell, explained in the browser */
 function windowControl(kind) {
-  const api = window.hllDesktop;
+  const api = window.gmnDesktop;
   if (api && typeof api[kind] === 'function') { api[kind](); return; }
   toast('Window controls belong to the desktop build — this is the browser preview.', 'info');
 }
@@ -7298,7 +7298,7 @@ function signInHTML() {
   <div class="signin">
     <div class="signin-card">
       <div class="row gap-14 mb-20">
-        ${hllEmblem('md', 'framed')}
+        ${gmnEmblem('md', 'framed')}
         <div><div class="brand-1">GAMING NATION</div><div class="brand-2">Trucker</div></div>
       </div>
 
@@ -7452,8 +7452,8 @@ function bindSignIn() {
 function dismissSplash() {
   const s = document.getElementById('splash');
   if (!s || s.classList.contains('gone')) return;
-  clearTimeout(window.__hllSplash);
-  const shown = Date.now() - (window.__hllSplashAt || Date.now());
+  clearTimeout(window.__gmnSplash);
+  const shown = Date.now() - (window.__gmnSplashAt || Date.now());
   const wait = Math.max(0, 1500 - shown);
   setTimeout(() => {
     s.classList.add('gone');

@@ -159,7 +159,7 @@ const SOURCE = `(function () {
            reproduce it cannot test registration as it actually happens.
 
            Off by default, so every existing test behaves as before. */
-        if (window.__hllConfirmEmail) {
+        if (window.__gmnConfirmEmail) {
           return Promise.resolve({ data: { user: user, session: null }, error: null });
         }
 
