@@ -228,7 +228,11 @@ app.whenReady().then(async () => {
     truck.job = { cargo: 'Steel coils', income: 4200, from: 'Rotterdam', to: 'Hamburg',
                   remainingM: 480000 };
     truck.speed = 85;
-    await wait(2500);
+    /* The client polls telemetry every 300ms and opens the run when it
+       sees the job. 2.5s of sleep was usually enough and occasionally
+       not, which showed up as this whole test failing intermittently on
+       NO RUN with every later check cascading off it. */
+    await until(driver, 'Store.db.job');
 
     const started = await driver.webContents.executeJavaScript(`(() => {
       const j = Store.db.job;
@@ -260,7 +264,7 @@ app.whenReady().then(async () => {
     /* ---- drive it half way ---- */
     truck.job.remainingM = 240000;
     truck.odometer += 240;
-    await wait(2500);
+    await until(driver, 'Store.db.job && Math.round(GameLink.progress(Store.db.job)) === 50');
 
     const half = await driver.webContents.executeJavaScript(`(() => {
       const j = Store.db.job;

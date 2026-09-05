@@ -49,9 +49,25 @@ const TARGETS = [
   { name: 'client', files: ['tracker.js', 'map-data.js'], pages: ['tracker.html'] },
 ];
 
-/* Every class name with a rule behind it, from both stylesheets. */
+/* A rule can also live in the page that uses it.
+
+   index.html carries the driver terminal's stylesheet inline — scoped to
+   #dt-root — because the two pages it came from, driver-login.html and
+   driver-dashboard.html, were merged into it. Reading only the two
+   stylesheets reported all 43 of those classes as having no rule anywhere,
+   which was this check being wrong rather than the markup: "anywhere"
+   includes the document doing the asking. */
+const inlineStyles = uniq(TARGETS.flatMap((t) => t.pages))
+  .map((p) => all(read(p), /<style>([\s\S]*?)<\/style>/g)
+    .map((m) => m[1])
+    .join('\n'))
+  .join('\n');
+
+/* Every class name with a rule behind it: both stylesheets, and whatever
+   the pages define for themselves. */
 const cssClasses = new Set(
-  all(read('style.css') + '\n' + read('tracker.css'), /\.([a-zA-Z][a-zA-Z0-9_-]*)/g)
+  all(read('style.css') + '\n' + read('tracker.css') + '\n' + inlineStyles,
+    /\.([a-zA-Z][a-zA-Z0-9_-]*)/g)
     .map((m) => m[1]));
 
 /* Class names that exist so JavaScript can find the element again, and are

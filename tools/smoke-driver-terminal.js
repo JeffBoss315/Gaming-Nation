@@ -1,6 +1,7 @@
-/* The driver terminal: driver-login.html and driver-dashboard.html.
+/* The driver terminal: the #/driver-login and #/driver-terminal views.
 
-   These two are the phone-side of the platform — a driver signs in against
+   These two were driver-login.html and driver-dashboard.html until they
+   were merged into index.html. They are the phone-side of the platform — a driver signs in against
    Supabase Auth and puts themselves on the dispatch board, and their
    position uploads while they are on shift. Nothing in the existing sweep
    covered them: tools/smoke-errors.js walks index, admin and tracker, and
@@ -62,19 +63,20 @@ function check(what, got, want) {
 const EMAIL = 'driver@heavyline.test';
 const PASSWORD = 'terminal-test';
 
-/* The seeded driver, and a session that survives a navigation.
+/* The seeded driver, and a session that survives a reload.
 
-   Real Supabase keeps the session in localStorage, which is the only
-   reason signing in on driver-login.html leaves you signed in when
-   driver-dashboard.html loads. The stand-in lives in one page and would
-   otherwise forget, so the login page would bounce to the dashboard,
-   the dashboard would find nobody signed in and bounce straight back.
+   The two views no longer navigate between documents, so the session no
+   longer has to cross one — but this test reloads once at the start to
+   clear whatever an earlier run left behind, and the stand-in would
+   forget across that. Real Supabase keeps the session in localStorage;
+   the stand-in is taught to do the same, so the reload lands in the same
+   state a driver would be in.
 
    Note what is NOT done here: signUp. It signs the new user in as a side
-   effect, and the login page checks for an existing session on load — so
-   seeding through signUp put the page into exactly that bounce before it
-   had shown anybody a form. The user is placed directly instead, signed
-   out, which is the state a login page is for. */
+   effect, and the sign-in view checks for an existing session on load —
+   so seeding through signUp sent the page straight to the terminal
+   before it had shown anybody a form. The user is placed directly
+   instead, signed out, which is the state a sign-in form is for. */
 const SEED = `
 (function () {
   var S = window.hllSupabase;
@@ -201,11 +203,15 @@ app.whenReady().then(async () => {
   const page = (name) => 'file:///' + path.join(ROOT, name).replace(/\\/g, '/');
   const js = (code) => win.webContents.executeJavaScript(code, true);
 
+  /* Both views live in one document, so the URL no longer says which
+     one is up. What is visible does. */
+  const VIEW = "document.getElementById('dt-terminal').hidden ? 'login' : 'terminal'";
+
   try {
 
     /* ---- 1. the login page ------------------------------------- */
 
-    await win.loadURL(page('driver-login.html'));
+    await win.loadURL(page('index.html') + '#/driver-login');
 
     /* An earlier run may have left the stand-in's session flag behind,
        which would send this one straight past the form. */
@@ -229,9 +235,9 @@ app.whenReady().then(async () => {
       await js("document.getElementById('message').classList.contains('err')"),
       'true');
 
-    check('still on the login page',
-      await js("location.pathname.split('/').pop()"),
-      'driver-login.html');
+    check('still on the sign-in view',
+      await js(VIEW),
+      'login');
 
     /* ---- 2. a wrong password ----------------------------------- */
 
@@ -260,9 +266,9 @@ app.whenReady().then(async () => {
     `);
     await wait(1200);
 
-    check('landed on the dashboard',
-      await js("location.pathname.split('/').pop()"),
-      'driver-dashboard.html');
+    check('landed on the terminal',
+      await js(VIEW),
+      'terminal');
 
     /* ---- 4. the dashboard loaded the driver -------------------- */
 
@@ -344,9 +350,9 @@ app.whenReady().then(async () => {
     await js("document.getElementById('logoutBtn').click()");
     await wait(1200);
 
-    check('back at the login page',
-      await js("location.pathname.split('/').pop()"),
-      'driver-login.html');
+    check('back at the sign-in view',
+      await js(VIEW),
+      'login');
 
   } catch (err) {
     fails.push('the walk stopped: ' + (err && err.message ? err.message : err));

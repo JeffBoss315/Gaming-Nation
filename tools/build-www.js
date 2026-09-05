@@ -96,19 +96,11 @@ site.log.push('admin.html        (management console)');
 site.write('reset-password.html', read('reset-password.html'));
 site.log.push('reset-password.html  (from the reset email)');
 
-/* The driver terminal: a sign-in and the shift screen behind it.
-
-   Separate from index.html on purpose. The drivers' website signs people
-   in against the local Accounts store; these two go straight at Supabase
-   auth and are what a driver opens on a phone to put themselves on the
-   dispatch board. They ship together or not at all — driver-login.html
-   redirects into driver-dashboard.html, and shipping one without the
-   other is a sign-in button that leads to a 404. */
-for (const f of ['driver-login.html', 'driver-dashboard.html']) {
-  site.write(f, read(f));
-}
-site.log.push('driver-login.html    (driver terminal sign-in)');
-site.log.push('driver-dashboard.html (driver terminal)');
+/* The driver terminal used to be two more files here — driver-login.html
+   and driver-dashboard.html. They are views inside index.html now, at
+   #/driver-login and #/driver-terminal, so there is nothing extra to copy
+   and no way to ship half of it: the sign-in and the screen it leads to
+   are the same document as the site. */
 
 for (const f of ['style.css', 'script.js', 'supabase-client.js', 'map-data.js']) {
   site.write(f, read(f));
@@ -195,7 +187,7 @@ if (!SITE_URL) {
 
   /* the private pages, and the source a crawler has no use for */
   const pages = ['/admin.html', '/reset-password.html', '/tracker.html',
-    '/driver-login.html', '/driver-dashboard.html', '/supabase-test.html'];
+    '/supabase-test.html'];
 
   /* Cloudflare Pages serves every page at BOTH addresses — /admin.html and
      /admin — and a Disallow only matches the path it names. So the list

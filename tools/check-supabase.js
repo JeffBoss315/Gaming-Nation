@@ -25,8 +25,9 @@
 
    What it still cannot see: whether the *authenticated* role has an
    insert policy. That needs a driver's session, and is reported as
-   unchecked rather than assumed. driver-dashboard.html names that case
-   at runtime instead — a 42501 on upload says the policy is missing.
+   unchecked rather than assumed. The driver terminal (index.html, at
+   #/driver-terminal) names that case at runtime instead — a 42501 on
+   upload says the policy is missing.
 */
 const fs = require('fs');
 const path = require('path');

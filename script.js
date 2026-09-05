@@ -13875,6 +13875,16 @@ function refreshPresence() {
 
 
 function boot() {
+  /* The driver terminal is the other thing in index.html.
+
+     driver-login.html and driver-dashboard.html were merged into that
+     file, and on their routes they own the document outright: the shell
+     they need is the same one, but everything below — the router, the
+     company store, presence polling, the splash — belongs to the
+     website and would fight them for it. index.html decides which of
+     the two is being asked for before this script is even parsed. */
+  if (window.HLL_TERMINAL) return;
+
   Store.load();
   normaliseCompany();
   provisionOwner();

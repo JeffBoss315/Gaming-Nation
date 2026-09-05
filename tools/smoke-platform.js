@@ -34,6 +34,19 @@ app.whenReady().then(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
     try {
+      /* 0. the driver terminal shares this document and must stay out of
+            the way of it. driver-login.html and driver-dashboard.html were
+            merged into index.html, so on every ordinary route their markup
+            is present and has to be hidden, their scripts unrun, and the
+            SPA has to have booted — which it does not if HLL_TERMINAL was
+            wrongly set, leaving a blank page. */
+      const dt = document.getElementById('dt-root');
+      say('terminal markup present but hidden',
+        dt ? (dt.hidden ? 'hidden' : 'VISIBLE') : 'MISSING');
+      say('terminal scripts not started',
+        window.dtGo === undefined ? 'not started' : 'STARTED');
+      say('the website booted', document.getElementById('app') ? 'yes' : 'NO');
+
       /* 1. sign in as the owner */
       const acc = Accounts.all().find(a => a.email === 'jeffboss730@gmail.com');
       say('owner account', acc ? acc.driverId + ' / ' + acc.role : 'MISSING');
