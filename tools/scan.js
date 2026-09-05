@@ -343,5 +343,83 @@ if (!problems) console.log('  website and app payloads are separate');
   }
 })();
 
+
+/* ============================================================
+   7. Does the installer contain everything the app requires?
+
+   electron-builder ships exactly what build.files lists. A file
+   that is required but not listed is not a warning and not a
+   build failure — it is simply absent, and the app dies on
+   launch with
+
+     Cannot find module './service-host'
+
+   in a Windows error box, before any of it has drawn a pixel.
+   Every other check here runs against the checkout, where the
+   file is obviously present, so nothing caught it: the smoke
+   tests require it from the source tree and pass, and the bug
+   only exists in the packaged copy somebody downloads.
+
+   It shipped exactly that way once. This walks the requires
+   instead of trusting them.
+   ============================================================ */
+(() => {
+  let pkg;
+  try { pkg = JSON.parse(read('package.json')); } catch (e) { return; }
+
+  const patterns = ((pkg.build && pkg.build.files) || [])
+    .filter((f) => typeof f === 'string' && !f.startsWith('!'));
+
+  if (!patterns.length) return;
+
+  /* Enough of a glob for the shapes this list actually uses: exact
+     names, and a directory with ** in it. */
+  const covered = (rel) => patterns.some((p) => {
+    if (p === rel) return true;
+    const star = p.indexOf('*');
+    if (star < 0) return false;
+    return rel.startsWith(p.slice(0, star));
+  });
+
+  /* Follow the requires from every packaged JavaScript file, so a file
+     that is listed but pulls in one that is not is caught too. */
+  const seen = new Set();
+  const queue = patterns.filter((p) => p.endsWith('.js'));
+  const missing = [];
+
+  while (queue.length) {
+    const rel = queue.shift();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+
+    const abs = path.join(ROOT, rel);
+    if (!fs.existsSync(abs)) continue;
+
+    let src;
+    try { src = fs.readFileSync(abs, 'utf8'); } catch (e) { continue; }
+
+    all(src, /require\(\s*'\.\/([a-zA-Z0-9_.-]+)'\s*\)/g).forEach((m) => {
+      const name = m[1].endsWith('.js') ? m[1] : m[1] + '.js';
+
+      if (!fs.existsSync(path.join(ROOT, name))) return;   /* not ours to ship */
+
+      if (!covered(name)) {
+        missing.push(name + '  (required by ' + rel + ')');
+      } else {
+        queue.push(name);
+      }
+    });
+  }
+
+  console.log('\npackaged requires');
+
+  if (missing.length) {
+    uniq(missing).forEach((m) => fail('packaging',
+      'required but not in build.files — the installed app dies on launch', m));
+  } else {
+    console.log('  every local require is in build.files (' + seen.size + ' file(s) walked)');
+  }
+})();
+
 console.log(problems ? `\n${problems} problem(s)\n` : '\nclean\n');
 process.exit(problems ? 1 : 0);

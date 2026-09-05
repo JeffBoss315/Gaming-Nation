@@ -49,7 +49,8 @@
     "deploy:cf": "node tools/build-www.js && node tools/deploy-cloudflare.js",
     "dev": "node tools/dev.js",
     "smoke:dmapp": "node tools/run-electron.js tools/smoke-dm-app.js .",
-    "smoke:host": "node tools/run-electron.js tools/smoke-host-service.js ."
+    "smoke:host": "node tools/run-electron.js tools/smoke-host-service.js .",
+    "smoke:launch": "node tools/smoke-launch.js ."
   },
   "devDependencies": {
     "electron": "^31.7.7",
@@ -63,6 +64,7 @@
     },
     "files": [
       "electron-main.js",
+      "service-host.js",
       "fleet-server.js",
       "preload.js",
       "game-connector.js",
