@@ -41,11 +41,6 @@ app.whenReady().then(async () => {
             SPA has to have booted — which it does not if HLL_TERMINAL was
             wrongly set, leaving a blank page. */
       const dt = document.getElementById('dt-root');
-      say('terminal markup present but hidden',
-        dt ? (dt.hidden ? 'hidden' : 'VISIBLE') : 'MISSING');
-      say('terminal scripts not started',
-        window.dtGo === undefined ? 'not started' : 'STARTED');
-      say('the website booted', document.getElementById('app') ? 'yes' : 'NO');
 
       /* 1. sign in as the owner */
       const acc = Accounts.all().find(a => a.email === 'jeffboss730@gmail.com');
@@ -55,6 +50,56 @@ app.whenReady().then(async () => {
       say('owner driver record', state.user ? state.user.id + ' ' + state.user.name : 'MISSING');
       go('#/dashboard'); render(); await wait(300);
       say('dashboard rendered', document.querySelector('.page') ? 'yes' : 'NO');
+
+      say('terminal markup present but hidden',
+        dt ? (dt.hidden ? 'hidden' : 'VISIBLE') : 'MISSING');
+      say('terminal scripts not started',
+        window.dtGo === undefined ? 'not started' : 'STARTED');
+      say('the website booted', document.getElementById('app') ? 'yes' : 'NO');
+
+      /* 0b. a repair that does not stick is a repair that runs for ever.
+
+            boot() normalises the local company; the Supabase pull then
+            replaced it with the remote copy, which still had the gap. So
+            the same field was repaired on every load and overwritten by
+            the next pull — "repaired 1 missing field(s)" in the console
+            for ever, fixing nothing at the source. The pull now repairs
+            what it just read and sends it back, so the SECOND pull of the
+            same record has nothing to do. */
+      const S = window.hllSupabase;
+      if (S && S.__db && Array.isArray(S.__db.company)) {
+        S.__db.company.length = 0;
+        S.__db.company.push({
+          id: 1,
+          version: 1,
+          updated_at: new Date().toISOString(),
+          /* a driver with no accountStatus: exactly what normaliseCompany fixes */
+          data: { drivers: [{ id: 'GMN-7777', name: 'Gap Driver' }] },
+        });
+
+        /* pull() reads Supabase only for somebody with a Supabase AUTH
+           session, and this probe signs in against the local account store.
+           Only that gate is stubbed; the merge, the repair and the write
+           below are the real code. */
+        const realSignedIn = Sync.signedIn;
+        Sync.signedIn = async () => true;
+
+        Sync.version = 0;
+        Sync.lastAt = 0;
+        await Sync.pull();
+        await wait(600);
+
+        Sync.signedIn = realSignedIn;
+
+        const stored = S.__db.company[0];
+        const row = ((stored && stored.data && stored.data.drivers) || [])
+          .find(d => d.id === 'GMN-7777');
+
+        say('a gap in the pulled record is repaired',
+          (Store.db.drivers.find(d => d.id === 'GMN-7777') || {}).accountStatus || 'NOT REPAIRED');
+        say('and the repair is sent back, not just held locally',
+          row && row.accountStatus ? 'source fixed' : 'SOURCE STILL BROKEN');
+      }
 
       /* 2. presence is derived, not random */
       refreshPresence();

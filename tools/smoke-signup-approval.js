@@ -130,6 +130,62 @@ app.whenReady().then(async () => {
       await js(`(window.hllSupabase.__db.applications[0]||{}).driver_id === window.hllSupabase.__db.drivers[0].driver_code`),
       'true');
 
+    /* ---- 2b. the driver row already exists ----------------------
+
+       Which is what happens the moment the handle_new_user() trigger
+       from 20260903 is installed: the database makes the drivers row
+       when the Auth user is created, so by the first sign-in there IS
+       one, provision() never runs — and filing the application used to
+       live inside provision().
+
+       The driver could sign in perfectly well and simply never appeared
+       on the recruitment screen. Nothing errored; the row was never
+       attempted. Signing in has to file it whoever made the driver. */
+
+    const trigger = await js(`(async () => {
+      const S = window.hllSupabase;
+
+      /* a second driver, made the way the trigger makes one: a drivers
+         row and no application anywhere */
+      const u = await S.auth.signUp({
+        email: 'trigger@example.com',
+        password: ${JSON.stringify(PASSWORD)},
+        options: { data: { full_name: 'Trigger Driver', role: 'driver' } },
+      });
+
+      const authId = (u.data && u.data.user && u.data.user.id)
+        || S.__users[S.__users.length - 1].user.id;
+
+      S.__db.drivers.push({
+        id: 99, driver_code: 'GMN9099', auth_user_id: authId,
+        full_name: 'Trigger Driver', email: 'trigger@example.com',
+        role: 'driver', status: 'pending',
+      });
+
+      const before = (S.__db.applications || []).length;
+
+      await Accounts.verify('trigger@example.com', ${JSON.stringify(PASSWORD)});
+      await new Promise(r => setTimeout(r, 500));
+
+      const after = (S.__db.applications || []).length;
+      const filed = (S.__db.applications || []).find(a => a.driver_id === 'GMN9099');
+
+      /* and signing in twice must not file it twice */
+      await Accounts.verify('trigger@example.com', ${JSON.stringify(PASSWORD)});
+      await new Promise(r => setTimeout(r, 500));
+
+      return JSON.stringify({
+        before, after,
+        filed: !!filed,
+        again: (S.__db.applications || []).filter(a => a.driver_id === 'GMN9099').length,
+      });
+    })()`);
+
+    const tr = JSON.parse(trigger);
+
+    check('filed even when the driver row existed', tr.filed, 'true');
+    check('and signing in twice files only one', String(tr.again), '1');
+
     /* ---- 3. the gate is shut ----------------------------------- */
 
     check('download refused while pending', first.access, 'false');
@@ -170,8 +226,13 @@ app.whenReady().then(async () => {
         })()
       `), 'true');
 
-    check('still only one driver record',
-      await js(`window.hllSupabase.__db.drivers.length`), '1');
+    /* One record for THIS applicant. Counting every row in the fixture
+       made the check hostage to anything else the test happens to add —
+       and what it is guarding is that approval did not mint a second
+       driver for the person being approved. */
+    check('still only one driver record for the applicant',
+      await js(`window.hllSupabase.__db.drivers
+        .filter(d => d.email === ${JSON.stringify(EMAIL)}).length`), '1');
 
   } catch (err) {
     fails.push('the walk stopped: ' + (err && err.message ? err.message : err));

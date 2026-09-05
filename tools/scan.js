@@ -264,5 +264,84 @@ if (fs.existsSync(built)) {
 }
 if (!problems) console.log('  website and app payloads are separate');
 
+
+/* ============================================================
+   6. Does the database agree with the app about who is staff?
+
+   The app decides who may work the recruitment screen from
+   PERMS['recruitment.manage'] and the levels in ROLES. The
+   database decides who may READ an application from is_staff().
+   Nothing made the two agree, and they did not: a dispatcher, an
+   event manager and a moderator were shown the screen and the
+   Approve button, and handed no rows.
+
+   That failure is invisible. An RLS SELECT that matches nothing
+   is a successful query returning zero rows — indistinguishable
+   from nobody having applied. No error, no warning, an empty
+   screen. It is precisely the kind of thing a static check is
+   for, so here it is.
+   ============================================================ */
+(() => {
+  const app = read('script.js');
+
+  /* the roles the app knows, with their levels */
+  const rolesAt = app.indexOf('const ROLES = {');
+  const permsAt = app.indexOf('const PERMS = {');
+  if (rolesAt < 0 || permsAt < 0) return;   /* renamed; nothing to compare */
+
+  const rolesSrc = app.slice(rolesAt, app.indexOf('\n};', rolesAt));
+  const permsSrc = app.slice(permsAt, app.indexOf('\n};', permsAt));
+
+  const levels = {};
+  all(rolesSrc, /^\s*([a-z_]+):\s*\{[^}]*level:\s*(\d+)/gm)
+    .forEach((m) => { levels[m[1]] = Number(m[2]); });
+
+  const needed = (permsSrc.match(/'recruitment\.manage':\s*(\d+)/) || [])[1];
+  if (!needed || !Object.keys(levels).length) return;
+
+  const appStaff = Object.keys(levels)
+    .filter((r) => levels[r] >= Number(needed))
+    .sort();
+
+  /* the newest definition of is_staff() wins, the same way it does in a
+     database that has had every migration run against it in order */
+  const sqlFiles = [];
+  const push = (rel) => {
+    const abs = path.join(ROOT, rel);
+    if (fs.existsSync(abs)) sqlFiles.push([rel, fs.readFileSync(abs, 'utf8')]);
+  };
+  push('supabase/setup.sql');
+  const migDir = path.join(ROOT, 'supabase', 'migrations');
+  if (fs.existsSync(migDir)) {
+    fs.readdirSync(migDir).sort().forEach((f) => push('supabase/migrations/' + f));
+  }
+
+  let definedIn = null;
+  let dbStaff = null;
+
+  for (const [rel, sql] of sqlFiles) {
+    const at = sql.indexOf('function public.is_staff()');
+    if (at < 0) continue;
+    const body = sql.slice(at, at + 900);
+    const list = body.match(/role\s+in\s*\(([\s\S]*?)\)/);
+    if (!list) continue;
+    dbStaff = all(list[1], /'([a-z_]+)'/g).map((m) => m[1]).sort();
+    definedIn = rel;
+  }
+
+  if (!dbStaff) return;   /* no is_staff() to check against */
+
+  const missing = appStaff.filter((r) => r !== 'driver' && dbStaff.indexOf(r) < 0);
+
+  if (missing.length) {
+    fail('roles', 'the database does not count these as staff, but the app does',
+      missing.join(', ') + ' — they see the recruitment screen and no rows'
+      + ' (is_staff() in ' + definedIn + ')');
+  } else {
+    console.log('\nroles');
+    console.log('  app and database agree on ' + dbStaff.length + ' staff role(s)');
+  }
+})();
+
 console.log(problems ? `\n${problems} problem(s)\n` : '\nclean\n');
 process.exit(problems ? 1 : 0);

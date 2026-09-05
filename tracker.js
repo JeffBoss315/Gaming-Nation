@@ -2896,6 +2896,8 @@ function seed() {
       minimiseToTray: true,
       telemetryPort: '25555',
       telemetryHost: 'localhost',
+      hostService: false,       /* run the company service on this machine */
+      hostServiceLan: false,    /* and let the rest of the crew reach it */
       liveTelemetry: true,      /* poll the real game when the server is reachable */
       pollRate: 400,            /* ms between telemetry polls — fast enough to read as live */
       ets2Exe: '',              /* eurotrucks2.exe */
@@ -4065,6 +4067,83 @@ function dmLine(m, mine) {
     ${m.text ? esc(m.text) : ''}${file}</div>`;
 }
 
+/* ---------------- hosting the service from here ----------------
+
+   The company service is what carries messages, calls and the crew room.
+   Somebody has to run it, and until now that somebody had to open a
+   terminal — which is a reasonable thing to ask of whoever set the
+   project up and an unreasonable thing to ask of a driver who installed
+   an app and pressed Messages.
+
+   The desktop build can run it itself. One machine hosts; everybody else
+   points at that address. Two machines both hosting is two separate
+   companies that cannot see each other, so this is a switch rather than
+   something that happens on its own. */
+const HostedService = {
+  status: { running: false, available: false, port: 7040, lan: false, lanUrl: null, error: null },
+
+  /* Only the desktop build can do this: a browser cannot start a server,
+     and the phone app has nowhere to run one. */
+  can() {
+    return !!(typeof window !== 'undefined' && window.hllDesktop && window.hllDesktop.startService);
+  },
+
+  async refresh() {
+    if (!this.can()) return;
+    try {
+      this.status = await window.hllDesktop.serviceStatus();
+      render();
+    } catch (e) { /* the button simply stays as it was */ }
+  },
+
+  /* Started, and then actually joined up: discoverLocalService() is what
+     tells the rest of the client there is a service now, and without it
+     the driver would be hosting one and still looking at an empty screen. */
+  async start(lan) {
+    if (!this.can()) return;
+
+    const res = await window.hllDesktop.startService({ port: 7040, lan: !!lan });
+    this.status = Object.assign({}, this.status, res, { available: true });
+
+    if (res && res.error) {
+      toast(res.error, 'err');
+      render();
+      return;
+    }
+
+    Store.db.settings.hostService = true;
+    Store.db.settings.hostServiceLan = !!lan;
+    Store.save();
+
+    toast('Company service started on this machine', 'ok');
+    Store.log('ok', 'Hosting the company service on port ' + (res.port || 7040)
+      + (lan ? ' — reachable from the rest of the network' : ' — this machine only'));
+
+    /* A moment for it to bind before anything asks it a question. */
+    setTimeout(() => {
+      discoverLocalService().then(() => {
+        Sync.start();
+        Fleet.start();
+        ServiceAuth.load();
+        Messages.pullThreads();
+        RoomCall.poll();
+        Ice.load();
+        this.refresh();
+        render();
+      });
+    }, 900);
+  },
+
+  async stop() {
+    if (!this.can()) return;
+    try { this.status = await window.hllDesktop.stopService(); } catch (e) { /* going anyway */ }
+    Store.db.settings.hostService = false;
+    Store.save();
+    toast('Company service stopped', 'info');
+    render();
+  },
+};
+
 /* Why the screen is empty, said at the top rather than discovered.
 
    Driver-to-driver messages and calls run through the company service.
@@ -4077,18 +4156,54 @@ function dmOffline() {
 
   const noService = !Sync.url();
 
-  return `<div class="dm-offline">${icon('alert')}<div>
+  /* The desktop build can start it. Offering the button here rather than
+     only in Settings is the whole point: this is the screen where a driver
+     finds out they cannot chat, so it is the screen that should be able to
+     do something about it. */
+  const canHost = noService && HostedService.can();
+
+  const body = noService
+    ? (canHost
+      ? 'Messages and calls between drivers go through Gaming Nation\'s own '
+        + 'service. This machine can run it — one machine hosts and the rest '
+        + 'of the crew points at it. Announcements from management arrive '
+        + 'either way.'
+      : 'Messages and calls between drivers go through Gaming Nation\'s own '
+        + 'service. Run it on the company machine, or put its address in '
+        + 'Settings. Announcements from management still arrive without it.')
+    : 'Sign out and back in — the service issues its own session, and this '
+      + 'device does not hold one.';
+
+  return `<div class="dm-offline">${icon('alert')}<div class="grow">
     <div class="b6">${noService
       ? 'Driver chat needs the company service'
       : 'This device has no session with the service'}</div>
-    <div class="t3 xs mt-4">${noService
-      ? 'Messages and calls between drivers go through Gaming Nation\x27s own '
-        + 'service. Start it with <span class="mono">npm run fleet</span> on the '
-        + 'company machine, or put its address in Settings. Announcements from '
-        + 'management still arrive without it.'
-      : 'Sign out and back in — the service issues its own session, and this '
-        + 'device does not hold one.'}</div>
+    <div class="t3 xs mt-4">${body}</div>
+    ${canHost ? `<div class="dm-offline-acts">
+      <button class="btn btn-sm btn-primary" data-act="host-service">
+        ${icon('bolt')}Run it on this machine</button>
+      <button class="btn btn-sm" data-act="host-service-lan" title="Also let other drivers on this network reach it">
+        ${icon('users')}Run it for the whole crew</button>
+    </div>` : ''}
   </div></div>`;
+}
+
+/* Where to point everybody else, once this machine is hosting for them.
+   An address nobody is told is an address nobody can use. */
+function hostedServiceNote() {
+  const st = HostedService.status;
+  if (!HostedService.can() || !st.running) return '';
+
+  return `<div class="dm-hosting">${icon('check')}<div class="grow">
+    <div class="b6">This machine is hosting the company service</div>
+    <div class="t3 xs mt-4">${st.lanUrl
+      ? 'Other drivers reach it at <span class="mono">' + esc(st.lanUrl) + '</span> — '
+        + 'they put that in Settings, or just open it in a browser.'
+      : 'This machine only. Use <b>Run it for the whole crew</b> to let others '
+        + 'on this network join.'}</div>
+  </div>
+  <button class="btn btn-sm" data-act="host-service-stop">${icon('phoneOff')}Stop</button>
+  </div>`;
 }
 
 /* The composer, and the reason it is not there when it is not. */
@@ -4159,7 +4274,7 @@ function viewMessages() {
   return `
   ${viewHead('Messages', 'Talk to another driver, or read what management sent',
     `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
-  ${dmOffline()}
+  ${dmOffline()}${hostedServiceNote()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -4231,7 +4346,7 @@ function viewChats() {
       ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
       : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
     `${callBtn}<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
-  ${dmOffline()}
+  ${dmOffline()}${hostedServiceNote()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -6379,6 +6494,10 @@ function handle(act, t) {
 
     case 'map-call': Calls.start(t.dataset.id, t.dataset.name); return;
 
+    case 'host-service': HostedService.start(false); return;
+    case 'host-service-lan': HostedService.start(true); return;
+    case 'host-service-stop': HostedService.stop(); return;
+
     case 'call-driver': Calls.start(t.dataset.id, t.dataset.name); return;
     case 'call-accept': Calls.accept(); return;
     case 'call-decline': Calls.decline(); return;
@@ -7226,6 +7345,15 @@ function boot() {
 /* nothing polls, tracks or reports until a driver is behind the client */
 function startServices() {
   const job = Store.db.job;
+
+  /* A machine that was hosting keeps hosting. Started before the probe
+     below, or the first look finds nothing and the driver waits out the
+     retry for something that was meant to be already running. */
+  if (Store.db.settings.hostService && HostedService.can()) {
+    HostedService.start(!!Store.db.settings.hostServiceLan);
+  } else {
+    HostedService.refresh();
+  }
 
   /* A token kept from last time, so a remembered session can reach the
      service without being asked for a password again. */

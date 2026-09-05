@@ -1039,6 +1039,82 @@ fromRow(row, authUser) {
 
    Everything it needs was already put into the signUp metadata by
    register(): full_name, driver_code, role and country. */
+/* File the application, whoever made the driver row.
+
+   This used to live inside provision(), and provision() only runs when
+   there is NO driver row. Once the handle_new_user() trigger from
+   20260903 is installed, the database makes that row the moment the Auth
+   user is created — so by the first sign-in verify() finds it, provision()
+   never runs, and no application is ever filed.
+
+   The driver could then sign in perfectly well and simply never appeared
+   on the recruitment screen. Nothing errored: the row was not refused,
+   it was never attempted. That is why it read as "admin cannot see
+   applications sent by new drivers" rather than as a failure.
+
+   Called from both paths now, and safe to call on every sign-in: it looks
+   before it writes, so an application that already exists is left alone.
+   That also repairs anybody stranded by the old behaviour — the next time
+   they sign in, their application appears. */
+async ensureApplication(driver, opts) {
+
+    if (!window.hllSupabase || !driver || !driver.driver_code) return null;
+
+    const o = opts || {};
+
+    /* Staff are not applicants. An admin does not queue for approval. */
+    if ((o.role || driver.role || 'driver') !== 'driver') return null;
+
+    const { data: existing, error: lookErr } = await window.hllSupabase
+        .from('applications')
+        .select('id')
+        .eq('driver_id', driver.driver_code)
+        .maybeSingle();
+
+    /* A lookup that failed is not the same as one that found nothing.
+       Filing on an error would risk a duplicate every sign-in. */
+    if (lookErr) {
+        console.warn('[GMN] Could not check for an existing application:', lookErr);
+        return null;
+    }
+
+    if (existing) return existing;
+
+    const reviewer = await recruiterSupabaseId();
+
+    /* driver_code, not id. setup.sql is explicit that
+       applications.driver_id is the text driver code, and the policy that
+       lets a driver see their own application reads
+         driver_id in (select driver_code from drivers where ...)
+       so a bigint here files a row its owner cannot read. */
+    const { data: made, error: appError } = await window.hllSupabase
+        .from('applications')
+        .insert({
+            driver_id: driver.driver_code,
+            full_name: o.name || driver.full_name || 'Driver',
+            email: o.email || driver.email || '',
+            country: o.country || driver.country || 'Not set',
+            status: 'pending',
+            reviewed_by: reviewer,
+            onboarding_status: 'pending'
+        })
+        .select()
+        .maybeSingle();
+
+    if (appError) {
+        /* Not fatal, and deliberately not rolled back: the driver row is
+           what lets them sign in at all, and a recruiter can still find
+           them on the roster. Losing the sign-in to tidy up the paperwork
+           would be the worse trade. */
+        console.warn('[GMN] No application could be filed for '
+            + driver.driver_code + ':', appError);
+        return null;
+    }
+
+    console.info('[GMN] Application filed for ' + driver.driver_code);
+    return made;
+},
+
 async provision(user) {
 
     if (!window.hllSupabase || !user) {
@@ -1095,44 +1171,7 @@ async provision(user) {
 
     console.log('[GMN] Driver record provisioned on first sign-in:', driver);
 
-    /* The application, so a recruiter has something to approve. Without it
-       the person exists and can sign in, but never appears on the
-       recruitment screen and is never let in. */
-    const { data: existing } = await window.hllSupabase
-        .from('applications')
-        .select('id')
-        .eq('driver_id', driver.driver_code)
-        .maybeSingle();
-
-    if (!existing && role === 'driver') {
-
-        const reviewer = await recruiterSupabaseId();
-
-        /* driver_code, not id. setup.sql is explicit that
-           applications.driver_id is the text GMN code, and the policy that
-           lets a driver see their own application reads
-             driver_id in (select driver_code from drivers where ...)
-           so a bigint here files a row its owner cannot read. */
-        const { error: appError } = await window.hllSupabase
-            .from('applications')
-            .insert({
-                driver_id: driver.driver_code,
-                full_name: name,
-                email: user.email || '',
-                country: country,
-                status: 'pending',
-                reviewed_by: reviewer,
-                onboarding_status: 'pending'
-            });
-
-        if (appError) {
-            /* Not fatal, and deliberately not rolled back: the driver row
-               is what lets them sign in at all, and a recruiter can still
-               find them on the roster. Losing the sign-in to tidy up the
-               paperwork would be the worse trade. */
-            console.warn('[GMN] Driver provisioned but no application filed:', appError);
-        }
-    }
+    await this.ensureApplication(driver, { name, country, email: user.email || '', role });
 
     return { driver, error: null };
 },
@@ -1237,6 +1276,25 @@ async verify(handle, password) {
                     : 'Your login is valid, but your Gaming Nation driver account is not linked. Contact management.'
             };
         }
+
+        /* An existing driver row does not mean an existing application.
+
+           When the database trigger makes the row, provision() never runs
+           and nothing files one — the driver signs in happily and never
+           reaches the recruitment screen. Checked on every sign-in rather
+           than only at creation, because the people it matters most for are
+           the ones already in that state: theirs is filed the next time
+           they sign in, with nobody having to do anything.
+
+           Not awaited into the sign-in: a recruiter's paperwork is not a
+           reason to hold up somebody's login, and it looks before it
+           writes, so running twice is harmless. */
+        Accounts.ensureApplication(driver, {
+            name: driver.full_name,
+            email: driver.email || user.email || '',
+            country: driver.country,
+            role: driver.role,
+        }).catch((e) => console.warn('[GMN] application check failed:', e));
 
         // Check account status
         if (
@@ -1716,11 +1774,20 @@ function normaliseCompany() {
   const db = Store.db;
   if (!db) return 0;
   let fixed = 0;
-  const arr = (o, k) => { if (!Array.isArray(o[k])) { o[k] = []; fixed++; } };
+
+  /* What was wrong, not just how much. "repaired 1 missing field(s)" said
+     nothing about WHICH field, so the same line every load was impossible
+     to act on — and the reason it appeared every load (a pull overwriting
+     the repair) could not be seen from it either. Capped, because a genuinely
+     empty record would otherwise print a wall. */
+  const what = [];
+  const note = (name) => { fixed++; if (what.length < 8 && what.indexOf(name) < 0) what.push(name); };
+
+  const arr = (o, k) => { if (!Array.isArray(o[k])) { o[k] = []; note(k); } };
 
   ['drivers', 'trucks', 'trailers', 'events', 'applications', 'assignments', 'jobs',
    'tickets', 'announcements', 'notifications', 'activity', 'sessions'].forEach((k) => arr(db, k));
-  if (!db.meta || typeof db.meta !== 'object') { db.meta = { season: new Date().getFullYear() + ' Season', founded: null }; fixed++; }
+  if (!db.meta || typeof db.meta !== 'object') { db.meta = { season: new Date().getFullYear() + ' Season', founded: null }; note('meta'); }
 
   db.events.forEach((e) => {
     arr(e, 'path');
@@ -1730,23 +1797,23 @@ function normaliseCompany() {
        turned up, who finished. Chat is deliberately not kept here; see the
        note on the service's convoy endpoints. */
     arr(e, 'activity');
-    if (typeof e.distance !== 'number') { e.distance = 0; fixed++; }
-    if (!e.status) { e.status = 'scheduled'; fixed++; }
-    if (!CONVOY_STATES[e.status]) { e.status = 'scheduled'; fixed++; }
+    if (typeof e.distance !== 'number') { e.distance = 0; note('convoy.distance'); }
+    if (!e.status) { e.status = 'scheduled'; note('convoy.status'); }
+    if (!CONVOY_STATES[e.status]) { e.status = 'scheduled'; note('convoy.status'); }
     /* convoys made before the leader was put on the roster */
     if (e.leaderId && Array.isArray(e.registered)
       && !e.registered.some((r) => r.driverId === e.leaderId)
       && (db.drivers || []).some((x) => x.id === e.leaderId)) {
       e.registered.unshift({ driverId: e.leaderId, state: 'confirmed', leader: true });
-      fixed++;
+      note('convoy.registered');
     }
   });
   db.drivers.forEach((d) => {
     arr(d, 'achievements');
-    if (typeof d.rankIdx !== 'number') { d.rankIdx = 0; fixed++; }
-    if (!d.accountStatus) { d.accountStatus = 'active'; fixed++; }
-    if (!d.role) { d.role = 'driver'; fixed++; }
-    if (!d.initials) { d.initials = initials(d.name || '?'); fixed++; }
+    if (typeof d.rankIdx !== 'number') { d.rankIdx = 0; note('driver.rankIdx'); }
+    if (!d.accountStatus) { d.accountStatus = 'active'; note('driver.accountStatus'); }
+    if (!d.role) { d.role = 'driver'; note('driver.role'); }
+    if (!d.initials) { d.initials = initials(d.name || '?'); note('driver.initials'); }
     /* Money earned arrived after the first records did, so a driver from an
        older install has none. Their finished runs carry it, so the total is
        recovered from those rather than started from zero — a driver does not
@@ -1755,7 +1822,7 @@ function normaliseCompany() {
       d.earned = (db.jobs || [])
         .filter((j) => j.driverId === d.id)
         .reduce((sum, j) => sum + (j.income || 0), 0);
-      fixed++;
+      note('driver.earned');
     }
   });
 
@@ -1767,13 +1834,17 @@ function normaliseCompany() {
     if (Date.now() - new Date(s.started).getTime() > STALE_SESSION) {
       s.ended = new Date(new Date(s.started).getTime() + STALE_SESSION).toISOString();
       s.abandoned = true;
-      fixed++;
+      note('session.ended');
     }
   });
   db.tickets.forEach((t) => arr(t, 'messages'));
   db.applications.forEach((a) => arr(a, 'notes'));
 
-  if (fixed) { Store.save(); console.info('[GMN] repaired ' + fixed + ' missing field(s) on the company record'); }
+  if (fixed) {
+    Store.save();
+    console.info('[GMN] repaired ' + fixed + ' missing field(s) on the company record: '
+      + what.join(', ') + (fixed > what.length ? ', …' : ''));
+  }
   return fixed;
 }
 
@@ -8339,6 +8410,31 @@ if (data.data) {
     ...Store.db,
     ...data.data
   };
+
+  /* Repair what just arrived, and push the repair back.
+
+     boot() normalises the local copy, and then this replaced it with the
+     remote one — which still had the gap. So the same field was repaired
+     on every single load, saved locally, and overwritten again by the next
+     pull: "repaired 1 missing field(s)" in the console for ever, fixing
+     nothing. It was a loop, not a one-off tidy-up.
+
+     Normalising here fixes the copy actually in use. Sending it back is
+     what stops it happening again, and it is deliberately the only place
+     that does: a browser that has just READ the record is the one browser
+     that should not normally write it back, so this is gated on something
+     genuinely having been wrong. */
+  const repaired = normaliseCompany();
+
+  if (repaired) {
+    /* After this returns — applying is still true here, and sendNow()
+       refuses to write while it is, which is the guard that stops a pull
+       turning into an echo. */
+    setTimeout(() => {
+      console.info('[GMN] pushing the repaired company record back to Supabase');
+      this.sendNow();
+    }, 0);
+  }
 }
 
 this.status = 'ok';

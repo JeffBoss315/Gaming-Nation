@@ -315,9 +315,23 @@ app.whenReady().then(async () => {
       return html;
     })()`);
 
+    /* It has to name the service AND give a next step. Which next step
+       depends on where it is running: the desktop shell can start one, so
+       it offers a button; a plain browser window like this one cannot, so
+       it says where to put the address. Asserting on the button alone
+       would pass only in the build a driver is not using, and asserting
+       on the old "npm run fleet" wording would fail the moment that
+       instruction stopped being the answer — which is the point of the
+       change it is testing. */
+    const named = /company service/i.test(offline);
+    const actionable = /Run it on this machine/.test(offline)   /* desktop */
+      || /address in Settings/i.test(offline);                  /* anywhere else */
+
     check('and says so when the service is missing',
-      /company service/i.test(offline) && /npm run fleet/.test(offline),
-      offline ? 'names the service and how to start it' : 'SAYS NOTHING');
+      named && actionable,
+      !named ? 'SAYS NOTHING'
+        : actionable ? 'names the service and what to do about it'
+          : 'names it but offers no way out');
 
     /* ---- 4. a call ---- */
 

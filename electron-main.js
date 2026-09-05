@@ -255,6 +255,11 @@ ipcMain.handle('app:tray', (_e, on) => {
   return { ok: true };
 });
 
+/* ---------------- hosting the company service ---------------- */
+require('./service-host').register();
+
+
+
 /* ---------------- lifecycle ---------------- */
 app.whenReady().then(() => {
   createWindow();

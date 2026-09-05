@@ -1754,3 +1754,24 @@ body.can-install .install-cta{display:inline-flex}
 }
 .pin-reach .btn{flex:1;justify-content:center;padding:6px 8px;font-size:11.5px}
 .pin-reach svg{width:14px;height:14px}
+
+/* The offer to run the service here, and the note saying this machine is. */
+.dm-offline .grow{min-width:0}
+.dm-offline-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+
+.dm-hosting{
+    display:flex;align-items:flex-start;gap:11px;
+    margin-bottom:14px;
+    padding:12px 14px;
+    border-radius:var(--r);
+    border:1px solid rgba(46,224,160,.28);
+    background:rgba(46,224,160,.07);
+}
+.dm-hosting svg{width:17px;height:17px;flex:none;margin-top:1px;color:var(--ok)}
+.dm-hosting .mono{
+    padding:1px 5px;
+    border-radius:5px;
+    background:var(--panel-3);
+    border:1px solid var(--line);
+    font-size:11.5px;
+}

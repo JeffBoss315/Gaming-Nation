@@ -240,6 +240,30 @@ Three JSON files beside it hold the state: `hll-company.json`,
 `HLL_COMPANY_FILE`, `HLL_SESSION_FILE` and `HLL_CHAT_FILE`;
 `http://localhost:8787/status` shows what it is doing.
 
+### The app can run the service itself
+
+Somebody has to run `fleet-server.js` or there is no chat, and telling a
+driver to open a terminal is not an answer. The desktop client can host it:
+**Messages → Run it on this machine**, or **Run it for the whole crew** to
+let the rest of the network in.
+
+One machine hosts. Every other client finds it automatically on the same
+machine, and elsewhere on the network you paste the address the hosting
+machine shows into Settings — or just open it in a browser, since the
+service serves the website too and a page it serves is joined up with no
+address to type.
+
+Two machines both hosting is two separate companies that cannot see each
+other, which is why this is a switch and not a default. The choice is
+remembered, so a machine that hosts keeps hosting after a restart, and the
+service stops when the app does.
+
+Its files live under the app's own data directory rather than beside the
+executable — Program Files is not writable, and a service that starts and
+then dies on the first save is a horrible thing to debug.
+
+`npm run fleet` still does the same job from a checkout.
+
 ### Calls: two things that will bite you
 
 Drivers can call each other and join a crew call, from the website and from

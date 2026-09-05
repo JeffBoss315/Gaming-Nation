@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('hllDesktop', {
   /* a real photo of the drop, taken from the screen the game is on */
   captureScreen: () => ipcRenderer.invoke('capture:screen'),
 
+  /* hosting the company service on this machine, so messages and calls
+     do not need somebody to open a terminal */
+  startService:  (opts) => ipcRenderer.invoke('service:start', opts),
+  stopService:   ()     => ipcRenderer.invoke('service:stop'),
+  serviceStatus: ()     => ipcRenderer.invoke('service:status'),
+
   /* startup + tray behaviour */
   setAutoLaunch:  (on, minimized) => ipcRenderer.invoke('app:autoLaunch', on, minimized),
   getAutoLaunch:  ()   => ipcRenderer.invoke('app:autoLaunchState'),
