@@ -6,15 +6,28 @@
 # that some ISPs simply do not carry — jeffboss315.github.io times out on
 # exactly the connection this company is run from. Cloudflare answers from
 # whichever edge is nearest, on addresses that are almost never blocked.
-# So the site is published to both, and heavyline.pages.dev is the one to
-# hand to drivers.
+#
+# TWO ADDRESSES, ONE SITE
+#
+#   gaming-nation.pages.dev   the name to hand to drivers, and the one
+#                             site.config.json points the canonical at, so
+#                             it is the one search engines will index
+#   heavyline.pages.dev       the original address, kept alive because it
+#                             is already written down in places this repo
+#                             cannot reach
+#
+# Both are Cloudflare Pages projects connected to this repository, so
+# Cloudflare builds BOTH on every push with nothing configured here. There
+# is no custom domain: the account owns no zone, and a pages.dev name is
+# the most anyone gets for free.
 #
 # TWO WAYS TO GET PUSH-TO-DEPLOY. YOU ONLY NEED ONE.
 #
-#   1. Connect the repository in the Cloudflare dashboard. Nothing to
-#      configure here and no secrets to keep:
+#   1. Connect the repository in the Cloudflare dashboard. This is what is
+#      set up today, for both projects. Nothing to configure here and no
+#      secrets to keep:
 #
-#        dash.cloudflare.com -> Workers & Pages -> heavyline
+#        dash.cloudflare.com -> Workers & Pages -> gaming-nation
 #          -> Settings -> Builds & deployments -> Connect to Git
 #        Build command      node tools/build-www.js
 #        Output directory   www
@@ -22,7 +35,7 @@
 #      Cloudflare then builds every push itself and this workflow stays
 #      asleep, which is why it checks for the token before doing anything.
 #
-#   2. Or add two repository secrets and let this workflow do it:
+#   2. Or add a repository secret and let this workflow do it:
 #
 #        Settings -> Secrets and variables -> Actions -> New repository secret
 #        CLOUDFLARE_API_TOKEN     a token with "Cloudflare Pages: Edit" on
@@ -97,7 +110,23 @@ jobs:
       # Run from the repository root, not from www/, because that is where
       # wrangler looks for functions/ — the download gate is a Pages
       # Function and deploying the folder alone would leave it behind.
-      - name: Deploy
+      - name: Deploy to gaming-nation.pages.dev
+        if: steps.check.outputs.ready == 'yes'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
+          command: pages deploy www --project-name=gaming-nation --branch=main
+
+      # The old address, kept working. It is a second project rather than
+      # an alias because a pages.dev name belongs to its project and cannot
+      # be pointed anywhere else — aliasing needs a custom domain, which
+      # needs a zone, which this account does not have.
+      #
+      # Not `if: failure()`-guarded and not allowed to fail quietly: if the
+      # legacy address stops updating it starts serving a site that is
+      # slowly drifting out of date, which is worse than an obvious break.
+      - name: Deploy to heavyline.pages.dev
         if: steps.check.outputs.ready == 'yes'
         uses: cloudflare/wrangler-action@v3
         with:
@@ -108,7 +137,8 @@ jobs:
       - name: Where it went
         if: steps.check.outputs.ready == 'yes'
         run: |
-          echo "Published to https://heavyline.pages.dev"
+          echo "Published to https://gaming-nation.pages.dev"
+          echo "          and https://heavyline.pages.dev"
           if [ -d functions ]; then
             echo "functions/ went with it — the download gate is live once"
             echo "HLL_DOWNLOAD_SECRET and the R2 binding are set on the project."

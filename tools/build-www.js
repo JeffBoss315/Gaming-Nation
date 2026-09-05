@@ -419,7 +419,7 @@ app.log.push('icons/            (' + app.copyTree('icons') + ' files)');
     }
   };
   walk('');
-  const stamp = 'heavylinetrucker-v' + version + '-' + digest.digest('hex').slice(0, 8);
+  const stamp = 'gamingnation-v' + version + '-' + digest.digest('hex').slice(0, 8);
 
   const swPath = path.join(APP, 'sw.js');
   const before = fs.readFileSync(swPath, 'utf8');

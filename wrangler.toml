@@ -14,7 +14,7 @@
 # release audit and fails on a clean checkout because release/ is gitignored.
 # The builder alone needs no dependencies at all.
 
-name = "heavyline"
+name = "gaming-nation"
 pages_build_output_dir = "www"
 
 # ------------------------------------------------------------------
@@ -33,7 +33,7 @@ pages_build_output_dir = "www"
 # SET UP ONCE
 #
 #   1. Make the bucket
-#        npx wrangler r2 bucket create heavyline-releases
+#        npx wrangler r2 bucket create gaming-nation-releases
 #
 #   2. Put the builds in it (after npm run dist)
 #        npm run release:push
@@ -41,7 +41,7 @@ pages_build_output_dir = "www"
 #   3. Give the Function a signing secret. Any long random string; it
 #      never leaves Cloudflare, and changing it invalidates every link
 #      already handed out, which is the way to revoke them.
-#        npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=heavyline
+#        npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=gaming-nation
 #
 #   4. Tell it where Supabase is. Not secrets — the anon key is public
 #      and is in supabase-client.js — but they belong in the environment
@@ -61,7 +61,7 @@ pages_build_output_dir = "www"
 # then:
 #
 #   Error: Failed to publish your Function. Got error:
-#   R2 bucket 'heavyline-releases' not found.
+#   R2 bucket 'gaming-nation-releases' not found.
 #
 # R2 has to be switched on once in the dashboard before any bucket can be
 # made; the API refuses with "Please enable R2 through the Cloudflare
@@ -71,8 +71,8 @@ pages_build_output_dir = "www"
 # Until then the Function deploys without a bucket, reports gate: 'off'
 # about itself, and the downloads page falls back to the public URL — see
 # functions/api/download-link.js. Uncomment this block the moment
-# `npx wrangler r2 bucket create heavyline-releases` succeeds.
+# `npx wrangler r2 bucket create gaming-nation-releases` succeeds.
 #
 # [[r2_buckets]]
 # binding = "RELEASES"
-# bucket_name = "heavyline-releases"
+# bucket_name = "gaming-nation-releases"

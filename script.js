@@ -1417,14 +1417,44 @@ const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
 
    tools/build-www.js writes window.HLL_SITE_URL into the pages it builds,
    from site.config.json. Falling back to the origin keeps development
-   working, where localhost really is the right answer. */
+   working, where localhost really is the right answer.
+
+   One more wrinkle, since the site gained a second address.
+
+   The platform now answers on both gaming-nation.pages.dev and the older
+   heavyline.pages.dev. A build-time constant can only name one of them, so
+   a driver who asked for a reset on the host that is NOT the constant gets
+   emailed a link to the other one. It works — they end up signed in — but
+   they land somewhere they never chose, which reads like a redirect to a
+   different company.
+
+   The origin is exactly right when it is a real public site: https, and not
+   a loopback address. That covers both hosts, and any custom domain added
+   later, with no code change. Everything else — the desktop client, a dev
+   server on localhost — falls through to the constant, which is what the
+   paragraph above is about and is still the right answer there. */
 function publicSiteUrl() {
+  const trim = (u) => String(u || '').replace(/\/$/, '');
+
+  try {
+    if (typeof location !== 'undefined'
+        && location.protocol === 'https:'
+        && !/^(localhost$|127\.|0\.0\.0\.0$|\[?::1\]?$)/i.test(location.hostname)) {
+      return trim(location.origin);
+    }
+  } catch (e) { /* no location worth trusting */ }
+
   try {
     if (typeof window !== 'undefined' && window.HLL_SITE_URL) {
-      return String(window.HLL_SITE_URL).replace(/\/$/, '');
+      return trim(window.HLL_SITE_URL);
     }
   } catch (e) { /* nothing to go on */ }
-  return String(location.origin || '').replace(/\/$/, '');
+
+  try {
+    return trim(location.origin);
+  } catch (e) {
+    return '';
+  }
 }
 
 /* target and rel together: an invite opens away from the platform, and

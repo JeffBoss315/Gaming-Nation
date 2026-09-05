@@ -31,7 +31,18 @@ const COMPANY_FILE = path.join(ROOT, 'hll-company.liverun.json');
 const SITE_OUT = path.join(ROOT, '.smoke-live-site');
 const APP_OUT = path.join(ROOT, '.smoke-live-app');
 
-app.setPath('userData', path.join(app.getPath('temp'), 'hll-smoke-live-run'));
+/* A fresh profile every run.
+
+   The driver record, the sessions and the money all live in localStorage
+   under this profile, and the checks below assert exact figures — 4200
+   earned, one delivery, one run in the session. Reusing the profile carried
+   the previous run's totals in, so a second run read 8400 and two
+   deliveries and reported nine failures that were nothing but yesterday's
+   arithmetic. COMPANY_FILE is already deleted for exactly this reason; the
+   profile behind it was missed. */
+const USER_DATA = path.join(app.getPath('temp'), 'hll-smoke-live-run');
+fs.rmSync(USER_DATA, { recursive: true, force: true });
+app.setPath('userData', USER_DATA);
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 
@@ -40,6 +51,27 @@ let problems = 0;
 const say = (k, v) => steps.push(k + ': ' + v);
 const check = (k, ok, v) => { steps.push((ok ? '  ' : '! ') + k + ': ' + v); if (!ok) problems++; };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Wait for a condition, not for a duration.
+
+   A fixed sleep is a guess about how fast this machine is, and the guess
+   was wrong here: delivering a load takes the client a moment longer than
+   the 3s it was given, so the run was read while it was still open and four
+   checks failed on a race rather than on behaviour. Polling turns the slow
+   case into a slower pass instead of a false failure, and leaves the
+   genuinely broken case failing on the timeout. */
+const until = async (win, expr, ms = 20000, step = 250) => {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    let ok = false;
+    try {
+      ok = await win.webContents.executeJavaScript('(() => !!(' + expr + '))()');
+    } catch (e) { ok = false; }
+    if (ok) return true;
+    if (Date.now() >= deadline) return false;
+    await wait(step);
+  }
+};
 
 /* ---- the fake game ----
    The same payload shape the community telemetry server produces. `truck`
@@ -253,7 +285,10 @@ app.whenReady().then(async () => {
     /* ---- deliver it ---- */
     truck.job = null;
     truck.speed = 0;
-    await wait(3000);
+    await until(driver,
+      'Store.db.job === null && Store.db.pending.length > 0');
+    await until(console2,
+      "HQLive.events.some(e => e.kind === 'job.delivered')");
 
     const done = await driver.webContents.executeJavaScript(`(() => ({
       job: Store.db.job,
@@ -315,7 +350,7 @@ app.whenReady().then(async () => {
 
     /* ---- the game closes ---- */
     await new Promise((done) => game.close(done));
-    await wait(4000);
+    await until(driver, 'GameWatch.running === false && !Sessions.current()');
 
     const closed = await driver.webContents.executeJavaScript(`(() => {
       const id = Store.db.driver.hllId;

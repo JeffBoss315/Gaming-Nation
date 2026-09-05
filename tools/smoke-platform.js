@@ -108,8 +108,16 @@ app.whenReady().then(async () => {
       say('signup created an account', cand ? cand.driverId : 'NO');
       const appn = Store.db.applications.find(a => a.email === email);
       say('signup filed an application', appn ? appn.id + ' / ' + appn.status : 'NO');
-      say('staff was notified', Store.db.notifications.some(n =>
-        n.driverId === state.user.id && /signed up/i.test(n.title || '')) ? 'yes' : 'NO');
+      /* Either title counts. The owner IS the recruiter here — recruiterDriver()
+         falls back to the owner seed — so registration sends them the direct
+         'New application for you' and deliberately leaves them OUT of the
+         broadcast titled 'New driver signed up', to avoid telling one person
+         twice. Matching only the broadcast reported NO for a person who had
+         in fact been told, and told more precisely. */
+      const heard = Store.db.notifications.find(n =>
+        n.driverId === state.user.id
+        && /signed up|application for you/i.test(n.title || ''));
+      say('staff was notified', heard ? heard.title : 'NO');
 
       /* the console has its own site now — smoke-sites covers it. Here we check
          the drivers' site tells staff there is something waiting. */

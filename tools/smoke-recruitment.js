@@ -6,11 +6,19 @@ const path = require('path');
    root turns require(ROOT + '/desktop-capture') into a bare module name */
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 
+/* Registration goes through Supabase Auth. Without this the test signed up
+   against the LIVE project, which rejected @example.com outright and left
+   the run with no steps at all — a failure that looked like the page had
+   not loaded. Every other smoke test already does this; this one predates
+   the stand-in and was never brought across. */
+const { SOURCE: FAKE_SUPABASE } = require('./fake-supabase');
+
 app.setPath('userData', path.join(app.getPath('temp'), 'hll-probe-driver'));
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });
   await win.loadFile(path.join(ROOT, 'index.html'));
+  await win.webContents.executeJavaScript(FAKE_SUPABASE);
   await new Promise((r) => setTimeout(r, 1600));
 
   const out = await win.webContents.executeJavaScript(`(async () => {
@@ -20,9 +28,17 @@ app.whenReady().then(async () => {
     const txt = () => document.querySelector('.page').textContent.replace(/\\s+/g,' ');
     try {
       const email = 'newdriver' + Date.now() + '@example.com';
-      const res = await Accounts.register({ name: 'New Driver', email,
-        password: 'NewDriver123', country: 'Netherlands', discord: '' });
-      say('register', res.error || 'ok');
+      /* Positional, like every other caller: register(account, password,
+         country). Passing a single object put the password inside the
+         account argument and left the real parameter undefined, so this
+         test never got past Supabase's "Signup requires a valid
+         password" — and it failed with steps still empty, which reads
+         like the page never loaded rather than like the call being wrong. */
+      const res = await Accounts.register(
+        { name: 'New Driver', email, discord: '',
+          created: new Date().toISOString() },
+        'NewDriver123', 'Netherlands');
+      say('register', res && res.confirmEmail ? 'confirm email sent' : 'ok');
       const acc = Accounts.all().find(a => a.email === email);
       state.user = Store.driver(acc.driverId);
 

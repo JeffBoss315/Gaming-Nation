@@ -122,13 +122,13 @@ security, so it holds no key that could read anybody else's record.
 
 ```bash
 # 1. the bucket
-npx wrangler r2 bucket create heavyline-releases
+npx wrangler r2 bucket create gaming-nation-releases
 
 # 2. the builds (after npm run dist and npm run android)
 npm run release:push          # add -- --dry to see what would go
 
 # 3. the signing secret — any long random string
-npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=heavyline
+npx wrangler pages secret put HLL_DOWNLOAD_SECRET --project-name=gaming-nation
 ```
 
 Then in the Cloudflare Pages dashboard → **Settings → Environment variables**:
@@ -302,20 +302,6 @@ those tests are actually about.
 
 ## Publishing it, free
 
-### heavyline.com is not available
-
-Checked against the registry rather than assumed:
-
-```
-heavyline.com   registered 2013-08-28, expires 2027-08-28
-                registrar  TurnCommerce / NameBright
-                nameservers DOMAIN-FOR-SALE.HUGEDOMAINSDNS.COM
-```
-
-It is parked with a domain broker and listed for sale, which typically means
-four figures. There is no free route to that exact name, and nothing in this
-repository can change that.
-
 ### What free actually gets you
 
 **Hosting is free. A .com is not.** Any of these publish the site at no cost,
@@ -323,34 +309,66 @@ with HTTPS, and all of them are indexed by Google perfectly well:
 
 | Host | Free address | Config in repo |
 |---|---|---|
-| Cloudflare Pages | `heavyline.pages.dev` | none needed — point it at `www/` |
-| Netlify | `heavyline.netlify.app` | [netlify.toml](netlify.toml) |
-| Vercel | `heavyline.vercel.app` | [vercel.json](vercel.json) |
+| Cloudflare Pages | `gaming-nation.pages.dev` | none needed — point it at `www/` |
+| Netlify | `gaming-nation.netlify.app` | [netlify.toml](netlify.toml) |
+| Vercel | `gaming-nation.vercel.app` | [vercel.json](vercel.json) |
 | GitHub Pages | `<you>.github.io/hll` | [.github/workflows/pages.yml](.github/workflows/pages.yml) |
 
 A `.pages.dev` address ranks on its own merits. If you want a real domain
 later, all four support custom domains free — you pay only the registrar.
 
-### If you want a domain, these were free to claim when checked
+### What is live now
 
-`heavyline.com` is gone, but the name is not:
+Two Cloudflare Pages projects, both connected to this repository, so both
+rebuild on every push to `main`:
 
 ```
-heavyline.net   AVAILABLE
-heavyline.org   AVAILABLE
-heavyline.co    AVAILABLE
-heavyline.gg    AVAILABLE      (fitting for a gaming VTC)
+https://gaming-nation.pages.dev    the one to hand to drivers
+https://heavyline.pages.dev        the original address, still working
 ```
 
-Around £10–35 a year depending on the ending. Availability changes daily —
-check before you plan around it.
+`siteUrl` names the first, so the canonical link, the sitemap and the social
+cards all point there — which is how the two hosts stay out of each other's
+way in search results instead of competing as duplicates.
+
+`gamingnation.pages.dev`, without the hyphen, belongs to somebody else's
+Cloudflare account. A `pages.dev` name is first-come and cannot be bought,
+which is the whole reason for the hyphen.
+
+### www.gamingnation needs a domain, and a domain needs buying
+
+There is no free path to `www.gamingnation.<anything>`. A custom domain on
+Cloudflare Pages requires the domain to be registered to you and added to
+your Cloudflare account as a zone; this account currently has none. Checked
+today:
+
+```
+gamingnation.com    registered by someone else
+gamingnation.net    registered by someone else
+gamingnation.org    registered by someone else
+gaming-nation.com   registered by someone else
+
+gamingnation.gg     AVAILABLE     (fitting for a gaming VTC)
+gamingnation.co     AVAILABLE
+gamingnation.io     AVAILABLE
+gamingnation.club   AVAILABLE
+```
+
+Around £10–35 a year for most, more for `.gg` and `.io`. Availability
+changes daily — check before you plan around it.
+
+Once one is bought: add it to Cloudflare (Websites -> Add a site), point the
+registrar at the nameservers Cloudflare gives you, then Workers & Pages ->
+`gaming-nation` -> Custom domains -> Set up a domain. Then change `siteUrl`
+below to `https://www.<the domain>` and push. Nothing else in the repository
+needs editing.
 
 ### Setting the address
 
 One value, in [site.config.json](site.config.json):
 
 ```json
-{ "siteUrl": "https://heavyline.pages.dev" }
+{ "siteUrl": "https://gaming-nation.pages.dev" }
 ```
 
 Then `npm run www`. The build writes the canonical link, the Open Graph and
@@ -365,7 +383,7 @@ that is the worst possible outcome. No canonical is far better than a wrong one.
 
 ### If the site will not load for you
 
-It is published at `https://jeffboss315.github.io/heavyline/` and it works —
+It is published at `https://jeffboss315.github.io/Gaming-Nation/` and it works —
 verified by fetching it from outside this network, which returns the page,
 `robots.txt` and `sitemap.xml` correctly.
 
@@ -388,13 +406,13 @@ blocked, and it is free:
    runs the release audit and fails on a clean checkout
 4. Output directory: `www`
 
-That publishes to `https://heavyline.pages.dev` — free, reachable, and it
+That publishes to `https://gaming-nation.pages.dev` — free, reachable, and it
 carries the name.
 
 Then change one line in [site.config.json](site.config.json):
 
 ```json
-{ "siteUrl": "https://heavyline.pages.dev" }
+{ "siteUrl": "https://gaming-nation.pages.dev" }
 ```
 
 and push. The canonical, the cards, the sitemap and `robots.txt` are all
