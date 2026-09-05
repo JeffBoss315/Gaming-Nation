@@ -47,7 +47,8 @@
     "release:push": "node tools/push-release.js",
     "service": "node fleet-server.js",
     "deploy:cf": "node tools/build-www.js && node tools/deploy-cloudflare.js",
-    "dev": "node tools/dev.js"
+    "dev": "node tools/dev.js",
+    "smoke:dmapp": "node tools/run-electron.js tools/smoke-dm-app.js ."
   },
   "devDependencies": {
     "electron": "^31.7.7",

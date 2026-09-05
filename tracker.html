@@ -296,6 +296,18 @@
     </div>
 
 
+    <!-- =========================================================
+         CALLS
+
+         Outside #app on purpose. render() replaces the whole of #app,
+         and a <video> or <audio> element that is replaced stops playing
+         — so a call drawn inside it would go silent the moment anything
+         else on screen changed. paintCall() writes here instead, and
+         nothing else touches it.
+    ========================================================== -->
+    <div id="callHost" aria-live="polite"></div>
+
+
     <!-- JavaScript disabled message -->
     <noscript>
         <div style="padding:24px;color:#e7eaef">

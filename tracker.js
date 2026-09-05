@@ -40,6 +40,13 @@ const fmt = {
 const P = {
   /* these are used across the client; a missing name silently falls back to
      the info glyph, which reads as the wrong icon rather than as an error */
+  /* Calling. Taken from the website set unchanged, because the two ends
+     ring each other and a driver should not meet a different phone
+     glyph depending on which one they are looking at. */
+  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>',
+  micOff:'<path d="M3 3l18 18"/><path d="M9.5 4.9A3 3 0 0 1 15 6v4"/><path d="M9 9.4V11a3 3 0 0 0 4.3 2.7"/><path d="M5.5 11.5a6.5 6.5 0 0 0 9.9 5.6"/><path d="M18.4 13.6a6.5 6.5 0 0 0 .1-2.1"/><path d="M12 18v3"/>',
+  phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M10.5 5.4h3"/><path d="M10.8 18.6h2.4"/>',
+  phoneOff:'<path d="M10.7 5.6A15.5 15.5 0 0 1 13 5.3"/><path d="M3 3l18 18"/><path d="M8.4 8.4l-2 1.2a1.6 1.6 0 0 0-.6 2l1 2.2a15.6 15.6 0 0 0 4.4 4.4l2.2 1a1.6 1.6 0 0 0 2-.6l1.2-2"/><path d="M18.6 13.8l.8-1.4a1.6 1.6 0 0 0-.6-2l-2-1.2"/>',
   users:'<circle cx="9" cy="8" r="3.2"/><path d="M2.5 20v-1.1A4.6 4.6 0 0 1 7.1 14.3h3.8A4.6 4.6 0 0 1 15.5 19v1"/><path d="M16.5 5.3a3.2 3.2 0 0 1 0 5.9M18 14.4a4.6 4.6 0 0 1 3.5 4.5V20"/>',
   bell:'<path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15z"/><path d="M10 19.5a2 2 0 0 0 4 0"/>',
   bolt:'<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/>',
@@ -1046,7 +1053,20 @@ const Realtime = {
 
     this.status = 'connecting';
     let es;
-    try { es = new EventSource(base + '/api/stream'); }
+    /* The token rides on the query string, not a header: EventSource
+       cannot set one. It is the same token over the same connection and
+       it never leaves the service.
+
+       Without it the stream is anonymous, and an anonymous stream is one
+       the service cannot deliver a private message or a ringing call
+       down — it has no name to route to. That is precisely why messaging
+       never worked from the client: everything else here is a broadcast
+       and did not care. */
+    const token = (typeof ServiceAuth !== 'undefined' && ServiceAuth.on())
+      ? '?token=' + encodeURIComponent(ServiceAuth.token)
+      : '';
+
+    try { es = new EventSource(base + '/api/stream' + token); }
     catch (e) { this.status = 'retry'; this.lastError = e.message; this.scheduleRetry(); return; }
     this.es = es;
 
@@ -1084,6 +1104,29 @@ const Realtime = {
       const d = parse(m.data);
       /* somebody wrote to the shared record — pull it now rather than in 20s */
       if (d && Sync.on() && d.version !== Sync.version) Sync.pull();
+    });
+
+    /* A message, to this driver or to the crew room. */
+    es.addEventListener('dm', (m) => {
+      const d = parse(m.data);
+      if (d) Messages.arrive(d);
+    });
+
+    /* Everything about a call: ringing, the answer, the SDP, the ice, and
+       the two room announcements. One door, so Calls decides what belongs
+       to it and what belongs to the mesh. */
+    es.addEventListener('call', (m) => {
+      const d = parse(m.data);
+      if (d) Calls.signal(d);
+    });
+
+    /* Somebody arrived or left. Only the thread list cares, and only so
+       the dot next to a name is honest. */
+    es.addEventListener('presence', (m) => {
+      const d = parse(m.data);
+      if (!d) return;
+      const t = Messages.threads.find((x) => String(x.withId) === String(d.driverId));
+      if (t) { t.online = !!d.online; render(); }
     });
 
     es.onerror = () => {
@@ -2973,9 +3016,20 @@ const NAV = [
   { key: 'logbook',     label: 'Logbook',       icon: 'book' },
   { key: 'profile',     label: 'Driver record', icon: 'user' },
   { key: 'leaderboard', label: 'Standings',     icon: 'trophy' },
+  /* Announcements AND conversations. The count used to be the unread
+     announcements alone, which was the whole of this screen; a message
+     from another driver now arrives here too and has to be counted, or
+     the one that actually wants answering is the one with no badge. */
   { key: 'messages',    label: 'Messages',      icon: 'mail',
-    count: () => Store.db.messages.filter((m) => !m.read).length },
-  { key: 'chats',       label: 'Crew chat',     icon: 'chat' },
+    count: () => Store.db.messages.filter((m) => !m.read).length
+      + Messages.threads.filter((t) => String(t.withId) !== FLEET_ROOM)
+        .reduce((n, t) => n + (t.unread || 0), 0) },
+
+  { key: 'chats',       label: 'Crew chat',     icon: 'chat',
+    count: () => {
+      const room = Messages.threads.find((t) => String(t.withId) === FLEET_ROOM);
+      return room ? (room.unread || 0) : 0;
+    } },
   { key: 'convoy',      label: 'Convoys',       icon: 'route' },
   { key: 'menu',        label: 'Menu',          icon: 'menu' },
   { key: 'settings',    label: 'Settings',      icon: 'settings' },
@@ -3950,77 +4004,203 @@ function viewProfile() {
   </section>`;
 }
 
-/* ---------------- messages ---------------- */
-function viewMessages() {
-  const list = Store.db.messages;
-  const sel = list[state.msgSel];
-  return `
-  ${viewHead('Messages', 'From Gaming Nation management',
-    `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
-  <section class="card"><div class="card-body">
-    ${list.length ? `<div class="split">
-      <div class="split-list">
-        ${list.map((m, i) => `<div class="split-item ${i === state.msgSel ? 'on' : ''} ${m.read ? '' : 'unread'}"
-          data-act="sel-msg" data-i="${i}">
-          <div class="split-title">${esc(m.from)}</div>
-          <div class="split-sub">${esc(m.subject)}</div>
-          <div class="split-sub t3">${esc(fmt.rel(m.at))}</div>
-        </div>`).join('')}
-      </div>
-      <div class="split-body">
-        ${sel ? `<div class="thread" style="display:block">
-          <div class="b7 lg">${esc(sel.subject)}</div>
-          <div class="t3 xs mt-8">From ${esc(sel.from)} · ${esc(fmt.dt(sel.at))}</div>
-          <p class="t2 mt-16" style="line-height:1.65">${esc(sel.body)}</p>
-        </div>` : ''}
-      </div>
-    </div>` : `<div class="empty">${icon('mail')}<div>No messages</div></div>`}
-  </div></section>`;
+/* ---------------- messages ----------------
+
+   Two things live here now. The announcements from management, which is
+   all this screen used to be, are the first entry in the list; every
+   other entry is another driver, and selecting one opens a real
+   conversation with a composer and a call button.
+
+   The thread list comes from the service rather than from local storage,
+   because the other end of a conversation is on somebody else's machine
+   by definition. */
+const MGMT_THREAD = '#management';
+
+function dmLine(m, mine) {
+  const when = m.at ? fmt.hm(m.at) : '';
+  const file = m.attachment
+    ? `<a class="dm-file" href="${esc(Sync.url() + '/files/' + m.attachment.id)}"
+         target="_blank" rel="noopener noreferrer">
+         ${icon(m.attachment.image ? 'image' : 'link')}${esc(m.attachment.name || 'attachment')}</a>`
+    : '';
+  return `<div class="msg ${mine ? 'mine' : ''}">
+    <div class="who">${esc(m.driver || 'Driver')} · ${esc(when)}</div>
+    ${m.text ? esc(m.text) : ''}${file}</div>`;
 }
 
-/* ---------------- chats ---------------- */
-function viewChats() {
-  const chats = Store.db.chats;
-  const ch = chats[state.chatSel] || chats[0];
-  /* a client with no channels yet has nothing to select into */
-  if (!ch) {
-    return `
-    ${viewHead('Crew chat', 'Convoy channels; driver to driver is on the platform')}
-    <section class="card"><div class="card-body">
-      <div class="empty">${icon('chat')}
-        <div>No channels yet</div>
-        <div class="t3 xs">Convoy channels appear here when a convoy you are on
-          is running. To message another driver directly &mdash; with photos,
-          files or a call &mdash; open Messages on the platform.</div>
-        <button class="btn btn-sm mt-16" data-act="open-hll" data-href="login.html#/messages">
-          ${icon('link')}Open Messages</button>
-      </div>
-    </div></section>`;
+/* The composer, and the reason it is not there when it is not. */
+function dmComposer(placeholder) {
+  if (!Messages.on()) {
+    return `<div class="dm-blocked">${icon('alert')}<div>${esc(Messages.reason())}</div></div>`;
   }
+  return `<form class="composer" id="dmForm">
+    <input class="input" id="dmText" placeholder="${esc(placeholder)}" autocomplete="off"
+      ${Messages.sending ? 'disabled' : ''}>
+    <button class="btn btn-primary" type="submit" ${Messages.sending ? 'disabled' : ''}>
+      ${icon('send')}${Messages.sending ? 'Sending' : 'Send'}</button>
+  </form>`;
+}
+
+function viewMessages() {
+  const notices = Store.db.messages;
+  const me = String((Store.db.driver && Store.db.driver.hllId) || '');
+  const open = Messages.open;
+
+  /* Management first, then everyone the service says we have talked to. */
+  const rows = [{
+    id: MGMT_THREAD,
+    title: 'Gaming Nation management',
+    sub: notices.length ? notices[0].subject : 'No announcements',
+    unread: notices.filter((m) => !m.read).length,
+    online: true,
+  }].concat(Messages.threads
+    .filter((t) => String(t.withId) !== FLEET_ROOM)
+    .map((t) => ({
+      id: String(t.withId),
+      title: t.name || t.withId,
+      sub: t.last ? String(t.last.text || 'Attachment').slice(0, 60) : 'No messages yet',
+      unread: t.unread || 0,
+      online: !!t.online,
+    })));
+
+  const sel = rows.find((r) => r.id === open) || rows[0];
+  const body = (() => {
+    if (!sel) return '';
+
+    if (sel.id === MGMT_THREAD) {
+      const m = notices[state.msgSel] || notices[0];
+      if (!m) return `<div class="empty">${icon('mail')}<div>No announcements</div></div>`;
+      return `<div class="thread" style="display:block">
+        <div class="b7 lg">${esc(m.subject)}</div>
+        <div class="t3 xs mt-8">From ${esc(m.from)} · ${esc(fmt.dt(m.at))}</div>
+        <p class="t2 mt-16" style="line-height:1.65">${esc(m.body)}</p>
+        ${notices.length > 1 ? `<div class="dm-notices mt-16">
+          ${notices.map((n, i) => `<button class="dm-notice ${i === state.msgSel ? 'on' : ''}"
+            data-act="sel-msg" data-i="${i}">${esc(n.subject)}</button>`).join('')}
+        </div>` : ''}
+      </div>`;
+    }
+
+    if (Messages.loading) return `<div class="empty">${icon('refresh')}<div>Opening…</div></div>`;
+    if (Messages.error) return `<div class="empty">${icon('alert')}<div>${esc(Messages.error)}</div></div>`;
+
+    return `
+      <div class="thread" id="dmThread">
+        ${Messages.history.length
+          ? Messages.history.map((m) => dmLine(m, String(m.driverId) === me)).join('')
+          : `<div class="empty">${icon('chat')}<div>Say something</div></div>`}
+      </div>
+      ${dmComposer('Message ' + sel.title)}`;
+  })();
+
   return `
-  ${viewHead('Crew chat', ch.members + ' drivers in #' + ch.name,
-    `<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
+  ${viewHead('Messages', 'Talk to another driver, or read what management sent',
+    `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
-        ${chats.map((c, i) => `<div class="split-item ${i === state.chatSel ? 'on' : ''}" data-act="sel-chat" data-i="${i}">
+        ${rows.map((r) => `<div class="split-item ${r.id === (sel && sel.id) ? 'on' : ''} ${r.unread ? 'unread' : ''}"
+          data-act="open-dm" data-id="${esc(r.id)}">
+          <div class="split-title">
+            ${r.id === MGMT_THREAD ? '' : `<span class="dot ${r.online ? 'on' : ''}"></span>`}
+            ${esc(r.title)}${r.unread ? ` <span class="pill sm">${r.unread}</span>` : ''}</div>
+          <div class="split-sub">${esc(r.sub)}</div>
+        </div>`).join('')}
+      </div>
+      <div class="split-body">
+        ${sel && sel.id !== MGMT_THREAD ? `<div class="dm-head">
+          <div>
+            <div class="b6">${esc(sel.title)}</div>
+            <div class="t3 xs">${sel.online ? 'Online now' : 'Offline — they will see it when they open the app'}</div>
+          </div>
+          <button class="btn btn-sm" data-act="call-driver"
+            data-id="${esc(sel.id)}" data-name="${esc(sel.title)}"
+            ${sel.online ? '' : 'disabled'}>${icon('phone')}Call</button>
+        </div>` : ''}
+        ${body}
+      </div>
+    </div>
+  </div></section>`;
+}
+
+/* ---------------- crew chat ----------------
+
+   The crew room is the whole fleet in one conversation, and the group
+   call that goes with it. Convoy channels, which is all this screen used
+   to hold, are still listed underneath — they are a different thing:
+   scoped to one run, and local to whoever is on it.
+
+   The room is the same '#fleet' thread the website opens, so a message
+   typed on a phone at a services and one typed at a desk are in the same
+   place, in order. */
+function viewChats() {
+  const chats = Store.db.chats;
+  const inRoom = Messages.open === FLEET_ROOM;
+  const me = String((Store.db.driver && Store.db.driver.hllId) || '');
+  const onCall = RoomCall.live || RoomCall.joining;
+  const waiting = RoomCall.known.length;
+
+  const ch = inRoom ? null : (chats[state.chatSel] || chats[0]);
+
+  /* Two buttons rather than one with a computed data-act: joining and
+     leaving are different actions, and writing them as one made the
+     second unreachable to anything reading this file — tools/scan.js
+     included, which is how it was noticed. */
+  const callBtn = onCall
+    ? `<button class="btn btn-sm btn-danger" data-act="room-leave">
+        ${icon('phoneOff')}${RoomCall.joining ? 'Joining…' : 'Leave call'}</button>`
+    : `<button class="btn btn-sm btn-primary" data-act="room-join">
+        ${icon('phone')}Crew call${waiting ? ' · ' + waiting : ''}</button>`;
+
+  const roomBody = Messages.loading
+    ? `<div class="empty">${icon('refresh')}<div>Opening…</div></div>`
+    : `<div class="thread" id="dmThread">
+        ${Messages.history.length
+          ? Messages.history.map((m) => dmLine(m, String(m.driverId) === me)).join('')
+          : `<div class="empty">${icon('chat')}<div>Nobody has said anything yet</div></div>`}
+      </div>
+      ${dmComposer('Message the crew')}`;
+
+  return `
+  ${viewHead('Crew chat',
+    inRoom
+      ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
+      : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
+    `${callBtn}<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
+  <section class="card"><div class="card-body">
+    <div class="split">
+      <div class="split-list">
+        <div class="split-item ${inRoom ? 'on' : ''}" data-act="open-room">
+          <div class="split-title">${icon('users')} Crew room</div>
+          <div class="split-sub">Everyone in the fleet</div>
+        </div>
+        ${chats.length ? `<div class="split-label">Convoy channels</div>` : ''}
+        ${chats.map((c, i) => `<div class="split-item ${!inRoom && i === state.chatSel ? 'on' : ''}"
+          data-act="sel-chat" data-i="${i}">
           <div class="split-title"># ${esc(c.name)}</div>
           <div class="split-sub">${c.members} drivers</div>
         </div>`).join('')}
       </div>
       <div class="split-body">
-        <div class="thread" id="thread">
-          ${ch.messages.map((m) => `<div class="msg ${m.who === Store.db.driver.name ? 'mine' : ''}">
-            <div class="who">${esc(m.who)} · ${esc(fmt.hm(m.at))}</div>${esc(m.body)}</div>`).join('')}
-        </div>
-        <form class="composer" id="chatForm">
-          <input class="input" id="chatInput" placeholder="Message #${esc(ch.name)}" autocomplete="off">
-          <button class="btn btn-primary" type="submit">${icon('send')}Send</button>
-        </form>
+        ${inRoom ? roomBody : (ch ? `
+          <div class="thread" id="thread">
+            ${ch.messages.map((m) => `<div class="msg ${m.who === Store.db.driver.name ? 'mine' : ''}">
+              <div class="who">${esc(m.who)} · ${esc(fmt.hm(m.at))}</div>${esc(m.body)}</div>`).join('')}
+          </div>
+          <form class="composer" id="chatForm">
+            <input class="input" id="chatInput" placeholder="Message #${esc(ch.name)}" autocomplete="off">
+            <button class="btn btn-primary" type="submit">${icon('send')}Send</button>
+          </form>` : `
+          <div class="empty">${icon('chat')}
+            <div>No convoy channels yet</div>
+            <div class="t3 xs">They appear here while a convoy you are on is running.
+              The crew room above is always open.</div>
+          </div>`)}
       </div>
     </div>
   </div></section>`;
 }
+
 
 /* ---------------- administration ----------------
    These write to the company record the platform keeps, so a change made
@@ -4707,6 +4887,931 @@ const Platform = {
   },
 };
 
+/* ============================================================
+   DRIVER TO DRIVER — messages, calls, and the crew room
+
+   Until now the client could only be talked AT: Messages held
+   announcements from management, and Crew chat held convoy channels
+   with a button that sent you to the website to actually reach
+   anybody. Both of those are still here; what is new is that a driver
+   can now hold a conversation, and a call, without leaving the app.
+
+   None of the protocol is new. fleet-server.js has carried
+   /api/dm/*, /api/call/* and the '#fleet' room for a while and the
+   website has spoken it all along — this is the client side of the
+   same conversation, so a message sent from a phone lands in the same
+   thread as one sent from the site.
+
+   Three pieces, in the order they depend on each other:
+
+     ServiceAuth   an identity the service will answer to. Without one
+                   every endpoint below is a 401, which is exactly why
+                   none of this worked from the client before.
+     Messages      threads, history and sending.
+     Calls
+     RoomCall      one-to-one, and the mesh for the crew room.
+   ============================================================ */
+
+const SERVICE_TOKEN_KEY = 'hll.trk.service.v1';
+
+/* ---------------- who the service thinks we are ----------------
+
+   The client already signs a driver in against the local account
+   store, and that is what gates the UI. It is NOT what gates the
+   service: the service issues its own token, and a message or a
+   ringing call can only be delivered to a connection that carries
+   one. So signing in has to do both, and the second half is here. */
+const ServiceAuth = {
+  token: null,
+  driver: null,        /* what the SERVICE says we are, not what we say */
+  status: 'off',       /* off | signed-in | rejected | unreachable */
+
+  load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SERVICE_TOKEN_KEY) || 'null');
+      if (raw && raw.token) {
+        this.token = raw.token;
+        this.driver = raw.driver || null;
+        this.status = 'signed-in';
+      }
+    } catch (e) { /* nothing kept */ }
+  },
+
+  keep() {
+    try {
+      if (this.token) {
+        localStorage.setItem(SERVICE_TOKEN_KEY,
+          JSON.stringify({ token: this.token, driver: this.driver }));
+      } else {
+        localStorage.removeItem(SERVICE_TOKEN_KEY);
+      }
+    } catch (e) { /* private mode; it simply will not persist */ }
+  },
+
+  on() { return !!this.token; },
+
+  headers(extra) {
+    const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+    if (this.token) h.Authorization = 'Bearer ' + this.token;
+    return h;
+  },
+
+  /* Called from the sign-in path, which is the one moment the password
+     is in hand. A driver never types it twice. */
+  async login(handle, password) {
+    const base = Sync.url();
+    if (!base) { this.status = 'off'; return false; }
+
+    try {
+      const res = await fetch(base + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: handle, password }),
+      });
+
+      if (res.status === 401) { this.status = 'rejected'; return false; }
+      if (!res.ok) { this.status = 'unreachable'; return false; }
+
+      const body = await res.json();
+      this.token = body.token;
+      this.driver = body.driver || null;
+      this.status = 'signed-in';
+      this.keep();
+
+      /* The live channel was opened anonymously at boot — before there
+         was any identity to open it with — so the service has no way to
+         route a private message down it. Open it again now that there
+         is. Without this, messages only arrive on the next poll and a
+         call never rings at all. */
+      this.reopenStream();
+      Messages.pullThreads();
+      return true;
+    } catch (e) {
+      this.status = 'unreachable';
+      return false;
+    }
+  },
+
+  async logout() {
+    const base = Sync.url();
+    if (base && this.token) {
+      try {
+        await fetch(base + '/api/auth/logout',
+          { method: 'POST', headers: this.headers() });
+      } catch (e) { /* leaving anyway */ }
+    }
+    this.token = null;
+    this.driver = null;
+    this.status = 'off';
+    this.keep();
+    Messages.reset();
+    this.reopenStream();
+  },
+
+  reopenStream() {
+    try {
+      if (typeof Realtime === 'undefined' || !Sync.url()) return;
+      Realtime.stop();
+      Realtime.start();
+    } catch (e) {
+      console.warn('[GMN] could not reopen the live channel:', e.message);
+    }
+  },
+};
+
+/* ---------------- the conversations ---------------- */
+const FLEET_ROOM = '#fleet';
+
+const Messages = {
+  threads: [],
+  open: null,          /* the id being read: a driver code, or FLEET_ROOM */
+  history: [],
+  members: 0,          /* how many are in the room, when the room is open */
+  loading: false,
+  sending: false,
+  error: null,
+
+  on() { return !!(Sync.url() && ServiceAuth.on()); },
+
+  /* Why the composer is disabled, in words a driver can act on. The
+     two reasons are different problems with different fixes, and
+     saying "unavailable" for both helps nobody. */
+  reason() {
+    if (!Sync.url()) return 'No company service is set. Settings has the address.';
+    if (!ServiceAuth.on()) return 'Sign in again — this device has no session with the service.';
+    return '';
+  },
+
+  reset() {
+    this.threads = [];
+    this.open = null;
+    this.history = [];
+    this.members = 0;
+    this.error = null;
+  },
+
+  unread() {
+    return this.threads.reduce((n, t) => n + (t.unread || 0), 0);
+  },
+
+  async pullThreads() {
+    if (!this.on()) return;
+    try {
+      const res = await fetch(Sync.url() + '/api/dm/threads',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      this.threads = body.threads || [];
+      this.error = null;
+      render();
+    } catch (e) { /* the fleet loop reports the link being down */ }
+  },
+
+  async openThread(withId) {
+    this.open = String(withId);
+    this.history = [];
+    this.loading = true;
+    this.error = null;
+    render();
+
+    if (!this.on()) { this.loading = false; render(); return; }
+
+    try {
+      const res = await fetch(
+        Sync.url() + '/api/dm/' + encodeURIComponent(this.open) + '?limit=100',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+
+      if (!res.ok) {
+        this.loading = false;
+        this.error = res.status === 404
+          ? 'That driver is not on the roster the service holds.'
+          : 'The service would not open that conversation.';
+        render();
+        return;
+      }
+
+      const body = await res.json();
+      this.history = body.messages || [];
+      this.members = body.members || 0;
+      this.loading = false;
+      render();
+      this.scrollDown();
+      this.markRead(this.open);
+    } catch (e) {
+      this.loading = false;
+      this.error = 'Could not reach the company service.';
+      render();
+    }
+  },
+
+  async markRead(withId) {
+    if (!this.on()) return;
+    try {
+      await fetch(Sync.url() + '/api/dm/read', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ with: withId }),
+      });
+      const t = this.threads.find((x) => String(x.withId) === String(withId));
+      if (t) t.unread = 0;
+    } catch (e) { /* it stays unread; nothing is lost */ }
+  },
+
+  async send(text) {
+    const body = String(text || '').trim();
+    if (!body || !this.open || this.sending) return;
+
+    if (!this.on()) {
+      toast(this.reason(), 'warn');
+      return;
+    }
+
+    this.sending = true;
+    render();
+
+    try {
+      const res = await fetch(Sync.url() + '/api/dm/send', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to: this.open, text: body }),
+      });
+
+      this.sending = false;
+
+      if (!res.ok) {
+        toast(res.status === 429
+          ? 'Sending too fast — try again in a moment'
+          : 'That message did not send', 'err');
+        render();
+        return;
+      }
+
+      /* The service echoes it back down the live channel to everyone
+         including us, so it is not appended here — doing both showed
+         every sent message twice. */
+      const input = $('#dmText');
+      if (input) { input.value = ''; input.focus(); }
+      render();
+    } catch (e) {
+      this.sending = false;
+      toast('Could not reach the company service', 'err');
+      render();
+    }
+  },
+
+  /* A message arriving on the live channel. */
+  arrive(d) {
+    if (!d || !d.message) return;
+    const m = d.message;
+    const mine = String(m.driverId) === String(Store.db.driver && Store.db.driver.hllId);
+
+    /* Is it for the conversation on screen? For the room, everything is;
+       for a person, either end of the pair counts. */
+    const inOpen = this.open && (
+      (this.open === FLEET_ROOM && d.room)
+      || (!d.room && (String(d.withId) === this.open
+        || String(m.driverId) === this.open
+        || (mine && String(d.to) === this.open))));
+
+    if (inOpen) {
+      if (!this.history.some((x) => x.id === m.id)) this.history.push(m);
+      render();
+      this.scrollDown();
+      if (!mine) this.markRead(this.open);
+    } else if (!mine) {
+      const who = d.room ? 'Crew chat' : (m.driver || 'A driver');
+      toast(who + ': ' + String(m.text || 'sent an attachment').slice(0, 60), 'info');
+    }
+
+    this.pullThreads();
+  },
+
+  scrollDown() {
+    setTimeout(() => {
+      const el = $('#dmThread');
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 30);
+  },
+};
+
+/* ---------------- calling ----------------
+
+   Public STUN only. A relay would need a server the company does not
+   have; without one a call connects on any normal network and fails on
+   a strict corporate one, which is the honest trade.
+
+   The protocol is the website's, unchanged, because the two have to be
+   able to ring each other: a driver on a phone calling a dispatcher on
+   the site is the ordinary case, not the exotic one. */
+const Calls = {
+  pc: null,
+  callId: null,
+  withId: null,
+  withName: '',
+  state: 'idle',       /* idle | ringing | incoming | connecting | live */
+  local: null,
+  remote: null,
+  incoming: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+
+  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+
+  can() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia
+      && typeof RTCPeerConnection !== 'undefined');
+  },
+
+  media() {
+    return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  },
+
+  async signalOut(kind, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on() || !this.withId) return null;
+    try {
+      return await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to: this.withId, kind, callId: this.callId, payload }),
+      });
+    } catch (e) { return null; }
+  },
+
+  peer() {
+    const pc = new RTCPeerConnection(this.config);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      this.remote = e.streams[0];
+      const el = $('#callRemote');
+      if (el) { el.srcObject = this.remote; el.play().catch(() => {}); }
+      if (this.state !== 'live') {
+        this.state = 'live';
+        this.startedAt = Date.now();
+        this.tick();
+      }
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (this.state !== 'idle') {
+          toast(pc.connectionState === 'failed'
+            ? 'The call failed — the two ends could not reach each other'
+            : 'The call ended', 'info');
+          this.teardown();
+        }
+      }
+    };
+
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    return pc;
+  },
+
+  async start(driverId, name) {
+    if (!this.can()) {
+      toast('This device cannot make calls', 'warn');
+      return;
+    }
+    if (this.state !== 'idle') { toast('You are already on a call', 'warn'); return; }
+    if (RoomCall.live) { toast('Leave the crew call first', 'warn'); return; }
+    if (!Messages.on()) { toast(Messages.reason(), 'warn'); return; }
+
+    this.withId = String(driverId);
+    this.withName = name || driverId;
+    this.callId = 'CALL-' + Math.random().toString(16).slice(2, 10);
+    this.state = 'ringing';
+    paintCall();
+
+    try {
+      this.local = await this.media();
+    } catch (e) {
+      toast('No microphone — permission is needed before calling', 'err');
+      this.teardown();
+      return;
+    }
+
+    const res = await this.signalOut('ring');
+
+    if (res && res.status === 409) {
+      toast(this.withName + ' is not connected', 'warn');
+      this.teardown();
+      return;
+    }
+    if (!res || !res.ok) {
+      toast('Could not place the call', 'err');
+      this.teardown();
+      return;
+    }
+    paintCall();
+  },
+
+  /* The callee makes no offer: it says yes, and the caller starts the
+     negotiation, so only one side is ever the offerer. */
+  async accept() {
+    const inc = this.incoming;
+    if (!inc) return;
+
+    this.incoming = null;
+    this.withId = String(inc.from);
+    this.withName = inc.fromName || inc.from;
+    this.callId = inc.callId;
+    this.state = 'connecting';
+    paintCall();
+
+    try {
+      this.local = await this.media();
+    } catch (e) {
+      toast('No microphone — the call could not be answered', 'err');
+      this.signalOut('decline');
+      this.teardown();
+      return;
+    }
+
+    this.pc = this.peer();
+    await this.signalOut('accept');
+  },
+
+  decline() {
+    if (!this.incoming) return;
+    /* Tell them first: teardown() clears the address the signal needs. */
+    this.withId = String(this.incoming.from);
+    this.callId = this.incoming.callId;
+    this.signalOut('decline');
+    this.teardown();
+  },
+
+  hangUp() {
+    if (this.state !== 'idle') this.signalOut('hangup');
+    this.teardown();
+  },
+
+  toggleMute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (this.state !== 'live') return;
+      const el = $('#callTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  teardown() {
+    try { if (this.pc) this.pc.close(); } catch (e) { /* already gone */ }
+    if (this.local) this.local.getTracks().forEach((t) => t.stop());
+    clearInterval(this.timer);
+    this.pc = null;
+    this.local = null;
+    this.remote = null;
+    this.timer = null;
+    this.callId = null;
+    this.withId = null;
+    this.withName = '';
+    this.incoming = null;
+    this.muted = false;
+    this.startedAt = 0;
+    this.state = 'idle';
+    paintCall();
+  },
+
+  async signal(d) {
+    if (!d) return;
+
+    /* Room traffic belongs to the group call, which keeps its own peers.
+       Routed here rather than in the event listener so there is one door
+       into call signalling and not two. */
+    if (d.room === FLEET_ROOM || String(d.kind).indexOf('room.') === 0
+        || (RoomCall.live && RoomCall.peers[String(d.from)])) {
+      return RoomCall.signal(d);
+    }
+
+    if (d.kind === 'ring') {
+      /* Already busy: say so, rather than ringing unanswered behind
+         whatever is already on screen. */
+      if (this.state !== 'idle' || this.incoming) {
+        const was = { withId: this.withId, callId: this.callId };
+        this.withId = String(d.from);
+        this.callId = d.callId;
+        await this.signalOut('busy');
+        this.withId = was.withId;
+        this.callId = was.callId;
+        return;
+      }
+      this.incoming = d;
+      this.state = 'incoming';
+      paintCall();
+      return;
+    }
+
+    /* Anything else about a call this device is not on is not ours. */
+    if (!this.callId || d.callId !== this.callId) return;
+
+    if (d.kind === 'accept') {
+      this.state = 'connecting';
+      this.pc = this.peer();
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+      await this.signalOut('offer', { sdp: this.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'offer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await this.pc.createAnswer();
+      await this.pc.setLocalDescription(answer);
+      await this.signalOut('answer', { sdp: this.pc.localDescription });
+      return;
+    }
+
+    if (d.kind === 'answer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice' && this.pc && d.payload && d.payload.candidate) {
+      try { await this.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+      catch (e) { /* a candidate that arrives too early is not fatal */ }
+      return;
+    }
+
+    if (d.kind === 'decline') { toast(this.withName + ' declined', 'info'); this.teardown(); return; }
+    if (d.kind === 'busy') { toast(this.withName + ' is on another call', 'info'); this.teardown(); return; }
+    if (d.kind === 'hangup') { toast('The call ended', 'info'); this.teardown(); }
+  },
+};
+
+/* ---------------- the crew call ----------------
+
+   A mesh: everyone holds one peer connection to everyone else. No
+   server mixes the audio, which is why there is nothing to run and
+   nothing to pay for — and also why it is not the shape for fifty
+   people. The list is capped so it degrades by refusing rather than by
+   melting somebody's phone.
+
+   Who offers to whom is settled once, on joining: the service hands a
+   joiner the list of people already in, and the joiner offers to each.
+   Everyone already in waits to be offered to. Exactly one side of every
+   pair starts, and there is no glare to resolve. */
+const RoomCall = {
+  live: false,
+  joining: false,
+  peers: {},           /* driverId -> { pc, name, stream } */
+  local: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+  known: [],           /* who is in it, whether or not this device has joined */
+
+  MAX: 8,
+
+  config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+
+  count() { return Object.keys(this.peers).length + (this.live ? 1 : 0); },
+
+  async signalOut(kind, to, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return null;
+    try {
+      return await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to, kind, room: FLEET_ROOM, payload }),
+      });
+    } catch (e) { return null; }
+  },
+
+  /* Who is in it, for the button label, without joining to find out. */
+  async poll() {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+    try {
+      const res = await fetch(base + '/api/call/room',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      this.known = body.peers || [];
+      render();
+    } catch (e) { /* the button just shows no count */ }
+  },
+
+  peerFor(id, name) {
+    if (this.peers[id]) return this.peers[id];
+
+    const pc = new RTCPeerConnection(this.config);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', id, { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      const entry = this.peers[id];
+      if (!entry) return;
+      entry.stream = e.streams[0];
+      this.attach();
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) this.drop(id);
+    };
+
+    if (this.local) this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+
+    this.peers[id] = { pc, name: name || id, stream: null };
+    return this.peers[id];
+  },
+
+  drop(id) {
+    const entry = this.peers[id];
+    if (!entry) return;
+    try { entry.pc.close(); } catch (e) { /* already gone */ }
+    delete this.peers[id];
+    paintCall();
+  },
+
+  async join() {
+    if (this.live || this.joining) return;
+
+    if (!Calls.can()) { toast('This device cannot make calls', 'warn'); return; }
+    if (Calls.state !== 'idle') { toast('End your call before joining the crew call', 'warn'); return; }
+    if (!Messages.on()) { toast(Messages.reason(), 'warn'); return; }
+
+    this.joining = true;
+    render();
+
+    try {
+      this.local = await Calls.media();
+    } catch (e) {
+      this.joining = false;
+      toast('No microphone — permission is needed before joining', 'err');
+      render();
+      return;
+    }
+
+    const res = await this.signalOut('join', FLEET_ROOM);
+    this.joining = false;
+
+    if (!res || !res.ok) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+      toast('Could not join the crew call', 'err');
+      render();
+      return;
+    }
+
+    const body = await res.json().catch(() => ({}));
+    const already = (body.peers || []).slice(0, this.MAX - 1);
+
+    if ((body.peers || []).length > this.MAX - 1) {
+      toast('The crew call is full — you are hearing the first ' + already.length, 'warn');
+    }
+
+    this.live = true;
+    this.startedAt = Date.now();
+    this.tick();
+
+    /* One offer per pair, from the joiner. */
+    for (const p of already) {
+      const entry = this.peerFor(String(p.driverId), p.name);
+      const offer = await entry.pc.createOffer();
+      await entry.pc.setLocalDescription(offer);
+      await this.signalOut('offer', String(p.driverId), { sdp: entry.pc.localDescription });
+    }
+
+    paintCall();
+    render();
+  },
+
+  async leave(quiet) {
+    if (!this.live && !this.joining) return;
+
+    Object.keys(this.peers).forEach((id) => this.drop(id));
+    this.peers = {};
+
+    if (this.local) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+    }
+
+    clearInterval(this.timer);
+    this.timer = null;
+    this.live = false;
+    this.joining = false;
+    this.muted = false;
+    this.startedAt = 0;
+
+    await this.signalOut('leave', FLEET_ROOM);
+
+    if (!quiet) toast('You left the crew call', 'info');
+    paintCall();
+    render();
+  },
+
+  mute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (!this.live) return;
+      const el = $('#callTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  /* One <audio> per peer, kept in a host element the re-render does not
+     replace — a stream attached to an element that is then thrown away
+     goes silent while the call is still up. */
+  attach() {
+    const host = $('#roomAudio');
+    if (!host) return;
+
+    Object.keys(this.peers).forEach((id) => {
+      const entry = this.peers[id];
+      if (!entry.stream) return;
+
+      let el = host.querySelector('[data-peer="' + id.replace(/"/g, '') + '"]');
+      if (!el) {
+        el = document.createElement('audio');
+        el.dataset.peer = id;
+        el.autoplay = true;
+        host.appendChild(el);
+      }
+      if (el.srcObject !== entry.stream) {
+        el.srcObject = entry.stream;
+        el.play().catch(() => {});
+      }
+    });
+
+    host.querySelectorAll('audio').forEach((el) => {
+      if (!this.peers[el.dataset.peer]) el.remove();
+    });
+  },
+
+  async signal(d) {
+    const from = String(d.from || '');
+
+    if (d.kind === 'room.joined') {
+      this.known = this.known.filter((p) => String(p.driverId) !== from)
+        .concat([{ driverId: from, name: d.fromName }]);
+      if (this.live) toast(d.fromName + ' joined the crew call', 'info');
+      render();
+      return;
+    }
+
+    if (d.kind === 'room.left') {
+      this.known = this.known.filter((p) => String(p.driverId) !== from);
+      if (this.live && this.peers[from]) {
+        toast(d.fromName + ' left the crew call', 'info');
+        this.drop(from);
+      }
+      render();
+      return;
+    }
+
+    if (!this.live) return;
+
+    if (d.kind === 'offer') {
+      const entry = this.peerFor(from, d.fromName);
+      await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await entry.pc.createAnswer();
+      await entry.pc.setLocalDescription(answer);
+      await this.signalOut('answer', from, { sdp: entry.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'answer') {
+      const entry = this.peers[from];
+      if (entry) await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice') {
+      const entry = this.peers[from];
+      if (entry && d.payload && d.payload.candidate) {
+        try { await entry.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+        catch (e) { /* a candidate that arrives too early is not fatal */ }
+      }
+      return;
+    }
+
+    if (d.kind === 'hangup') this.drop(from);
+  },
+};
+
+/* ---------------- the call overlay ----------------
+
+   Drawn outside render(), into its own host, because a re-render
+   replaces the DOM and a <video>/<audio> whose element is replaced
+   stops playing mid-call. */
+function paintCall() {
+  const host = $('#callHost');
+  if (!host) return;
+
+  const c = Calls;
+  const r = RoomCall;
+
+  if (c.state === 'idle' && !r.live && !r.joining) {
+    /* Keep the audio host itself: dropping it would detach live streams. */
+    host.innerHTML = '<div id="roomAudio" hidden></div>';
+    return;
+  }
+
+  if (r.live || r.joining) {
+    const names = Object.keys(r.peers).map((id) => esc(r.peers[id].name));
+    host.innerHTML = `
+      <div class="call-bar">
+        <div class="call-who">
+          ${icon('users')}
+          <div>
+            <div class="call-name">Crew call</div>
+            <div class="call-sub">${r.joining ? 'Joining…'
+              : (r.count() + ' on the call' + (names.length ? ' · ' + names.join(', ') : ' · waiting for others'))}</div>
+          </div>
+        </div>
+        <div class="call-timer mono" id="callTimer">${esc(r.elapsed())}</div>
+        <div class="call-acts">
+          <button class="btn btn-sm ${r.muted ? 'btn-mute' : ''}" data-act="room-mute">
+            ${icon(r.muted ? 'micOff' : 'mic')}${r.muted ? 'Unmute' : 'Mute'}</button>
+          <button class="btn btn-sm btn-danger" data-act="room-leave">${icon('phoneOff')}Leave</button>
+        </div>
+      </div>
+      <div id="roomAudio" hidden></div>`;
+    r.attach();
+    return;
+  }
+
+  if (c.state === 'incoming' && c.incoming) {
+    host.innerHTML = `
+      <div class="call-bar ringing">
+        <div class="call-who">
+          ${icon('phone')}
+          <div>
+            <div class="call-name">${esc(c.incoming.fromName || c.incoming.from)}</div>
+            <div class="call-sub">Incoming call</div>
+          </div>
+        </div>
+        <div class="call-acts">
+          <button class="btn btn-sm btn-ok" data-act="call-accept">${icon('phone')}Answer</button>
+          <button class="btn btn-sm btn-danger" data-act="call-decline">${icon('phoneOff')}Decline</button>
+        </div>
+      </div>
+      <div id="roomAudio" hidden></div>`;
+    return;
+  }
+
+  const label = { ringing: 'Ringing…', connecting: 'Connecting…', live: '' }[c.state] || '';
+  host.innerHTML = `
+    <div class="call-bar${c.state === 'live' ? '' : ' ringing'}">
+      <div class="call-who">
+        ${icon('phone')}
+        <div>
+          <div class="call-name">${esc(c.withName)}</div>
+          <div class="call-sub">${esc(label || 'On a call')}</div>
+        </div>
+      </div>
+      <div class="call-timer mono" id="callTimer">${esc(c.elapsed())}</div>
+      <div class="call-acts">
+        ${c.state === 'live' ? `<button class="btn btn-sm ${c.muted ? 'btn-mute' : ''}" data-act="call-mute">
+          ${icon(c.muted ? 'micOff' : 'mic')}${c.muted ? 'Unmute' : 'Mute'}</button>` : ''}
+        <button class="btn btn-sm btn-danger" data-act="call-hangup">${icon('phoneOff')}
+          ${c.state === 'live' ? 'End' : 'Cancel'}</button>
+      </div>
+    </div>
+    <audio id="callRemote" autoplay></audio>
+    <div id="roomAudio" hidden></div>`;
+}
+
+
 const VIEWS = {
   dashboard: viewDashboard,
   livemap: viewLiveMap,
@@ -4831,6 +5936,11 @@ function render() {
   bindViewForms();
   const th = $('#thread');
   if (th) th.scrollTop = th.scrollHeight;
+
+  /* The call bar lives outside #app, so a re-render does not draw it —
+     but a re-render can change what it should say (who is in the crew
+     call, whether the mute is on), so it is repainted alongside. */
+  paintCall();
 }
 
 function bindViewForms() {
@@ -4853,6 +5963,19 @@ function bindViewForms() {
   } else {
     TileMap.destroy();
   }
+
+  const df = $('#dmForm');
+  if (df) df.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#dmText');
+    if (input) Messages.send(input.value);
+  });
+
+  /* The thread opens at the bottom, where the newest message is. Doing
+     it here rather than in render() means it also happens after a
+     re-render caused by somebody else typing. */
+  const dt = $('#dmThread');
+  if (dt) dt.scrollTop = dt.scrollHeight;
 
   const cf = $('#chatForm');
   if (cf) cf.addEventListener('submit', (e) => {
@@ -5066,7 +6189,31 @@ function handle(act, t) {
       Store.save(); toast('All messages marked read', 'ok'); render();
       return;
 
-    case 'sel-chat': state.chatSel = +t.dataset.i; render(); return;
+    case 'sel-chat':
+      state.chatSel = +t.dataset.i;
+      /* leaving the crew room for a convoy channel */
+      if (Messages.open === FLEET_ROOM) Messages.open = null;
+      render();
+      return;
+
+    case 'open-dm': {
+      const id = t.dataset.id;
+      if (id === MGMT_THREAD) { Messages.open = MGMT_THREAD; render(); return; }
+      Messages.openThread(id);
+      return;
+    }
+
+    case 'open-room': Messages.openThread(FLEET_ROOM); return;
+
+    case 'call-driver': Calls.start(t.dataset.id, t.dataset.name); return;
+    case 'call-accept': Calls.accept(); return;
+    case 'call-decline': Calls.decline(); return;
+    case 'call-hangup': Calls.hangUp(); return;
+    case 'call-mute': Calls.toggleMute(); return;
+
+    case 'room-join': RoomCall.join(); return;
+    case 'room-leave': RoomCall.leave(); return;
+    case 'room-mute': RoomCall.mute(); return;
 
     case 'submit-one': submitDelivery(t.dataset.id); return;
     case 'discard-one': discardDelivery(t.dataset.id); return;
@@ -5619,6 +6766,10 @@ const Auth = {
 
   signOut() {
     try { localStorage.removeItem(LS_TRK_SESSION); } catch (e) {}
+    /* Hang up before the identity that placed the call goes away, or the
+       other end is left holding a connection nobody will ever answer for. */
+    try { Calls.teardown(); RoomCall.leave(true); } catch (e) { /* nothing open */ }
+    ServiceAuth.logout();
     Store.db.driver = null;
     Store.db.conn.hll = 'offline';
     Telemetry.stop();
@@ -5821,6 +6972,24 @@ function bindSignIn() {
     }
     Auth.signIn(res.account, res.driver, $('#si-remember').checked);
     toast('Signed in as ' + Store.db.driver.name, 'ok');
+
+    /* Two sign-ins, one password. The one above unlocks this client; this
+       one gets an identity the company service will answer to, which is
+       what messages and calls need — without it every /api/dm and
+       /api/call request is a 401 and the driver is signed in to an app
+       that cannot reach anybody.
+
+       Not awaited: the service may be down, and a client that will not
+       finish signing in because messaging is unavailable is a worse
+       client than one whose Messages tab says so. */
+    ServiceAuth.login(handle, pw).then((ok) => {
+      if (!ok && Sync.url()) {
+        Store.log('warn', 'Signed in here, but the company service did not accept it — '
+          + 'messages and calls will be unavailable');
+      }
+      render();
+    });
+
     startServices();
     render();
   });
@@ -5883,6 +7052,14 @@ function boot() {
 /* nothing polls, tracks or reports until a driver is behind the client */
 function startServices() {
   const job = Store.db.job;
+
+  /* A token kept from last time, so a remembered session can reach the
+     service without being asked for a password again. */
+  ServiceAuth.load();
+  Messages.pullThreads();
+  RoomCall.poll();
+  clearInterval(startServices.roomTimer);
+  startServices.roomTimer = setInterval(() => RoomCall.poll(), 20000);
 
   /* the client works out for itself when the game opens and closes */
   GameWatch.start();

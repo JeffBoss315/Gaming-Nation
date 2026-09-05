@@ -1619,3 +1619,97 @@ body.can-install .install-cta{display:inline-flex}
   .btn:active,.btn-primary:active,.btn-ghost:active,
   .btn-ok:active,.btn-danger:active{transform:none!important}
 }
+
+
+/* ============================================================
+   CALLS AND MESSAGES
+
+   The call bar sits above everything because a ringing phone that
+   is behind the screen you are on is a missed call. It lives
+   outside #app (see tracker.html) so a re-render cannot take the
+   audio element with it.
+   ============================================================ */
+
+.call-bar{
+    position:fixed;
+    left:50%;transform:translateX(-50%);
+    bottom:16px;
+    z-index:180;
+    width:min(520px,calc(100% - 24px));
+    display:flex;align-items:center;gap:14px;
+    padding:11px 14px;
+    border-radius:var(--r-lg);
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    box-shadow:var(--sh-3),var(--edge);
+}
+
+/* Ringing has to be findable out of the corner of an eye, so it
+   carries the accent rather than the panel colour. */
+.call-bar.ringing{
+    border-color:var(--accent-line);
+    background:var(--accent-soft);
+}
+
+.call-bar .call-who{display:flex;align-items:center;gap:11px;min-width:0;flex:1 1 auto}
+.call-bar .call-who svg{width:19px;height:19px;flex:none;color:var(--accent)}
+
+.call-name{font-size:13.5px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.call-sub{font-size:11.5px;color:var(--text-3);line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.call-timer{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-2);flex:none}
+
+.call-acts{display:flex;gap:7px;flex:none}
+
+/* Muted is a state you need to see at a glance, and there was no
+   button variant for "on, and you should know about it". */
+.btn-mute{
+    color:var(--warn);
+    border-color:rgba(240,180,60,.34);
+    background:rgba(240,180,60,.10);
+}
+
+/* ---- a conversation ---- */
+
+.dm-blocked{
+    display:flex;align-items:flex-start;gap:9px;
+    padding:11px 13px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;line-height:1.5;
+    color:var(--text-3);
+}
+.dm-blocked svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--warn)}
+
+/* Announcements are a list of subjects rather than a thread, so they
+   get chips under the one being read instead of bubbles. */
+.dm-notices{display:flex;flex-wrap:wrap;gap:7px}
+.dm-notice{
+    padding:5px 10px;
+    border-radius:99px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    font-size:11.5px;color:var(--text-2);
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.dm-notice.on{border-color:var(--accent-line);color:var(--accent);background:var(--accent-soft)}
+
+/* The crew room and the convoy channels are two kinds of thing in one
+   list, and without a divider the room reads as just another channel. */
+.split-label{
+    padding:12px 12px 5px;
+    font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-3);
+}
+
+/* Clear of the phone tab bar, which is 52px of button plus whatever the
+   device reserves at the bottom. Sitting on top of Menu and Convoy would
+   make the call bar the thing you hit trying to leave the screen. */
+@media (max-width:720px){
+    .call-bar{bottom:calc(52px + env(safe-area-inset-bottom) + 12px)}
+}
+
+@media (max-width:640px){
+    .call-bar{gap:10px;padding:10px 12px}
+    .call-timer{display:none}
+}

@@ -1079,6 +1079,23 @@ async function callSignal(req, res) {
     from: me.id,
     fromName: me.name,
     video: !!(b && b.video),
+
+    /* Which conversation this belongs to, carried through.
+
+       A mesh is one-to-one traffic — an offer, an answer, some
+       candidates, per pair — so every signal in the group call comes
+       down this path with a real driver id on it. Dropping `room` here
+       made those indistinguishable from an ordinary call, and the
+       receiving end has nothing else to tell them apart by: it discarded
+       them for not matching a callId it had never issued.
+
+       The effect was a group call that looked like it worked. Whoever
+       joined last built a peer connection for everyone already in and
+       showed them in the list; nobody already in ever answered, so no
+       audio flowed in either direction. Both clients read the field —
+       neither could, until it was sent. */
+    room: (b && b.room) ? String(b.room) : null,
+
     payload: (b && b.payload) || null,
     at: new Date().toISOString(),
   });
