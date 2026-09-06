@@ -6048,10 +6048,7 @@ function adminPanel(tab) {
           <div class="stat-val" style="font-size:23px">${apps.filter((a) => a.status === s).length}</div>
           <div class="stat-lbl">${esc(statusLabel(s))}</div></div>`).join('')}
       </div>
-      ${apps.length ? '' : `<div class="empty">${icon('userPlus')}
-        <div><div class="b7">No applications yet</div>
-          <div class="sm t2 mt-6">Anyone who creates an account on the drivers' website files one
-            at the same time, and it appears here straight away.</div></div></div>`}
+      ${apps.length ? '' : applicationsEmptyState()}
       ${apps.length ? `<div class="table-wrap"><table class="tbl">
         <thead><tr><th>Applicant</th><th>Country</th><th>Experience</th><th class="right">Hours</th>
           <th>Submitted</th><th>Status</th><th class="right">Actions</th></tr></thead>
@@ -8781,6 +8778,47 @@ await Applications.pull();
    That is the whole job here: carry the columns that exist both
    ways, and leave the rest alone rather than dropping it.
    ============================================================ */
+/* An empty recruitment screen has three completely different causes and
+   used to have one sentence: "Anyone who creates an account on the drivers'
+   website files one at the same time, and it appears here straight away."
+
+   Which is a promise, not a report — and it was confidently wrong in the
+   two cases that actually needed attention. A row level security select
+   that matches nothing is a SUCCESSFUL query returning zero rows, so a
+   recruiter refused by policy saw the same screen, and the same reassuring
+   sentence, as a recruiter with genuinely no applicants. There was nothing
+   on the screen, or in the console, to tell them apart. That is the whole
+   reason this was reported as "applications never reach the admin" instead
+   of as an error: nothing ever presented itself as an error.
+
+   So say which of the three it is. */
+function applicationsEmptyState() {
+  const when = Applications.lastAt ? fmt.rel(new Date(Applications.lastAt).toISOString()) : null;
+
+  if (Applications.status === 'error') {
+    return `<div class="empty">${icon('alert')}
+      <div><div class="b7">The application list could not be read</div>
+        <div class="sm t2 mt-6">This is not an empty inbox — the query itself failed, so there may well be
+          applications waiting that this screen cannot show.
+          ${Applications.lastError ? `<br><span class="mono xs t3">${esc(String(Applications.lastError))}</span>` : ''}
+          <br>If it mentions row level security or permission, the account you are signed in as is not
+          recognised as staff by the database. <span class="mono xs">supabase/setup.sql</span> holds the
+          <span class="mono xs">is_staff()</span> list that decides that; re-run it.</div></div></div>`;
+  }
+
+  if (Applications.status === 'off') {
+    return `<div class="empty">${icon('info')}
+      <div><div class="b7">Showing this browser only</div>
+        <div class="sm t2 mt-6">Supabase is not connected, so this is whatever was filed on this machine —
+          not the company's applications. Anything sent from another device is not counted here.</div></div></div>`;
+  }
+
+  return `<div class="empty">${icon('userPlus')}
+    <div><div class="b7">No applications yet</div>
+      <div class="sm t2 mt-6">Checked against Supabase${when ? ' ' + esc(when) : ''} and the table really is empty.
+        Anyone who creates an account on the drivers' website files one at the same time.</div></div></div>`;
+}
+
 const Applications = {
   status: 'off',        /* off | ok | error */
   lastError: null,

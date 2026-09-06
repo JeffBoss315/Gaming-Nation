@@ -142,6 +142,38 @@ on conflict (id) do nothing;
 -- A helper first, so every staff policy says the same thing in
 -- one place. SECURITY DEFINER matters: a policy on drivers that
 -- selects from drivers would otherwise recurse.
+--
+-- THIS LIST MUST MATCH script.js. It is not a matter of taste.
+--
+-- The app decides who works the recruitment screen with
+--
+--   PERMS['recruitment.manage'] = 4
+--
+-- and ROLES puts these at 4 or above: recruiter 4, dispatcher 4,
+-- event_manager 5, moderator 6, management 8, admin 9,
+-- super_admin 10.
+--
+-- This function used to list only recruiter, management, admin
+-- and super_admin. A dispatcher, an event manager or a moderator
+-- was therefore shown the recruitment screen, shown the Approve
+-- and Reject buttons, and handed NO ROWS by row level security,
+-- because "Staff can read every application" is built on this
+-- function.
+--
+-- Nothing errored. An RLS select that matches nothing is a
+-- SUCCESSFUL query returning zero rows, and zero rows is exactly
+-- what "nobody has applied yet" looks like. That is how it was
+-- reported: applications from new drivers never reached the
+-- people meant to approve them.
+--
+-- If you would rather these three did NOT see applications, do
+-- not narrow this quietly — raise 'recruitment.manage' in
+-- script.js above their level so the screen stops being offered.
+-- The two disagreeing is what produced a blank screen with no
+-- explanation, and it will do it again.
+--
+-- Not listed, deliberately: 'driver'. A driver reads their own
+-- application through its own policy, not through this.
 -- ============================================================
 
 create or replace function public.is_staff()
@@ -153,7 +185,15 @@ as $$
   select exists (
     select 1 from public.drivers
     where auth_user_id = auth.uid()
-      and role in ('recruiter', 'management', 'admin', 'super_admin')
+      and role in (
+        'recruiter',
+        'dispatcher',
+        'event_manager',
+        'moderator',
+        'management',
+        'admin',
+        'super_admin'
+      )
   );
 $$;
 
