@@ -5549,6 +5549,27 @@ function viewCommunity() {
 }
 
 /* ---------------- 26. Support (spec §14) ---------------- */
+
+/* Who may see a support request at all.
+
+   A ticket is a private conversation between one driver and management —
+   an account problem, a complaint, sometimes another driver's name in it.
+
+   viewSupport() has always filtered the list correctly, and that was
+   mistaken for the whole job. It is not: the list is an index, not the
+   only door. #/ticket/TKT-1234 is a URL. It is typed, guessed off the
+   sequence, pasted into Discord and followed by whoever reads it — and
+   viewTicket() checked only that the ticket EXISTED before rendering the
+   subject, the full message history, the driver who raised it, and a
+   working reply box. Filtering an index is not protecting the thing it
+   indexes.
+
+   Staff see every ticket; that is the job. Everybody else sees their own
+   and nothing else. */
+function ticketVisible(t) {
+  return !!t && (can('admin.view') || t.driverId === state.user.id);
+}
+
 function viewSupport() {
   const staff = can('admin.view');
   const f = state.ui.supportFilter;
@@ -5598,7 +5619,12 @@ function viewSupport() {
 
 function viewTicket(id) {
   const t = Store.ticket(id);
-  if (!t) return notFound('Ticket not found', 'That support reference does not exist.', '#/support');
+  /* Deliberately the SAME answer for "no such ticket" and "not yours".
+     Two different answers would turn this page into a way of asking which
+     references exist, and the references run in sequence. */
+  if (!ticketVisible(t)) {
+    return notFound('Ticket not found', 'That support reference does not exist.', '#/support');
+  }
   const d = Store.driver(t.driverId);
   const staff = can('admin.view');
 
@@ -7578,6 +7604,10 @@ function handleAction(act, t, ev) {
     case 'ticket-new': openTicketModal(); return;
     case 'ticket-save': saveTicket(); return;
     case 'ticket-resolve': case 'ticket-progress': {
+      /* These two buttons are only DRAWN for staff. Drawing is not
+         deciding: the action is dispatched by name and anything that can
+         name it can fire it, so the rule lives here as well. */
+      if (!can('admin.view')) { toast('Only GMN management can change a ticket', 'danger'); return; }
       const tk = Store.ticket(id); if (!tk) return;
       tk.status = act === 'ticket-resolve' ? 'resolved' : 'in_progress';
       tk.updated = new Date().toISOString();
@@ -12433,7 +12463,12 @@ render();
 
             const t = Store.ticket(state.route.params[0]);
 
-            if (!t) return;
+            /* The same check the page did before rendering this form. The
+               form is only half of it: a reply is a write, and a write has
+               to be checked where it happens, not where it was offered. */
+            if (!ticketVisible(t)) {
+                return toast('That support request is not yours', 'danger');
+            }
 
             const fromStaff = can('admin.view');
 
