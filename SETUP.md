@@ -378,17 +378,22 @@ later, all four support custom domains free — you pay only the registrar.
 
 ### What is live now
 
-Two Cloudflare Pages projects, both connected to this repository, so both
-rebuild on every push to `main`:
+One Cloudflare Pages project, connected to this repository, so it rebuilds
+on every push to `main`:
 
 ```
-https://gaming-nation.pages.dev    the one to hand to drivers
-https://heavyline.pages.dev        the original address, still working
+https://gaming-nation.pages.dev    the address to hand to drivers
 ```
 
-`siteUrl` names the first, so the canonical link, the sitemap and the social
-cards all point there — which is how the two hosts stay out of each other's
-way in search results instead of competing as duplicates.
+`siteUrl` names it, so the canonical link, the sitemap and the social cards
+all agree with where the site actually is.
+
+There were two of these for a while. `heavyline.pages.dev` was the original
+address and went on answering right through the rename, off the same
+repository and the same commits. It is deleted now: nothing pointed at it
+any more, and two projects building one repository is two chances for a
+search engine to decide the site is a duplicate of itself. A released
+`pages.dev` name goes to whoever asks for it next, so it is not coming back.
 
 `gamingnation.pages.dev`, without the hyphen, belongs to somebody else's
 Cloudflare account. A `pages.dev` name is first-come and cannot be bought,

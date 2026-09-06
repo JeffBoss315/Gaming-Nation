@@ -1522,20 +1522,20 @@ const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
    from site.config.json. Falling back to the origin keeps development
    working, where localhost really is the right answer.
 
-   One more wrinkle, since the site gained a second address.
+   The origin is tried FIRST, though, whenever it is a real public site:
+   https, and not a loopback address.
 
-   The platform now answers on both gaming-nation.pages.dev and the older
-   heavyline.pages.dev. A build-time constant can only name one of them, so
-   a driver who asked for a reset on the host that is NOT the constant gets
-   emailed a link to the other one. It works — they end up signed in — but
-   they land somewhere they never chose, which reads like a redirect to a
-   different company.
+   That ordering was written when the platform answered on two addresses at
+   once — gaming-nation.pages.dev and the older heavyline.pages.dev — and a
+   build-time constant could only name one of them, so a reset asked for on
+   the other host emailed a link that worked but landed the driver somewhere
+   they never chose. Only gaming-nation is left now, and the ordering stays
+   anyway: it is what makes a custom domain correct on the day it is added,
+   with no code change and nothing to remember.
 
-   The origin is exactly right when it is a real public site: https, and not
-   a loopback address. That covers both hosts, and any custom domain added
-   later, with no code change. Everything else — the desktop client, a dev
-   server on localhost — falls through to the constant, which is what the
-   paragraph above is about and is still the right answer there. */
+   Everything without an origin worth trusting — the desktop client, a dev
+   server on localhost — still falls through to the constant, which is what
+   the paragraph above is about and is still the right answer there. */
 function publicSiteUrl() {
   const trim = (u) => String(u || '').replace(/\/$/, '');
 
