@@ -24,11 +24,38 @@ script does the whole job:
 It is idempotent — safe on a fresh project, safe to re-run over an existing
 one, and it drops nothing. It creates the three tables, the keys and indexes,
 the `company` row the app reads on boot, the trigger that moves
-`company.version`, and every row-level-security policy.
+`company.version`, every row-level-security policy, and the `on_auth_user_created`
+trigger that makes a new driver's record and files their application.
 
 **The app does not work without this.** Supabase turns RLS on by default, and
 a table with RLS on and no policy behind it answers every read with nothing
 and refuses every write. That looks exactly like an empty database.
+
+**And that is the trap.** Every failure in this area is silent and reads as
+"nobody has signed up yet":
+
+- A select refused by RLS is a *successful* query returning zero rows.
+- Without `on_auth_user_created`, a new driver's row and application cannot
+  be written at all — email confirmation is on by default, so `signUp()`
+  returns no session, `auth.uid()` is null, and the policies correctly refuse
+  the one person entitled to write them. The browser cannot do it. Nothing it
+  sends can.
+
+Neither reports an error anywhere. If the recruitment screen is empty, run
+this script again before assuming it is true.
+
+### The `supabase/migrations/` directory
+
+`setup.sql` is the whole database and is the only thing a fresh project needs.
+
+The files in [`supabase/migrations/`](supabase/migrations/) are the same fixes
+delivered one at a time, for a project that is already running and should not
+be re-set-up wholesale. They are dated, idempotent, and each one opens with
+the symptom it cures. Running them on a project that already has `setup.sql`
+at this version changes nothing.
+
+This directory used to go unmentioned here, which is how a project set up from
+this page could be missing the trigger above and have no way of finding out.
 
 ### Check it took
 
@@ -213,7 +240,8 @@ written but there is no `SELECT` policy letting the new user read it. Step 2.
 | `supabase-client.js` | the shared Supabase browser client |
 | `map-data.js` | cities, routes and map projection |
 | `serve.js` | the static dev server |
-| `supabase/setup.sql` | the complete database setup |
+| `supabase/setup.sql` | the complete database setup — tables, policies, signup trigger |
+| `supabase/migrations/` | the same fixes one at a time, for a project already running |
 | `tools/scan.js` | static audit |
 | `tools/smoke-*.js` | runtime harnesses |
 

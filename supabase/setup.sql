@@ -309,7 +309,108 @@ update public.drivers set status = 'active' where status is null;
 
 
 -- ============================================================
--- 8. Check it worked
+-- 8. The driver row and the application, made by the database
+--
+-- Without this section, a fresh install cannot register anybody
+-- and the reason is invisible.
+--
+-- Both tables are protected by policies keyed on auth.uid():
+--
+--   drivers        with check (auth.uid() = auth_user_id)
+--   applications   with check (driver_id in (select driver_code
+--                              from drivers where auth_user_id = auth.uid()))
+--
+-- Correct policies. But when email confirmation is on — and it
+-- is on by default — signUp() returns a user and NO session.
+-- There is no auth.uid() yet, null = anything is never true, and
+-- both inserts are refused for the one person entitled to make
+-- them. The browser cannot do this. Nothing it sends can.
+--
+-- So the database does it, at the moment the Auth user appears,
+-- as its owner, before any session exists. Turning the policies
+-- off instead would let anybody write a driver record for
+-- anybody else, which is what they are there to stop.
+--
+-- The application is filed HERE rather than at first sign-in on
+-- purpose. Filing it later works, but it means a real applicant
+-- is invisible to the recruiter until they confirm their email —
+-- and permanently invisible if that email never arrives.
+-- Confirmation should gate being APPROVED, not being SEEN.
+--
+-- This lived only in supabase/migrations/ and SETUP.md never
+-- mentioned that directory, so every fresh install was missing
+-- it. That is why it is in the main script now.
+-- ============================================================
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer                 -- runs as the owner, so RLS does not apply
+set search_path = public
+as $handle_new_user$
+declare
+  meta        jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  want_code   text  := nullif(meta->>'driver_code', '');
+  final_code  text;
+  new_role    text  := coalesce(nullif(meta->>'role', ''), 'driver');
+  full_name   text;
+  country     text;
+begin
+  full_name := coalesce(nullif(meta->>'full_name', ''), split_part(new.email, '@', 1));
+  country   := coalesce(nullif(meta->>'country', ''), 'Not set');
+
+  -- Already there? Then this is a re-run, or the browser got in first.
+  select d.driver_code into final_code
+    from public.drivers d
+   where d.auth_user_id = new.id;
+
+  if final_code is null then
+
+    -- driver_code is unique and the browser cannot see what is taken, so a
+    -- clash is a matter of time rather than bad luck. Failing here would
+    -- leave an Auth user with no driver record, which is the exact state
+    -- this trigger exists to prevent; take the next free code instead.
+    final_code := coalesce(want_code, 'GMN' || lpad((floor(random() * 9000) + 1000)::int::text, 4, '0'));
+
+    while exists (select 1 from public.drivers where driver_code = final_code) loop
+      final_code := 'GMN' || lpad((floor(random() * 9000) + 1000)::int::text, 4, '0');
+    end loop;
+
+    insert into public.drivers (
+      auth_user_id, driver_code, full_name, email, country, role, status
+    )
+    values (new.id, final_code, full_name, new.email, country, new_role, 'pending');
+  end if;
+
+  -- Staff are not applicants: an admin does not queue for approval.
+  if new_role = 'driver'
+     and not exists (select 1 from public.applications a where a.driver_id = final_code)
+  then
+    insert into public.applications (driver_id, full_name, email, country, status)
+    values (final_code, full_name, new.email, country, 'pending');
+  end if;
+
+  return new;
+exception
+  when others then
+    -- A failure here would abort the signup itself, and the person would be
+    -- told their account could not be created when in truth only the
+    -- profile row failed. Better to let them in and repair the row than to
+    -- turn away a real applicant.
+    raise warning 'handle_new_user failed for %: %', new.id, sqlerrm;
+    return new;
+end
+$handle_new_user$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+
+-- ============================================================
+-- 9. Check it worked
+
 --
 -- Run these after the script. The first should list your drivers
 -- with an auth_user_id on each; the second should return true
