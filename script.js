@@ -11508,7 +11508,7 @@ const CLIENT_RELEASE = {
       size: '80.4 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
       file: 'release/Gaming-Nation-Trucker-1.0.0-android.apk',
-      size: '6.9 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
+      size: '6.6 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
 
