@@ -45,6 +45,14 @@
   --danger:#fb6a80;
   --violet:#a78bfa;
 
+  /* The same five as channels, so a translucent status tint is derived
+     from its colour rather than being a second, drifting copy of it. */
+  --ok-rgb:46,224,160;
+  --info-rgb:34,211,238;
+  --warn-rgb:247,179,43;
+  --danger-rgb:251,106,128;
+  --violet-rgb:167,139,250;
+
   /* geometry — a touch softer, which is most of what reads as current */
   --r-sm:7px; --r:10px; --r-lg:14px; --r-xl:18px;
   --sidebar:236px;
@@ -262,15 +270,14 @@ table{border-collapse:collapse;width:100%}
    filled with the accent takes near-black text instead. */
 .btn-primary{background:var(--accent);color:#0a1403;border-color:var(--accent)}
 .btn-primary svg{color:#0a1403}
-.btn-primary svg{color:#fff}
 .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .btn-ghost{background:transparent}
-.btn-danger{background:transparent;border-color:rgba(239,95,95,.32);color:#f79a9a}
-.btn-danger svg{color:#f79a9a}
-.btn-danger:hover{background:rgba(239,95,95,.10);border-color:rgba(239,95,95,.5)}
-.btn-ok{background:transparent;border-color:rgba(62,207,142,.32);color:#7fdcb4}
-.btn-ok svg{color:#7fdcb4}
-.btn-ok:hover{background:rgba(62,207,142,.10);border-color:rgba(62,207,142,.5)}
+.btn-danger{background:transparent;border-color:rgba(var(--danger-rgb),.32);color:var(--danger)}
+.btn-danger svg{color:var(--danger)}
+.btn-danger:hover{background:rgba(var(--danger-rgb),.10);border-color:rgba(var(--danger-rgb),.5)}
+.btn-ok{background:transparent;border-color:rgba(var(--ok-rgb),.32);color:var(--ok)}
+.btn-ok svg{color:var(--ok)}
+.btn-ok:hover{background:rgba(var(--ok-rgb),.10);border-color:rgba(var(--ok-rgb),.5)}
 .btn-sm{height:28px;padding:0 10px;font-size:12px}
 .btn-sm svg{width:13px;height:13px}
 .btn-lg{height:40px;padding:0 20px;font-size:13.5px}
@@ -291,12 +298,12 @@ table{border-collapse:collapse;width:100%}
 .badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:5px;
   font-size:11px;font-weight:500;background:var(--panel-2);color:var(--text-2);border:1px solid var(--line);white-space:nowrap}
 .badge svg{width:11px;height:11px}
-.badge.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
-.badge.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
-.badge.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.badge.info{color:var(--info);border-color:rgba(185,232,122,.28);background:rgba(185,232,122,.09)}
+.badge.ok{color:var(--ok);border-color:rgba(var(--ok-rgb),.28);background:rgba(var(--ok-rgb),.09)}
+.badge.warn{color:var(--warn);border-color:rgba(var(--warn-rgb),.28);background:rgba(var(--warn-rgb),.09)}
+.badge.danger{color:var(--danger);border-color:rgba(var(--danger-rgb),.28);background:rgba(var(--danger-rgb),.09)}
+.badge.info{color:var(--info);border-color:rgba(var(--info-rgb),.28);background:rgba(var(--info-rgb),.09)}
 .badge.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
-.badge.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
+.badge.violet{color:var(--violet);border-color:rgba(var(--violet-rgb),.28);background:rgba(var(--violet-rgb),.09)}
 .badge.solid{background:var(--accent);color:#0a1403;border-color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r);
   background:var(--panel-2);border:1px solid var(--line);font-size:12px;font-weight:450;color:var(--text-2);cursor:pointer;transition:all var(--t-fast)}
@@ -431,7 +438,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   background-repeat:no-repeat;background-position:right 10px center;background-size:15px;padding-right:32px}
 .input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--accent-line)}
 .input::placeholder,.textarea::placeholder{color:var(--text-3)}
-.input.err,.textarea.err,.select.err{border-color:rgba(239,95,95,.55)}
+.input.err,.textarea.err,.select.err{border-color:rgba(var(--danger-rgb),.55)}
 /* Some of these carry a paragraph of what to do next, and showErr sets
    them with textContent, so the line breaks have to survive in CSS. */
 .err-msg{font-size:11.5px;color:var(--danger);white-space:pre-line;line-height:1.5}
@@ -485,7 +492,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .menu button svg{width:14px;height:14px;color:var(--text-3)}
 .menu button:hover{background:var(--panel-2);color:var(--text)}
 .menu .sep{height:1px;background:var(--line);margin:4px 0}
-.menu button.danger{color:#f79a9a}
+.menu button.danger{color:var(--danger)}
 .scrim{position:fixed;inset:0;z-index:55;background:rgba(5,7,9,.6)}
 
 /* ---------- 15. Notifications ---------- */
@@ -996,13 +1003,13 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   background:var(--panel-2);color:var(--text-2);border:1px solid var(--line);
 }
 .pill svg{width:11px;height:11px}
-.pill.ok{color:var(--ok);border-color:rgba(62,207,142,.28);background:rgba(62,207,142,.09)}
-.pill.warn{color:var(--warn);border-color:rgba(217,155,43,.28);background:rgba(217,155,43,.09)}
+.pill.ok{color:var(--ok);border-color:rgba(var(--ok-rgb),.28);background:rgba(var(--ok-rgb),.09)}
+.pill.warn{color:var(--warn);border-color:rgba(var(--warn-rgb),.28);background:rgba(var(--warn-rgb),.09)}
 .pill.err,
-.pill.danger{color:var(--danger);border-color:rgba(239,95,95,.28);background:rgba(239,95,95,.09)}
-.pill.info{color:var(--info);border-color:rgba(185,232,122,.28);background:rgba(185,232,122,.09)}
+.pill.danger{color:var(--danger);border-color:rgba(var(--danger-rgb),.28);background:rgba(var(--danger-rgb),.09)}
+.pill.info{color:var(--info);border-color:rgba(var(--info-rgb),.28);background:rgba(var(--info-rgb),.09)}
 .pill.brand{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
-.pill.violet{color:var(--violet);border-color:rgba(139,124,240,.28);background:rgba(139,124,240,.09)}
+.pill.violet{color:var(--violet);border-color:rgba(var(--violet-rgb),.28);background:rgba(var(--violet-rgb),.09)}
 
 /* ---------- 27. Spacing utilities that were being asked for ----------
    The markup uses these steps; without a rule the element simply got no
@@ -1052,9 +1059,9 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   white-space:nowrap;
 }
 .livedot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
-.livedot.on{color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.09)}
+.livedot.on{color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.09)}
 .livedot.on::before{animation:gmnPulse 1.9s ease-in-out infinite}
-.livedot.wait{color:var(--warn);border-color:rgba(217,155,43,.32);background:rgba(217,155,43,.09)}
+.livedot.wait{color:var(--warn);border-color:rgba(var(--warn-rgb),.32);background:rgba(var(--warn-rgb),.09)}
 .livedot.wait::before{animation:gmnPulse 1.1s ease-in-out infinite}
 .livedot.off{color:var(--text-3)}
 
@@ -1285,15 +1292,15 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .verify-ico .ic{width:13px;height:13px}
 
 .verify-row.ok .verify-ico{
-  color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.09);
+  color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.09);
 }
-.verify-row.review{background:rgba(217,155,43,.05);border-color:rgba(217,155,43,.20)}
+.verify-row.review{background:rgba(var(--warn-rgb),.05);border-color:rgba(var(--warn-rgb),.20)}
 .verify-row.review .verify-ico{
-  color:var(--warn);border-color:rgba(217,155,43,.34);background:rgba(217,155,43,.10);
+  color:var(--warn);border-color:rgba(var(--warn-rgb),.34);background:rgba(var(--warn-rgb),.10);
 }
-.verify-row.flagged{background:rgba(239,95,95,.06);border-color:rgba(239,95,95,.24)}
+.verify-row.flagged{background:rgba(var(--danger-rgb),.06);border-color:rgba(var(--danger-rgb),.24)}
 .verify-row.flagged .verify-ico{
-  color:var(--danger);border-color:rgba(239,95,95,.36);background:rgba(239,95,95,.11);
+  color:var(--danger);border-color:rgba(var(--danger-rgb),.36);background:rgba(var(--danger-rgb),.11);
 }
 
 /* a run row in a history table opens its working, so it has to look pressable */
@@ -1453,7 +1460,7 @@ tr[data-act="verify-job"]{cursor:pointer}
 }
 .fleetrow.convoy-row:hover .convoy-kick,
 .convoy-kick:focus-visible{opacity:1}
-.convoy-kick:hover{color:var(--danger);background:rgba(239,95,95,.12)}
+.convoy-kick:hover{color:var(--danger);background:rgba(var(--danger-rgb),.12)}
 .convoy-kick .ic{width:14px;height:14px}
 
 /* ---------- convoy chat ---------- */
@@ -1477,7 +1484,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   animation:gmnRise .2s ease;
 }
 .cmsg.mine{align-self:flex-end;background:var(--panel-3);border-color:var(--line-2)}
-.cmsg.staff{border-color:rgba(185,232,122,.34);background:rgba(185,232,122,.07)}
+.cmsg.staff{border-color:rgba(var(--accent-rgb),.34);background:rgba(var(--accent-rgb),.07)}
 .cmsg.leader{border-color:rgba(255,209,102,.34);background:rgba(255,209,102,.06)}
 
 .cmsg-who{
@@ -1567,7 +1574,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   opacity:0;transition:opacity var(--t),color var(--t),background var(--t);
 }
 .cmsg:hover .cmsg-del,.cmsg-del:focus-visible{opacity:1}
-.cmsg-del:hover{color:var(--danger);background:rgba(239,95,95,.12)}
+.cmsg-del:hover{color:var(--danger);background:rgba(var(--danger-rgb),.12)}
 .cmsg-del .ic{width:11px;height:11px}
 
 /* the honest label on a straight-line measurement */
@@ -1774,7 +1781,7 @@ tr[data-act="verify-job"]{cursor:pointer}
   box-shadow:inset 0 1px 2px rgba(0,0,0,.22), 0 0 0 3px var(--accent-soft);
 }
 .input.err:focus,.textarea.err:focus,.select.err:focus{
-  box-shadow:inset 0 1px 2px rgba(0,0,0,.22), 0 0 0 3px rgba(239,95,95,.16);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22), 0 0 0 3px rgba(var(--danger-rgb),.16);
 }
 
 /* ---------- tables ---------- */
@@ -1891,13 +1898,13 @@ a.link:hover{background-size:100% 1px}
 .livedot.on::before{
   content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
   background:var(--ok);margin-right:6px;vertical-align:middle;
-  box-shadow:0 0 0 0 rgba(62,207,142,.6);
+  box-shadow:0 0 0 0 rgba(var(--ok-rgb),.6);
   animation:livePulse 2s var(--ease) infinite;
 }
 @keyframes livePulse{
-  0%{box-shadow:0 0 0 0 rgba(62,207,142,.5)}
-  70%{box-shadow:0 0 0 6px rgba(62,207,142,0)}
-  100%{box-shadow:0 0 0 0 rgba(62,207,142,0)}
+  0%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),.5)}
+  70%{box-shadow:0 0 0 6px rgba(var(--ok-rgb),0)}
+  100%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),0)}
 }
 
 /* ---------- density ----------

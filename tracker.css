@@ -37,6 +37,14 @@
   --danger:#fb6a80;
   --violet:#a78bfa;
 
+  /* The same five as channels, so a translucent status tint is derived
+     from its colour rather than being a second, drifting copy of it. */
+  --ok-rgb:46,224,160;
+  --info-rgb:34,211,238;
+  --warn-rgb:247,179,43;
+  --danger-rgb:251,106,128;
+  --violet-rgb:167,139,250;
+
   /* geometry */
   --r-sm:7px; --r:10px; --r-lg:14px; --r-xl:18px;
   --sidebar:236px;
@@ -177,8 +185,8 @@ table{border-collapse:collapse;width:100%}
   background:var(--panel-3);color:var(--text-2);border:1px solid var(--line-2)}
 .run-state .beat{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
 .run-state.rolling{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
-.run-state.done{background:rgba(62,207,142,.1);color:var(--ok);border-color:rgba(62,207,142,.32)}
-.run-state.held{background:rgba(217,155,43,.1);color:var(--warn);border-color:rgba(217,155,43,.32)}
+.run-state.done{background:rgba(var(--ok-rgb),.1);color:var(--ok);border-color:rgba(var(--ok-rgb),.32)}
+.run-state.held{background:rgba(var(--warn-rgb),.1);color:var(--warn);border-color:rgba(var(--warn-rgb),.32)}
 
 /* waypoint rail — the run as a route, not a loading bar */
 .rrail{position:relative;margin:30px 0 6px;padding:0 2px}
@@ -251,14 +259,13 @@ table{border-collapse:collapse;width:100%}
    filled with the accent takes near-black text instead. */
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#0a1403}
 .btn-primary svg{color:#0a1403}
-.btn-primary svg{color:#fff}
 .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
-.btn-ok{background:transparent;border-color:rgba(62,207,142,.32);color:#7fdcb4}
-.btn-ok svg{color:#7fdcb4}
-.btn-ok:hover{background:rgba(62,207,142,.1)}
-.btn-danger{background:transparent;border-color:rgba(239,95,95,.32);color:#f79a9a}
-.btn-danger svg{color:#f79a9a}
-.btn-danger:hover{background:rgba(239,95,95,.1)}
+.btn-ok{background:transparent;border-color:rgba(var(--ok-rgb),.32);color:var(--ok)}
+.btn-ok svg{color:var(--ok)}
+.btn-ok:hover{background:rgba(var(--ok-rgb),.1)}
+.btn-danger{background:transparent;border-color:rgba(var(--danger-rgb),.32);color:var(--danger)}
+.btn-danger svg{color:var(--danger)}
+.btn-danger:hover{background:rgba(var(--danger-rgb),.1)}
 .btn-ghost{background:transparent}
 .btn-sm{height:25px;padding:0 9px;font-size:11.5px}
 .btn-sm svg{width:12px;height:12px}
@@ -344,7 +351,7 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .menu button svg{width:14px;height:14px;color:var(--text-3)}
 .menu button:hover{background:var(--panel-2);color:var(--text)}
 .menu .sep{height:1px;background:var(--line);margin:4px 0}
-.menu button.danger{color:#f79a9a}
+.menu button.danger{color:var(--danger)}
 
 @media (max-width:1020px){ .facts{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))} }
 @media (max-width:860px){
@@ -642,7 +649,7 @@ body.can-install .install-cta{display:inline-flex}
 
 .si-err{
   margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;text-align:center;
-  color:var(--danger);background:rgba(239,95,95,.10);border:1px solid rgba(239,95,95,.30);
+  color:var(--danger);background:rgba(var(--danger-rgb),.10);border:1px solid rgba(var(--danger-rgb),.30);
 }
 
 /* Caps Lock is the commonest reason a password that is right is refused,
@@ -1104,7 +1111,7 @@ body.can-install .install-cta{display:inline-flex}
     right:-1px;bottom:-1px;width:12px;height:12px;
     border:2.5px solid var(--rail);background:var(--text-3);
   }
-  .ab-live.ok{background:var(--ok);box-shadow:0 0 8px rgba(62,207,142,.6)}
+  .ab-live.ok{background:var(--ok);box-shadow:0 0 8px rgba(var(--ok-rgb),.6)}
   /* White, not the page's text tones and NOT --accent.
 
      The bar is crimson now, so the accent sits on top of itself: the
@@ -1280,9 +1287,9 @@ body.can-install .install-cta{display:inline-flex}
   50%{opacity:.35;transform:scale(.8)}
 }
 @keyframes gmnHalo{
-  0%{box-shadow:0 0 0 0 rgba(62,207,142,.34)}
-  70%{box-shadow:0 0 0 7px rgba(62,207,142,0)}
-  100%{box-shadow:0 0 0 0 rgba(62,207,142,0)}
+  0%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),.34)}
+  70%{box-shadow:0 0 0 7px rgba(var(--ok-rgb),0)}
+  100%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),0)}
 }
 @keyframes gmnSweep{
   from{transform:translateX(-100%)}
@@ -1305,11 +1312,11 @@ body.can-install .install-cta{display:inline-flex}
   content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;
 }
 .livedot.on{
-  color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.09);
+  color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.09);
 }
 .livedot.on::before{animation:gmnPulse 1.9s ease-in-out infinite}
 .livedot.wait{
-  color:var(--warn);border-color:rgba(217,155,43,.32);background:rgba(217,155,43,.09);
+  color:var(--warn);border-color:rgba(var(--warn-rgb),.32);background:rgba(var(--warn-rgb),.09);
 }
 .livedot.wait::before{animation:gmnPulse 1.1s ease-in-out infinite}
 .livedot.off{color:var(--text-3)}
@@ -1455,9 +1462,9 @@ body.can-install .install-cta{display:inline-flex}
   border:1px solid var(--line-2);background:var(--panel-2);color:var(--text-3);
 }
 .runline-dot .ic{width:12px;height:12px}
-.runline-row.ok .runline-dot{color:var(--ok);border-color:rgba(62,207,142,.34);background:rgba(62,207,142,.08)}
-.runline-row.warn .runline-dot{color:var(--warn);border-color:rgba(217,155,43,.32);background:rgba(217,155,43,.08)}
-.runline-row.err .runline-dot{color:var(--danger);border-color:rgba(239,95,95,.32);background:rgba(239,95,95,.08)}
+.runline-row.ok .runline-dot{color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.08)}
+.runline-row.warn .runline-dot{color:var(--warn);border-color:rgba(var(--warn-rgb),.32);background:rgba(var(--warn-rgb),.08)}
+.runline-row.err .runline-dot{color:var(--danger);border-color:rgba(var(--danger-rgb),.32);background:rgba(var(--danger-rgb),.08)}
 /* the newest line is the one being read */
 .runline-row:first-child .runline-dot{animation:gmnHalo 2.4s ease-out 2}
 .runline-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
