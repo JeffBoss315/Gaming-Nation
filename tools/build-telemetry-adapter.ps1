@@ -12,11 +12,13 @@ if (-not $candidates) {
 }
 
 $dotnet = $candidates | Select-Object -First 1
+$publishDir = Join-Path $PSScriptRoot '..\telemetry-adapter\publish'
 & $dotnet restore 'telemetry-adapter\HllTelemetryAdapter.csproj' --ignore-failed-sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $dotnet publish 'telemetry-adapter\HllTelemetryAdapter.csproj' -c Release -o . --ignore-failed-sources -p:PublishSingleFile=true
+& $dotnet publish 'telemetry-adapter\HllTelemetryAdapter.csproj' -c Release -o $publishDir --ignore-failed-sources -p:PublishSingleFile=true
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+Copy-Item (Join-Path $publishDir 'hll-telemetry-adapter.exe') 'hll-telemetry-adapter.exe' -Force
 if (-not (Test-Path 'hll-telemetry-adapter.exe')) {
   throw 'The .NET publish completed without producing hll-telemetry-adapter.exe.'
 }
