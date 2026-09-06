@@ -781,6 +781,56 @@ const Accounts = {
       console.log('[GMN] Gaming Nation driver created:', driver);
 
 
+      /* Stop here if there is no session, because everything below this
+         line needs one and none of it will say so.
+
+         This is the whole reason applications from the website never
+         reached a recruiter.
+
+         With email confirmation on, signUp() returns a user and NO
+         session. The code below inserts into public.applications, and that
+         policy is
+
+           on public.applications for insert to authenticated
+           with check (driver_id in (select driver_code from drivers
+                                     where auth_user_id = auth.uid()))
+
+         With no session the request is anon, not authenticated, and
+         auth.uid() is null. It cannot succeed. Not "usually fails" —
+         cannot.
+
+         There has always been a branch for this: return confirmEmail and
+         let Accounts.ensureApplication() file the row at first sign-in,
+         when a session exists. But it hung off driverError, and once the
+         handle_new_user() trigger was installed the drivers insert stopped
+         being attempted at all — the trigger had already made the row, so
+         there was no error, so the branch was unreachable. A migration
+         written to fix one failure quietly disabled the handling for
+         another.
+
+         What happened instead: the application insert was refused, the
+         catch below deleted the driver row the trigger had just made, and
+         registration threw. No application, no driver row, and an Auth
+         user that now answers "already registered" to anybody trying
+         again.
+
+         The check is on the session, which is the thing actually required,
+         rather than on whether some earlier statement happened to error. */
+      if (!(authData && authData.session)) {
+
+        console.warn('[GMN] Registered without a session (email confirmation '
+          + 'is on). The application is filed at first sign-in, by '
+          + 'Accounts.ensureApplication.');
+
+        return {
+          confirmEmail: true,
+          email: account.email,
+          driverId: driver.driver_code || driverId,
+          user: user
+        };
+      }
+
+
       /* ============================================================
          3. CREATE DRIVER APPLICATION
          ============================================================ */
