@@ -3441,15 +3441,15 @@ function viewAuth() {
           ? 'Est. ' + new Date(db.meta.founded).getFullYear() + ' · Europe-wide'
           : 'Virtual trucking company · Europe-wide'}</div>
         <h1 class="hero-title">The digital <span class="grad-text">headquarters</span> of the Gaming Nation fleet.</h1>
-        <p class="t2 mt-16" style="font-size:15px;line-height:1.65">
+        <p class="auth-lede t2 mt-16" style="font-size:15px;line-height:1.65">
           Convoys, driver records, fleet assignments, rankings and achievements —
           one command centre for every GMN driver, and a full management console for the people running it.</p>
-        <div class="row gap-8 wrap mt-20">
+        <div class="auth-chips row gap-8 wrap mt-20">
           ${['Convoy management', 'Live route maps', 'Driver progression', 'Fleet control'].map((t) =>
             `<span class="badge brand">${icon('check')}${t}</span>`).join('')}
         </div>
 
-        <div class="mt-24">
+        <div class="auth-social mt-24">
           <div class="eyebrow mb-12">Follow Gaming Nation</div>
           ${socialHTML()}
         </div>

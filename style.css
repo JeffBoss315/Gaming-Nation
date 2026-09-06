@@ -619,8 +619,41 @@ table.tbl tbody tr:last-child td{border-bottom:0}
   .g-cal{grid-template-columns:minmax(0,1fr)}
   .g-3{grid-template-columns:repeat(2,minmax(0,1fr))}
   .span-2{grid-column:auto}
-  .auth{grid-template-columns:1fr}
-  .auth-vis{display:none}
+
+  /* The brand panel becomes a band above the form rather than vanishing.
+
+     It used to be display:none below this width, which meant every visitor
+     arriving on a phone — most of them — met an unlabelled form on a black
+     field: no emblem, no company name, nothing saying what they were signing
+     in to. The panel does not fit beside the form at this width, but almost
+     none of that is a reason to drop what the page is.
+
+     So the parts are ranked instead. The mark, the name and the headline
+     stay, because they are the answer to "where am I". The lede paragraph
+     and the follow links go, because they are the answer to a question
+     nobody asks before signing in, and on a 390px screen they would push
+     the form itself below the fold. */
+  .auth{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .auth-vis{
+    gap:20px;
+    padding:26px 24px 24px;
+    border-right:0;
+    border-bottom:1px solid var(--line);
+    justify-content:flex-start;
+  }
+  .auth-lede,.auth-social,.auth-stats{display:none}
+  .hero-title{font-size:25px}
+  .auth-form-wrap{padding:30px 24px 44px;align-content:start}
+}
+
+/* Narrower still: the strapline is the third line of the same idea the name
+   and the sub already carry, and the chips wrap to three rows. Both go, and
+   the headline carries it alone. */
+@media (max-width:560px){
+  .auth-vis{gap:16px;padding:20px 18px 18px}
+  .hero-title{font-size:21px}
+  .brand-strap,.auth-chips{display:none}
+  .auth-form-wrap{padding:24px 18px 36px}
 }
 @media (max-width:900px){
   :root{--sidebar:0px}
