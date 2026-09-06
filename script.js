@@ -589,6 +589,22 @@ const Accounts = {
           password: password,
 
           options: {
+            /* Where the confirmation link comes BACK to.
+
+               Without this, Supabase builds the link from the project's
+               Site URL — a value set once in a dashboard, invisible from
+               here, and wrong the moment the site moves. It was wrong: it
+               named heavyline.pages.dev, which no longer exists, so the
+               confirmation link in every one of those emails resolved to
+               nothing.
+
+               resetPasswordForEmail() has always passed its own redirect,
+               for exactly this reason. Sign-up simply never did, and the
+               difference was invisible until the old host was deleted. */
+            ...(publicRedirectBase()
+              ? { emailRedirectTo: publicRedirectBase() + '/login.html' }
+              : {}),
+
             data: {
               full_name: account.name,
               driver_code: driverId,
@@ -1101,6 +1117,63 @@ fromRow(row, authUser) {
    before it writes, so an application that already exists is left alone.
    That also repairs anybody stranded by the old behaviour — the next time
    they sign in, their application appears. */
+/* Send the confirmation email again.
+
+   Until now there was no way to. A driver whose confirmation email never
+   arrived — it is rate limited, it goes to spam, the address had a typo,
+   the link pointed at a host that had been deleted — was stuck with no
+   move left. Signing in said "Email not confirmed". Registering again said
+   "That email address already has a Gaming Nation sign-in". Both true,
+   both dead ends, and between them no third option existed anywhere in the
+   app. The account was real and permanently unreachable.
+
+   This is that third option. */
+async resendConfirmation(email) {
+
+    if (!window.gmnSupabase) {
+        return { error: 'Supabase is not connected, so no email can be sent.' };
+    }
+
+    const addr = String(email || '').trim().toLowerCase();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+        return { error: 'Enter the email address you registered with.' };
+    }
+
+    const base = publicRedirectBase();
+
+    const { error } = await window.gmnSupabase.auth.resend({
+        type: 'signup',
+        email: addr,
+        ...(base ? { options: { emailRedirectTo: base + '/login.html' } } : {})
+    });
+
+    if (error) {
+
+        /* Being rate limited is the ordinary answer here, not a fault, and
+           it is the one most likely to be hit by the person clicking this
+           twice. Supabase's own SMTP allows only a few messages an hour and
+           is documented as being for testing — if this keeps happening, the
+           project needs its own SMTP, and no amount of clicking will help. */
+        if (/rate|too many|only request|seconds/i.test(error.message || '')) {
+            return {
+                error: 'Supabase will not send another confirmation email yet. '
+                     + 'Wait a minute and try again. If this keeps happening, the '
+                     + 'project is on the built-in Supabase mail, which allows only '
+                     + 'a few messages an hour — it needs its own SMTP server.'
+            };
+        }
+
+        /* An address that was never registered, or is already confirmed,
+           is not something to explain in detail to whoever is typing. */
+        console.warn('[GMN] Confirmation resend refused:', error);
+        return { error: error.message || 'That email could not be sent.' };
+    }
+
+    console.info('[GMN] Confirmation email resent to ' + addr);
+    return { ok: true, email: addr };
+},
+
 async ensureApplication(driver, opts) {
 
     if (!window.gmnSupabase || !driver || !driver.driver_code) return null;
@@ -1536,6 +1609,24 @@ const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
    Everything without an origin worth trusting — the desktop client, a dev
    server on localhost — still falls through to the constant, which is what
    the paragraph above is about and is still the right answer there. */
+/* The same address, but only when it is one an email can actually point
+   at — and null when it is not.
+
+   publicSiteUrl() always answers something, because the things that ask it
+   always need something. A redirect handed to Supabase is different: it is
+   checked against the project's allow-list, and a value that cannot appear
+   there is worse than no value, because passing nothing falls back to the
+   project's Site URL and passing rubbish does not.
+
+   The case this exists for is the desktop client. It loads the same
+   login.html off the filesystem, so location.origin is 'file://' and there
+   is no GMN_SITE_URL baked in — which produced 'file://login.html' as the
+   place to send somebody's confirmation email. */
+function publicRedirectBase() {
+  const u = publicSiteUrl();
+  return /^https:\/\//i.test(u) ? u : null;
+}
+
 function publicSiteUrl() {
   const trim = (u) => String(u || '').replace(/\/$/, '');
 
@@ -3594,6 +3685,14 @@ function signInFormHTML() {
       </div>
       <button class="btn btn-primary btn-lg btn-block" type="submit">${icon('bolt')}Sign in</button>
       <div class="err-msg hide mt-12 center" data-err="form"></div>
+      <!-- Revealed only when the sign-in was refused for want of a
+           confirmed address. "Email not confirmed" is a true statement and
+           a dead end on its own: the one thing it does not say is how to
+           get another email. -->
+      <div class="hide mt-12 center sm" id="li-unconfirmed">
+        <span class="t2">Not arrived? It is often in the spam folder.</span>
+        <span class="link" data-act="resend-confirm">Send it again</span>
+      </div>
     </form>
 
     <p class="sm t3 center mt-20">No account yet?
@@ -7387,6 +7486,25 @@ function handleAction(act, t, ev) {
     case 'forgot':
       openForgotPasswordModal();
       return;
+    case 'resend-confirm': {
+      /* The sign-in box takes an email OR a driver ID, and only one of
+         those can be posted to. Ask rather than guess. */
+      const field = $('#li-id');
+      const typed = field ? field.value.trim() : '';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed)) {
+        toast('Enter your email address first', 'warn',
+          'A driver ID is not something a confirmation email can be sent to.');
+        if (field) field.focus();
+        return;
+      }
+      toast('Sending…', 'info');
+      Accounts.resendConfirmation(typed).then((r) => {
+        if (r.error) return toast('Not sent', 'danger', r.error);
+        toast('Confirmation email sent', 'ok',
+          'Sent to ' + r.email + '. Check the spam folder if it is not in the inbox.');
+      });
+      return;
+    }
     case 'logout':
       signOutEverywhere(); closeAllLayers();
       $('#app').innerHTML = viewAuth(); bindAuth(); return;
@@ -12020,7 +12138,14 @@ function bindAuth() {
       btn.disabled = true;
       const res = await Accounts.verify(handle, pw);
       btn.disabled = false;
-      if (res.error) { showErr(f, 'form', res.error); return; }
+      if (res.error) {
+        showErr(f, 'form', res.error);
+        /* Supabase phrases this "Email not confirmed". Offer the way out
+           next to the refusal rather than leaving them to find it. */
+        const un = $('#li-unconfirmed');
+        if (un) un.classList.toggle('hide', !/not confirmed|confirm your email/i.test(res.error));
+        return;
+      }
 
       /* The browser has accepted the password; now prove it to the service
          too, with the same credentials, so the identity on anything we send
@@ -12106,9 +12231,10 @@ function bindAuth() {
         toast('Account created', 'ok', 'Confirm your email to finish');
         showErr(rf, 'form',
           'Almost there. We have sent a confirmation link to ' + res.email
-          + '. Open it, then sign in with the same password — your driver '
-          + 'record and your application are made at that point, and a '
-          + 'recruiter takes it from there.');
+          + '. It is often in the spam folder. Open it, then sign in with the '
+          + 'same password — your driver record and your application are made '
+          + 'at that point, and a recruiter takes it from there. If it never '
+          + 'arrives, the Sign in tab can send it again.');
         return;
       }
 
