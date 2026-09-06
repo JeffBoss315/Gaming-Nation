@@ -11,22 +11,26 @@ android/app/build/
 android/.gradle/
 .gradle/
 release/
-hll-company.json
-hll-convoy-chat.jsonl
-hll-convoy-chat.jsonl.tmp
-hll-sessions.json
-hll-sessions.json.tmp
-hll-company.json.tmp
+# Runtime state the services write beside themselves: the company record,
+# the fleet room, the outbox, the read marks, and the session table.
+#
+# Matched by PREFIX, not by name. The named list that used to be here was
+# defeated by an ordinary rename: HLL -> GMN moved every one of these to a
+# gmn- name, none of which was listed, and the whole set — including 38
+# live bearer tokens — was committed to a public repo before anyone
+# noticed. A glob would have held through the rename. This one does.
+hll-*.json
+hll-*.json.tmp
+hll-*.jsonl
+hll-*.jsonl.tmp
+gmn-*.json
+gmn-*.json.tmp
+gmn-*.jsonl
+gmn-*.jsonl.tmp
 
 # screenshots from tools/shots.js — generated, not source
 .shots/
 
-# state the company service writes beside itself
-hll-chat.json
-hll-outbox.json
-# who has read how far in the fleet room — runtime state, like the
-# conversations themselves
-hll-room-reads.json
 
 # .NET intermediates for the telemetry adapter. obj/ and bin/ are rebuilt by
 # `dotnet build` every time and churn on every compile — two of them were
