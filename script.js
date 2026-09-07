@@ -184,6 +184,35 @@ const ROLES = {
   admin:         { name: 'Administrator',       level: 9,  color: '#8bd62b' },
   super_admin:   { name: 'Super Administrator', level: 10, color: '#9db8ff' },
 };
+/* The role a record actually carries, which is not always one this table
+   lists.
+
+   ROLES[u.role].name was written unguarded at three call sites, and the
+   moment a driver record carried anything else — a value set straight in
+   the database, a row with no role at all — it did not mislabel a badge,
+   it threw. viewSettings() is one of those sites, which is how the whole
+   settings screen became unreachable for a single driver while every other
+   page still worked.
+
+   An unrecognised role is shown as itself rather than quietly relabelled
+   as Driver: whoever is looking should be able to see what the record
+   really says. It is given level 0, so an unknown role can never grant
+   anything — the same answer can() already reaches through `?? 0`. */
+function roleOf(role) {
+  const known = ROLES[role];
+  if (known) return known;
+
+  const raw = String(role == null ? '' : role).trim();
+
+  return {
+    name: raw
+      ? raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      : 'Driver',
+    level: 0,
+    color: 'var(--text-3)',
+  };
+}
+
 const PERMS = {
   'admin.view':        4,
   'recruitment.manage': 4,
@@ -4627,7 +4656,7 @@ function viewDriver(id) {
                 <div class="card-body">
                   ${kv('GMN ID', `<span class="mono">${esc(d.id)}</span>`)}
                   ${kv('Rank', `<span style="color:${r.color}">${esc(r.name)}</span>`)}
-                  ${kv('Role', esc(ROLES[d.role].name))}
+                  ${kv('Role', esc(roleOf(d.role).name))}
                   ${kv('Joined', esc(fmt.date(d.joined)))}
                   ${kv('Discord', `<span class="mono">${esc(d.discord)}</span>`)}
                   ${kv('TruckersMP', `<span class="mono">${esc(d.truckersmp)}</span>`)}
@@ -6199,7 +6228,7 @@ function viewSettings() {
           <div class="card-body">
             ${kv('Driver ID', `<span class="mono">${esc(u.id)}</span>`)}
             ${kv('Rank', `<span style="color:${rankOf(u).color}">${esc(rankOf(u).name)}</span>`)}
-            ${kv('Role', esc(ROLES[u.role].name))}
+            ${kv('Role', esc(roleOf(u.role).name))}
             ${kv('Member since', esc(fmt.date(u.joined)))}
             ${kv('Account status', statusBadge(u.accountStatus))}
           </div></div>
@@ -6255,7 +6284,7 @@ function viewAdmin() {
     <div class="page-head">
       <div><div class="eyebrow">Management</div>
         <h1 class="page-title">GMN Admin Console</h1>
-        <p class="page-sub">Signed in as ${esc(ROLES[state.user.role].name)} · ${esc(state.user.id)}</p></div>
+        <p class="page-sub">Signed in as ${esc(roleOf(state.user.role).name)} · ${esc(state.user.id)}</p></div>
       <div class="row gap-8">
         <button class="btn" data-act="export-data">${icon('download')}Export data</button>
         ${can('events.manage') ? `<button class="btn" data-act="dispatch-new">${icon('route')}Dispatch a load</button>` : ''}
@@ -8597,22 +8626,26 @@ async function discoverLocalService() {
     if (!isLocalPage()) return false;
     if (typeof fetch !== 'function') return false;
 
-    const stop = new AbortController();
-    const bell = setTimeout(() => stop.abort(), 1200);
+    for (const base of LOCAL_SERVICES) {
+      const stop = new AbortController();
+      const bell = setTimeout(() => stop.abort(), 1200);
 
-    let ok = false;
-    try {
-      const res = await fetch(LOCAL_SERVICE + '/status',
-        { cache: 'no-store', signal: stop.signal });
-      ok = res.ok;
-    } catch (e) { ok = false; }
-    clearTimeout(bell);
+      let ok = false;
+      try {
+        const res = await fetch(base + '/status',
+          { cache: 'no-store', signal: stop.signal });
+        ok = res.ok;
+      } catch (e) { ok = false; }
+      clearTimeout(bell);
 
-    if (!ok) return false;
+      if (!ok) continue;
 
-    window.GMN_SERVICE = LOCAL_SERVICE;
-    console.log('[GMN] company service found on ' + LOCAL_SERVICE);
-    return true;
+      window.GMN_SERVICE = base;
+      console.log('[GMN] company service found on ' + base);
+      return true;
+    }
+
+    return false;
 
   } catch (e) {
     return false;
@@ -8620,7 +8653,21 @@ async function discoverLocalService() {
 }
 
 /* Where the service listens when it is running beside you. */
-const LOCAL_SERVICE = 'http://localhost:7040';
+/* Where the service listens when it is running beside you.
+
+   Two spellings of the same machine, and the ORDER is the whole fix.
+   fleet-server.js binds 127.0.0.1 — that literal IPv4 address, unless it is
+   started with --lan. "localhost" on Windows resolves to ::1 first, and
+   nothing is listening there. So a page that only ever asked for localhost
+   could sit on the same machine as a running service and never once reach
+   it: the address it was asking for had nothing on it.
+
+   Asking for the address the server actually binds, first, is what makes
+   the service found rather than typed in by hand. */
+const LOCAL_SERVICES = ['http://127.0.0.1:7040', 'http://localhost:7040'];
+
+/* the first candidate, for the code that names a single default */
+const LOCAL_SERVICE = LOCAL_SERVICES[0];
 
 function isLocalPage() {
   if (typeof location === 'undefined') return false;
@@ -10308,7 +10355,7 @@ function openDriverLive(driverId) {
           <div>
             <div class="b7 lg">${esc(d ? d.name : driverId)}</div>
             <div class="xs t3 mt-4 mono">${esc(driverId)}${
-              d && d.role && ROLES[d.role] ? ' · ' + esc(ROLES[d.role].name) : ''}</div>
+              d && d.role && ROLES[d.role] ? ' · ' + esc(roleOf(d.role).name) : ''}</div>
           </div>
         </div>
         ${conn}

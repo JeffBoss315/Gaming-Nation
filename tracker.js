@@ -2172,7 +2172,24 @@ function defaultServiceUrl() {
 }
 
 /* Where the company service listens when it is running beside you. */
-const LOCAL_SERVICE = 'http://localhost:7040';
+/* Where the service listens when it is running beside you.
+
+   Two spellings of the same machine, and the ORDER is the whole fix.
+   fleet-server.js binds 127.0.0.1 — that literal IPv4 address, unless it is
+   started with --lan. "localhost" on Windows resolves to ::1 first, and
+   nothing is listening there. So a client that only ever asked for
+   localhost could sit on the same machine as a running service, retry every
+   minute for ever, and never once reach it: the address it was asking for
+   had nothing on it.
+
+   Asking for the address the server actually binds, first, is what makes
+   the service found rather than typed in by hand. localhost is kept behind
+   it for anyone running the service somewhere that answers on that name and
+   not on 127.0.0.1. */
+const LOCAL_SERVICES = ['http://127.0.0.1:7040', 'http://localhost:7040'];
+
+/* the first candidate, for the code that names a single default */
+const LOCAL_SERVICE = LOCAL_SERVICES[0];
 
 /* Ask the machine this client is on whether the service is running.
 
@@ -2190,22 +2207,26 @@ async function discoverLocalService() {
     if ((Store.db.settings.fleetUrl || '').trim()) return false;
     if (typeof fetch !== 'function') return false;
 
-    const stop = new AbortController();
-    const bell = setTimeout(() => stop.abort(), 1200);
+    for (const base of LOCAL_SERVICES) {
+      const stop = new AbortController();
+      const bell = setTimeout(() => stop.abort(), 1200);
 
-    let ok = false;
-    try {
-      const res = await fetch(LOCAL_SERVICE + '/status',
-        { cache: 'no-store', signal: stop.signal });
-      ok = res.ok;
-    } catch (e) { ok = false; }
-    clearTimeout(bell);
+      let ok = false;
+      try {
+        const res = await fetch(base + '/status',
+          { cache: 'no-store', signal: stop.signal });
+        ok = res.ok;
+      } catch (e) { ok = false; }
+      clearTimeout(bell);
 
-    if (!ok) return false;
+      if (!ok) continue;
 
-    window.GMN_SERVICE = LOCAL_SERVICE;
-    console.log('[GMN] company service found on ' + LOCAL_SERVICE);
-    return true;
+      window.GMN_SERVICE = base;
+      console.log('[GMN] company service found on ' + base);
+      return true;
+    }
+
+    return false;
 
   } catch (e) {
     return false;
@@ -3777,14 +3798,36 @@ function runCardInner() {
 
   if (!job) {
     const last = db.logbook[0];
+
+    /* Seeing the game is not the same as hearing from it.
+
+       This used to say "take a load in game and it appears here on its own"
+       whenever the process was up — including when nothing was arriving from
+       it at all. So a driver with a live load on screen was told the client
+       was fine and to keep waiting, and there was nothing anywhere saying
+       what was actually wrong.
+
+       The game only sends anything when the SCS telemetry plugin is loaded
+       INSIDE it, and that is a file in the game's own folder that this app
+       cannot put there. Which is exactly why it has to be said out loud. */
+    const hearing = Telemetry.mode === 'live';
+
     return `
       <div class="run-top">
         <div>
           <div class="eyebrow">Current delivery</div>
-          <div class="run-idle">${db.conn.ets2 === 'running' ? 'No active delivery'
+          <div class="run-idle">${db.conn.ets2 === 'running'
+            ? (hearing ? 'No active delivery' : 'The game is not sending telemetry')
             : Launcher.api() || GameWatch.supported ? 'Waiting for the game' : 'No run in progress'}</div>
           <div class="run-meta">${db.conn.ets2 === 'running'
-            ? 'The game is running. Take a load in game and it appears here on its own.'
+            ? (hearing
+              ? 'The game is running. Take a load in game and it appears here on its own.'
+              : 'The client can see ' + mapFor(db.settings.game).short + ' running but is '
+                + 'receiving nothing from it, so a delivery cannot be picked up however '
+                + 'far you drive. The telemetry plugin has to sit in the game’s own '
+                + 'plugins folder, and it has to match the build you play: 64-bit ' + mapFor(db.settings.game).short
+                + ' loads bin\\win_x64\\plugins and never looks at win_x86. '
+                + 'Add it there and restart the game.')
             : GameWatch.supported
               ? 'Start ' + mapFor(db.settings.game).label + ' however you like — the client sees it open and starts tracking by itself.'
               : Launcher.api()
@@ -3795,7 +3838,8 @@ function runCardInner() {
                    has here is the record of runs made elsewhere. */
                 : 'Runs are recorded on the machine you play on. This shows them, and everything else about your driving, wherever you are.'}</div>
         </div>
-        <span class="run-state"><span class="beat"></span>${db.conn.ets2 === 'running' ? 'Idle' : 'Standby'}</span>
+        <span class="run-state"><span class="beat"></span>${db.conn.ets2 === 'running'
+          ? (hearing ? 'Idle' : 'No signal') : 'Standby'}</span>
       </div>
 
       <!-- the delivery rail sits here whether or not there is a run, so the
@@ -5064,9 +5108,18 @@ function statusBarHTML() {
     <span class="sb-item ${ets2On ? 'on' : ''}">
       <span class="sb-dot ${ets2On ? 'ok' : ''}"></span>${ets2On ? 'ETS2 running' : 'ETS2 closed'}</span>
     <span class="sb-sep"></span>
-    <button class="sb-item btn-like ${linkOn ? 'on' : ''}" data-act="nav" data-view="livemap">
-      <span class="sb-dot ${Telemetry.mode === 'live' ? 'ok' : linkOn ? 'warn' : ''}"></span>${
-        Telemetry.mode === 'live' ? 'Telemetry live' : linkOn ? 'Telemetry waiting' : 'Telemetry armed'}</button>
+    <!-- "Armed" was the label on the state where nothing is connected at
+         all, which made the least working of the three read as the most
+         confident. A driver watching this while their load never appeared
+         had every reason to believe the client was fine. -->
+    <button class="sb-item btn-like ${linkOn ? 'on' : ''}" data-act="nav" data-view="livemap"
+      title="${Telemetry.mode === 'live'
+        ? 'The game is sending telemetry and runs are being tracked'
+        : linkOn
+          ? 'Connected to the adapter, but the game has not sent a frame yet'
+          : 'Nothing is arriving from the game — the telemetry plugin is usually missing from its plugins folder'}">
+      <span class="sb-dot ${Telemetry.mode === 'live' ? 'ok' : linkOn ? 'warn' : 'err'}"></span>${
+        Telemetry.mode === 'live' ? 'Telemetry live' : linkOn ? 'Telemetry waiting' : 'No telemetry'}</button>
     <span class="sb-sep"></span>
     <button class="sb-item btn-like ${Realtime.status === 'live' ? 'on' : ''}"
       data-act="fleet-setup"
