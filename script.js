@@ -6886,6 +6886,26 @@ function openSearch() {
       const inp = w.querySelector('#cmdInput'), out = w.querySelector('#cmdResults');
       const run = () => { out.innerHTML = searchResults(inp.value); };
       inp.addEventListener('input', run); run();
+
+      /* The cursor belongs in the box. Ctrl+K opened the search and left the
+         focus wherever it was, so the first thing anybody typed went nowhere
+         and the search looked broken before it had done anything. */
+      try { inp.focus(); inp.select(); } catch (e) { /* not fatal */ }
+
+      /* And picking a result has to close it.
+
+         Results navigate through the shared data-act="go" handler, which
+         sets location.hash — and nothing on that path closes a modal. So the
+         destination loaded UNDERNEATH the search, which still had the screen.
+         Worse, picking something you were already looking at only re-rendered
+         behind it, so the search sat there and nothing happened at all.
+
+         Deferred by a tick so the navigation runs first: this listener sits
+         on an ancestor of the button and would otherwise tear the result out
+         of the document before the handler that acts on it. */
+      w.addEventListener('click', (e) => {
+        if (e.target.closest('[data-act]')) setTimeout(closeModal, 0);
+      });
     },
   });
 }
@@ -6897,9 +6917,15 @@ function searchResults(q) {
       .map(([k, r]) => `<button class="btn btn-block" style="justify-content:flex-start" data-act="go" data-href="#/${k}">
         ${icon(r.icon)}${esc(r.title)}</button>`).join('')}</div>`;
 
-  const drivers = Store.db.drivers.filter((d) => (d.name + d.id).toLowerCase().includes(q)).slice(0, 5);
-  const events = Store.db.events.filter((e) => (e.name + e.start + e.dest).toLowerCase().includes(q)).slice(0, 5);
-  const trucks = Store.db.trucks.filter((t) => (t.id + t.make + t.model + t.plate).toLowerCase().includes(q)).slice(0, 5);
+  /* Joined through a helper rather than with +, because a record missing one
+     of these fields used to put the literal text "undefined" into the thing
+     being searched — so a driver with no country matched a search for "und",
+     and every event without a destination matched each other. */
+  const hay = (...parts) => parts.map((p) => (p == null ? '' : String(p))).join(' ').toLowerCase();
+
+  const drivers = Store.db.drivers.filter((d) => hay(d.name, d.id).includes(q)).slice(0, 5);
+  const events = Store.db.events.filter((e) => hay(e.name, e.start, e.dest).includes(q)).slice(0, 5);
+  const trucks = Store.db.trucks.filter((t) => hay(t.id, t.make, t.model, t.plate).includes(q)).slice(0, 5);
   if (!drivers.length && !events.length && !trucks.length)
     return emptyState('search', 'No matches', `Nothing found for “${q}”.`);
 
@@ -9924,6 +9950,7 @@ const LiveMap = {
   map: null, roadLayer: null, routeLayer: null, cityLayer: null, fleetLayer: null,
   _graph: null, _graphGame: null, _roadSig: null,
   timer: null, drivers: [], online: false, lastError: null,
+  source: 'none',   /* none | supabase | service — where the positions came from */
   game: 'ets2',
 
   service() {
@@ -10192,7 +10219,18 @@ const LiveMap = {
 
   async poll() {
     const base = this.service();
-    if (!base) { this.drivers = []; this.online = false; this.paint(); return; }
+
+    /* No company service configured. That used to be the end of it: the map
+       drew the road network and said nobody could appear on it until a
+       service was running.
+
+       Which was wrong, and had been for a while. login.html's driver
+       terminal inserts every GPS fix into public.driver_locations, that
+       table is in the supabase_realtime publication, and script.js had never
+       once read it — the map was looking in the one place the positions were
+       not. */
+    if (!base) return this.pollSupabase();
+
     /* the stream is already keeping this current */
     if (HQLive.status === 'live') return;
     try {
@@ -10204,6 +10242,75 @@ const LiveMap = {
     } catch (e) {
       this.drivers = []; this.online = false; this.lastError = e.message;
     }
+    this.paint();
+  },
+
+  /* The crew, read from the table the driver terminal has been filling.
+
+     Row level security decides what comes back, and deliberately not the
+     same amount for everybody — 20260904_driver_locations_and_realtime.sql
+     lets a driver read their own positions and staff read every one. So
+     dispatch sees the fleet and a driver sees themselves. This reports
+     whatever it was given rather than pretending either way.
+
+     A position is real-world latitude and longitude; drawFleet projects it
+     onto the game schematic through geoToGameLatLng, and leaves `game`
+     unset on purpose so a real fix is drawn on whichever map is open. */
+  async pollSupabase() {
+    if (!window.gmnSupabase) {
+      this.drivers = []; this.online = false; this.source = 'none';
+      this.paint(); return;
+    }
+
+    try {
+      const { data, error } = await window.gmnSupabase
+        .from('driver_locations')
+        .select('driver_id, latitude, longitude, speed, heading, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+
+      /* Newest row per driver. The query is ordered newest first, so the
+         first row seen for a driver is the one that counts — no grouping in
+         the database and no second round trip. */
+      const latest = new Map();
+      (data || []).forEach((r) => {
+        if (r && !latest.has(r.driver_id)) latest.set(r.driver_id, r);
+      });
+
+      /* Three minutes. Long enough that a phone through a tunnel or a stop
+         at lights is still on the map, short enough that yesterday's run is
+         not shown as somebody driving now. */
+      const cutoff = Date.now() - 3 * 60 * 1000;
+
+      this.drivers = Array.from(latest.values()).map((r) => {
+        const rec = (Store.db.drivers || []).find((d) => d
+          && String(d.supabaseId) === String(r.driver_id));
+
+        return {
+          id: rec ? rec.id : 'driver-' + r.driver_id,
+          name: rec ? rec.name : 'Driver',
+          lat: Number(r.latitude),
+          lon: Number(r.longitude),
+          speed: r.speed == null ? null : Number(r.speed),
+          heading: r.heading == null ? null : Number(r.heading),
+          at: Date.parse(r.updated_at) || 0,
+        };
+      }).filter((d) => Number.isFinite(d.lat) && Number.isFinite(d.lon) && d.at > cutoff);
+
+      this.online = true;
+      this.lastError = null;
+      this.source = 'supabase';
+
+    } catch (e) {
+      this.drivers = [];
+      this.online = false;
+      this.source = 'none';
+      this.lastError = supabaseError(e);
+      console.warn('[GMN] could not read live positions:', this.lastError);
+    }
+
     this.paint();
   },
 
@@ -10537,12 +10644,25 @@ function viewLivemap() {
       </div>
     </div>
 
+    <!-- "Nobody can appear on it until the fleet service is running" was
+         simply not true, and it sent people to set up a server they did not
+         need. Positions go into Supabase from the driver terminal and the
+         map reads them now, so with no service configured this is a
+         statement about WHOSE positions come back, not whether any do.
+
+         Row level security is what decides that: a driver may read their
+         own, staff may read every one. -->
     ${configured ? '' : `<div class="card mb-16"><div class="card-body row gap-12">
-      <span style="color:var(--warn);width:18px;height:18px;flex:none">${icon('alert')}</span>
-      <div class="grow"><div class="b7">No fleet service connected</div>
-        <div class="xs t3 mt-4">The map is drawn, but nobody can appear on it until the Gaming Nation
-          fleet service is running and this platform knows where it is.
-          ${can('admin.view') ? 'Use <b>Company service</b> above.' : 'An administrator sets this up.'}</div></div>
+      <span style="color:var(--${can('admin.view') ? 'text-3' : 'warn'});width:18px;height:18px;flex:none">${
+        icon(can('admin.view') ? 'info' : 'alert')}</span>
+      <div class="grow"><div class="b7">${can('admin.view')
+        ? 'Positions are coming from Gaming Nation, not a fleet service'
+        : 'You can only see your own position here'}</div>
+        <div class="xs t3 mt-4">${can('admin.view')
+          ? 'Every driver reporting from the terminal appears on this map. A company '
+            + 'service adds the live stream and in-game telemetry — use <b>Company service</b> above.'
+          : 'The map shows the position your own driver terminal reports. Seeing the rest '
+            + 'of the crew is a dispatch view, and an administrator turns it on.'}</div></div>
     </div></div>`}
 
     <div class="card"><div class="card-body" style="padding:0">
