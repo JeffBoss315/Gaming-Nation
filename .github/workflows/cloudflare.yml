@@ -1,65 +1,11 @@
-# Publish the website to Cloudflare Pages on every push.
-#
-# WHY THIS EXISTS ALONGSIDE pages.yml
-#
-# GitHub Pages answers from four fixed addresses (185.199.108-111.153)
-# that some ISPs simply do not carry — jeffboss315.github.io times out on
-# exactly the connection this company is run from. Cloudflare answers from
-# whichever edge is nearest, on addresses that are almost never blocked.
-#
-# TWO ADDRESSES, ONE SITE
-#
-#   gaming-nation.pages.dev   the name to hand to drivers, and the one
-#                             site.config.json points the canonical at, so
-#                             it is the one search engines will index
-#   heavyline.pages.dev       the original address, kept alive because it
-#                             is already written down in places this repo
-#                             cannot reach
-#
-# Both are Cloudflare Pages projects connected to this repository, so
-# Cloudflare builds BOTH on every push with nothing configured here. There
-# is no custom domain: the account owns no zone, and a pages.dev name is
-# the most anyone gets for free.
-#
-# TWO WAYS TO GET PUSH-TO-DEPLOY. YOU ONLY NEED ONE.
-#
-#   1. Connect the repository in the Cloudflare dashboard. This is what is
-#      set up today, for both projects. Nothing to configure here and no
-#      secrets to keep:
-#
-#        dash.cloudflare.com -> Workers & Pages -> gaming-nation
-#          -> Settings -> Builds & deployments -> Connect to Git
-#        Build command      node tools/build-www.js
-#        Output directory   www
-#
-#      Cloudflare then builds every push itself and this workflow stays
-#      asleep, which is why it checks for the token before doing anything.
-#
-#   2. Or add a repository secret and let this workflow do it:
-#
-#        Settings -> Secrets and variables -> Actions -> New repository secret
-#        CLOUDFLARE_API_TOKEN     a token with "Cloudflare Pages: Edit" on
-#                                 this account. That one permission is all a
-#                                 site deploy needs — do not hand a CI job a
-#                                 token that can touch the whole account.
-#
-#      The account id (c54290a31703c611a3387fd22b2c147a) is defaulted in the
-#      deploy step, so the token is the only secret to add.
-#
-# Do NOT use `npm run www` as the build command anywhere: that runs
-# tools/scan.js first, which is a release audit and fails on a clean
-# checkout because release/ is gitignored. The builder alone needs no
-# dependencies at all.
-
 name: Publish to Cloudflare
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
-# A deploy already in flight is allowed to finish rather than being
-# cancelled: a half-applied deploy is worse than a slightly stale one.
 concurrency:
   group: cloudflare-pages
   cancel-in-progress: false
@@ -67,50 +13,49 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 25
 
-      # Without a token there is nothing this job can do, and a workflow
-      # that fails red on every push teaches people to ignore the red. If
-      # Cloudflare is building from Git instead, this is the expected path.
-      #
-      # Only the TOKEN needs to be a secret. An account id is an identifier,
-      # not a credential, so it is defaulted in the deploy step below and
-      # one secret is enough. CLOUDFLARE_ACCOUNT_ID still overrides it.
-      - name: Is there a token to deploy with
+      - name: Check Cloudflare token
         id: check
+        shell: bash
         run: |
           if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
             echo "ready=yes" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare token found."
           else
             echo "ready=no" >> "$GITHUB_OUTPUT"
-            echo "No CLOUDFLARE_API_TOKEN set — skipping."
-            echo "Either connect the repo in the Cloudflare dashboard, or add"
-            echo "CLOUDFLARE_API_TOKEN under Settings -> Secrets and variables -> Actions."
+            echo "ERROR: CLOUDFLARE_API_TOKEN is missing."
+            exit 1
           fi
 
-      # tools/build-www.js is plain node with no dependencies, so npm ci
-      # would only pull Electron in for no reason.
-      - name: Build the site
+      - name: Build website
         if: steps.check.outputs.ready == 'yes'
         run: node tools/build-www.js
 
-      # A deploy that publishes an empty directory takes the site down and
-      # reports success. Check something is actually there first.
-      - name: Check something was built
+      - name: Verify build
         if: steps.check.outputs.ready == 'yes'
         run: |
-          test -f www/login.html || { echo "www/login.html missing"; exit 1; }
-          echo "built $(find www -type f | wc -l) files"
+          test -f www/login.html || {
+            echo "ERROR: www/login.html is missing"
+            exit 1
+          }
 
-      # Run from the repository root, not from www/, because that is where
-      # wrangler looks for functions/ — the download gate is a Pages
-      # Function and deploying the folder alone would leave it behind.
-      - name: Deploy to gaming-nation.pages.dev
+          echo "Build successful."
+          echo "Files:"
+          find www -type f | wc -l
+
+      - name: Deploy to Gaming Nation
         if: steps.check.outputs.ready == 'yes'
         uses: cloudflare/wrangler-action@v3
         with:
@@ -118,15 +63,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
           command: pages deploy www --project-name=gaming-nation --branch=main
 
-      # The old address, kept working. It is a second project rather than
-      # an alias because a pages.dev name belongs to its project and cannot
-      # be pointed anywhere else — aliasing needs a custom domain, which
-      # needs a zone, which this account does not have.
-      #
-      # Not `if: failure()`-guarded and not allowed to fail quietly: if the
-      # legacy address stops updating it starts serving a site that is
-      # slowly drifting out of date, which is worse than an obvious break.
-      - name: Deploy to heavyline.pages.dev
+      - name: Deploy to Heavyline
         if: steps.check.outputs.ready == 'yes'
         uses: cloudflare/wrangler-action@v3
         with:
@@ -134,12 +71,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
           command: pages deploy www --project-name=heavyline --branch=main
 
-      - name: Where it went
-        if: steps.check.outputs.ready == 'yes'
+      - name: Deployment complete
         run: |
-          echo "Published to https://gaming-nation.pages.dev"
-          echo "          and https://heavyline.pages.dev"
-          if [ -d functions ]; then
-            echo "functions/ went with it — the download gate is live once"
-            echo "GMN_DOWNLOAD_SECRET and the R2 binding are set on the project."
-          fi
+          echo "Gaming Nation: https://gaming-nation.pages.dev"
+          echo "Heavyline: https://heavyline.pages.dev"
