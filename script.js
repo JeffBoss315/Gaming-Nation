@@ -3521,7 +3521,11 @@ function shellHTML() {
         <button class="icon-btn mobile-only" data-act="open-sidebar" aria-label="Open menu">${icon('menu')}</button>
         <div class="search">
           ${icon('search')}
-          <input id="globalSearch" type="search" placeholder="Search drivers, convoys, fleet…" aria-label="Search" autocomplete="off">
+          <!-- readonly from the markup, not just from the binder: this is a
+               button that looks like a field, and the browser will autofill
+               anything it can type into. -->
+          <input id="globalSearch" type="search" readonly placeholder="Search drivers, convoys, fleet…"
+            aria-label="Search" autocomplete="off">
           <span class="kbd">Ctrl K</span>
         </div>
         <div class="grow"></div>
@@ -6877,6 +6881,13 @@ function openAddDriver() {
 }
 
 function openSearch() {
+  /* One at a time. Anything that can ask for the search twice — a stray
+     focus, a double press, a reopen while one is already up — would
+     otherwise stack a second copy on top of the first, and closing one would
+     leave the other still covering the page. */
+  const already = document.getElementById('cmdInput');
+  if (already) { try { already.focus(); already.select(); } catch (e) {} return; }
+
   openModal({
     title: 'Search Gaming Nation', size: 'wide',
     body: `<div class="search" style="max-width:none">${icon('search')}
@@ -13398,9 +13409,36 @@ function bindViewForms() {
 
         gs.dataset.bound = '1';
 
-        gs.addEventListener('focus', () => {
+        /* Opened by being PRESSED, not by being focused.
+
+           This box is a launcher: it blurs itself and hands over to the
+           real search. Opening on focus made anything that merely put the
+           cursor here open a modal, and two things do that without a person
+           asking:
+
+             - the browser's autofill. Chrome focuses a field to fill it,
+               and it fills this one despite autocomplete="off" — hence an
+               email address sitting in a box labelled "Search drivers,
+               convoys, fleet…".
+             - closing the search itself. The browser restores focus to
+               whatever had it before, which is this input, which opened the
+               search again. Picking a result navigated, closed, and reopened
+               the modal over the page you had just asked for.
+
+           readonly is what stops the autofill: browsers do not fill a field
+           that cannot be typed into, and this one never holds real input
+           anyway. Enter and Space keep it reachable from the keyboard. */
+        const openIt = (e) => {
+            if (e) e.preventDefault();
             gs.blur();
             openSearch();
+        };
+
+        gs.readOnly = true;
+
+        gs.addEventListener('mousedown', openIt);
+        gs.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') openIt(e);
         });
     }
 }

@@ -42,6 +42,7 @@
     "smoke:terminal": "node tools/run-electron.js tools/smoke-driver-terminal.js .",
     "smoke:signup": "node tools/run-electron.js tools/smoke-signup-approval.js .",
     "smoke:profile": "node tools/run-electron.js tools/smoke-profile.js .",
+    "smoke:search": "node tools/run-electron.js tools/smoke-search.js .",
     "smoke:downloadpage": "node tools/run-electron.js tools/smoke-download-page.js .",
     "smoke:downloads": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-download-gate.mjs",
     "release:collect": "node tools/collect-release.js --strict",
