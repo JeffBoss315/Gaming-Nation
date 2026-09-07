@@ -5697,6 +5697,142 @@ function viewCommunity() {
   </div>`;
 }
 
+/* Why is the recruitment screen empty?
+
+   Every failure between "somebody registered" and "a row appears here" is
+   silent, and two of them are indistinguishable from success: a select
+   refused by row level security is a SUCCESSFUL query returning zero rows,
+   which from the browser looks exactly like nobody having applied.
+
+   So ask each question separately and show every answer, including the
+   ones that are fine. The useful fact is which step is the FIRST to be
+   wrong, and no single result can show that.
+
+   In the app rather than as a script to paste into the console, because
+   the console now refuses pasted code until you type "allow pasting" —
+   and telling somebody to defeat a warning that exists to protect them is
+   not a reasonable instruction. */
+async function diagnoseApplications() {
+  const rows = [];
+  const problems = [];
+  const add = (k, v, bad) => rows.push({ k, v: String(v), bad: !!bad });
+  const bad = (m) => problems.push(m);
+
+  const sb = window.gmnSupabase;
+
+  if (!sb) {
+    add('Supabase client', 'MISSING', true);
+    bad('The Supabase library did not load, so nothing here can be read. '
+      + 'Check the network and any ad-blocker.');
+  } else {
+    add('Supabase client', 'present');
+
+    const { data: sess } = await sb.auth.getSession();
+    const session = sess && sess.session;
+    add('Signed in to Supabase', session ? 'yes' : 'NO', !session);
+
+    if (!session) {
+      bad('You are signed in to the app but not to Supabase. Every policy on '
+        + 'these tables is "to authenticated", so every read returns nothing. '
+        + 'Sign out and sign in again with your email and password.');
+    } else {
+      add('Account', session.user.email);
+      add('Email confirmed', session.user.email_confirmed_at ? 'yes' : 'NO',
+          !session.user.email_confirmed_at);
+
+      const { data: me, error: meErr } = await sb.from('drivers')
+        .select('driver_code, role, status')
+        .eq('auth_user_id', session.user.id).maybeSingle();
+
+      if (meErr) {
+        add('Your driver row', 'ERROR ' + meErr.code, true);
+        bad('Your own driver row could not be read: ' + meErr.message);
+      } else if (!me) {
+        add('Your driver row', 'NO ROW', true);
+        bad('You have no drivers row, so is_staff() cannot be true. Run supabase/setup.sql.');
+      } else {
+        add('Your driver code', me.driver_code);
+        add('Your role', me.role);
+      }
+
+      /* The one that decides. The app and the database keep separate
+         opinions about who is staff, and only this one controls the rows. */
+      const { data: staff, error: staffErr } = await sb.rpc('is_staff');
+
+      if (staffErr) {
+        add('is_staff() says', 'ERROR ' + staffErr.code, true);
+        bad('is_staff() could not be called (' + staffErr.message + '). If it does '
+          + 'not exist, run supabase/setup.sql.');
+      } else {
+        add('is_staff() says', String(staff), staff === false);
+        if (staff === false) {
+          bad('The database does not count you as staff, so the policy "Staff can '
+            + 'read every application" gives you nothing. An empty result is not an '
+            + 'error, which is exactly why the screen just looks empty. Re-run '
+            + 'supabase/setup.sql, which sets the role list is_staff() uses.');
+        }
+      }
+
+      const { data: apps, error: appErr } = await sb.from('applications')
+        .select('id, driver_id, full_name, status');
+
+      if (appErr) {
+        add('Applications readable', 'ERROR ' + appErr.code, true);
+        bad('The applications table refused the read (' + appErr.message + '). '
+          + 'That is a policy problem, not an empty table.');
+      } else {
+        add('Applications you can see', (apps || []).length, (apps || []).length === 0);
+      }
+
+      const { data: drv } = await sb.from('drivers').select('driver_code, role');
+      const applicants = (drv || []).filter((d) => (d.role || 'driver') === 'driver');
+      add('Drivers in the database', (drv || []).length);
+      add('Of those, plain drivers', applicants.length);
+
+      if (!appErr && (apps || []).length === 0) {
+        if (applicants.length === 0) {
+          bad('No applications AND no plain drivers — only staff. So the table being '
+            + 'empty is CORRECT: nobody has completed a registration yet. Register a '
+            + 'test account on the drivers site; it should appear here at once.');
+        } else {
+          bad('There are ' + applicants.length + ' driver(s) who should each have an '
+            + 'application, and no application rows at all. Run supabase/setup.sql — '
+            + 'it files one for every driver that has none.');
+        }
+      }
+    }
+  }
+
+  add('Held by this screen', (Store.db.applications || []).length);
+  add('Last pull', Applications.lastAt
+    ? fmt.rel(new Date(Applications.lastAt).toISOString()) : 'never');
+  add('Pull status', Applications.status
+    + (Applications.lastError ? ' - ' + Applications.lastError : ''),
+    Applications.status === 'error');
+
+  openModal({
+    title: 'Why the recruitment screen is empty',
+    sub: 'Every step between a driver registering and a row appearing here',
+    size: 'lg',
+    body: `
+      <table class="tbl"><tbody>
+        ${rows.map((r) => `<tr>
+          <td class="sm t2" style="width:46%">${esc(r.k)}</td>
+          <td class="sm ${r.bad ? 'b7' : ''}" style="color:${r.bad ? 'var(--danger)' : 'var(--text)'}">${esc(r.v)}</td>
+        </tr>`).join('')}
+      </tbody></table>
+      ${problems.length ? problems.map((m) => `
+        <div class="mt-16" style="padding:12px 14px;border-radius:var(--r);
+          background:rgba(var(--danger-rgb),.09);border:1px solid rgba(var(--danger-rgb),.28)">
+          <div class="sm">${esc(m)}</div></div>`).join('')
+        : `<div class="mt-16" style="padding:12px 14px;border-radius:var(--r);
+             background:rgba(var(--ok-rgb),.09);border:1px solid rgba(var(--ok-rgb),.28)">
+             <div class="sm">Every check passed. If the screen is still empty, press Refresh.</div></div>`}`,
+    foot: `<button class="btn btn-ghost" data-act="modal-close">Close</button>
+           <button class="btn btn-primary" data-act="apps-refresh">${icon('refresh')}Refresh now</button>`,
+  });
+}
+
 /* ---------------- 26. Support (spec §14) ---------------- */
 
 /* Who may see a support request at all.
@@ -6201,7 +6337,10 @@ function adminPanel(tab) {
         <span class="xs t3">${Applications.lastAt
           ? 'Checked ' + esc(fmt.rel(new Date(Applications.lastAt).toISOString()))
           : 'Not yet checked against Supabase'}</span>
-        <button class="btn btn-sm" data-act="apps-refresh">${icon('refresh')}Refresh</button>
+        <div class="row gap-8">
+          <button class="btn btn-sm" data-act="apps-diagnose">${icon('info')}Diagnose</button>
+          <button class="btn btn-sm" data-act="apps-refresh">${icon('refresh')}Refresh</button>
+        </div>
       </div>
       ${apps.length ? '' : applicationsEmptyState()}
       ${apps.length ? `<div class="table-wrap"><table class="tbl">
@@ -7772,6 +7911,7 @@ function handleAction(act, t, ev) {
 
     /* support */
     case 'support-filter': state.ui.supportFilter = v; render(); return;
+    case 'apps-diagnose': diagnoseApplications(); return;
     case 'apps-refresh': {
       toast('Checking Supabase…', 'info');
       Applications.pull().then((ran) => {
