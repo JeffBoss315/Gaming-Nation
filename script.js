@@ -13721,7 +13721,20 @@ const Messages = {
         method: 'POST',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
-          'X-HLL-Filename': file.name.replace(/[^\\x20-\\x7e]/g, '_'),
+          /* One backslash, not two.
+
+             This was /[^\\x20-\\x7e]/g. In a regex LITERAL \\ is an escaped
+             backslash, so the class read "not one of: backslash, x, 2, 0,
+             the range '0' to '\', 7, e" — which is almost every character a
+             filename is made of. It did not strip the unprintable ones, it
+             replaced nearly all the printable ones:
+
+               "rapport café 🚚.pdf"  ->  "___________________"
+
+             Nothing errored, which is why it lasted: the header was still
+             valid, the upload still went, and every file simply arrived
+             named after a row of underscores. */
+          'X-HLL-Filename': file.name.replace(/[^\x20-\x7e]/g, '_'),
           Authorization: 'Bearer ' + ServiceAuth.token,
         },
         body: file,

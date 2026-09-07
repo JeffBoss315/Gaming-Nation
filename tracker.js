@@ -5514,7 +5514,7 @@ const Messages = {
       await fetch(Sync.url() + '/api/dm/read', {
         method: 'POST',
         headers: ServiceAuth.headers(),
-        body: JSON.stringify({ with: withId }),
+        body: JSON.stringify({ withId: withId }),
       });
       const t = this.threads.find((x) => String(x.withId) === String(withId));
       if (t) t.unread = 0;
