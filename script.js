@@ -1120,6 +1120,13 @@ fromRow(row, authUser) {
            include what they are. */
         role: row.role || (local && local.role) || 'driver',
 
+        /* The profile photo, which is the driver's own rather than the
+           company's. Supabase first so it follows them to any browser they
+           sign in on; the local record is the fallback for a project that
+           has not run 20260907_driver_avatar.sql yet, where the photo still
+           only travels in the company blob. */
+        avatar: row.avatar || (local && local.avatar) || '',
+
         /* --- no column yet: local record, then a safe default --- */
         initials: (local && local.initials) || initials(row.full_name || 'Driver'),
         rankIdx: (local && local.rankIdx) ?? 0,
@@ -2354,6 +2361,45 @@ function readAvatarFile(file) {
     img.src = url;
   });
 }
+
+/* Put the photo somewhere it will still be after they sign out.
+
+   It used to live only on the roster record, which meant it travelled in
+   the company blob and lived or died with that record — and a driver whose
+   roster row this browser had not pulled yet had nowhere to put it at all:
+   `Store.driver(id) || state.user` quietly wrote it to the copy this
+   session renders, Store.save() wrote a company record that never contained
+   it, and the next pull replaced the copy. The photo was never anywhere
+   durable, which is why signing out lost it.
+
+   drivers.avatar is the driver's own, covered by the "Drivers can update
+   their own profile" policy that is already in setup.sql, and comes back
+   with them on whatever machine they sign in on next.
+
+   Best effort, and deliberately not fatal. A project that has not run
+   supabase/migrations/20260907_driver_avatar.sql has no such column, and
+   refusing the upload over that would leave them worse off than before —
+   the local record is written either way, so the photo still shows and
+   still travels in the company record exactly as it used to. */
+async function persistAvatar(dataUrl) {
+  if (!window.gmnSupabase || !state.user || !state.user.supabaseId) return false;
+
+  try {
+    const { error } = await window.gmnSupabase
+      .from('drivers')
+      .update({ avatar: dataUrl || null })
+      .eq('id', state.user.supabaseId);
+
+    if (error) throw error;
+    return true;
+
+  } catch (err) {
+    console.warn('[GMN] the photo was not stored on the driver record — run '
+      + 'supabase/migrations/20260907_driver_avatar.sql:', supabaseError(err));
+    return false;
+  }
+}
+
 function avatarStack(drivers, max = 5, size = 32) {
   const shown = drivers.slice(0, max);
   const rest = drivers.length - shown.length;
@@ -5390,7 +5436,18 @@ const APPLICATION_STAGES = [
 ];
 function applicationTracker(a) {
   const rejected = a.status === 'rejected';
+  const approved = a.status === 'approved';
   const idx = APPLICATION_STAGES.findIndex((st) => st[0] === a.status);
+
+  /* The one line an applicant is actually looking for.
+
+     The timeline below says the same thing, but it says it as five rows of
+     equal weight and you have to find the one marked "Current" to read your
+     own answer off it. A driver opening this page wants to know whether
+     they are still waiting or whether they are in — so that is what the
+     card leads with, in those words. */
+  const firstName = String(a.name || '').trim().split(/\s+/)[0] || 'driver';
+  const stage = APPLICATION_STAGES[idx >= 0 ? idx : 0];
   return `<div class="card reveal d1">
     <div class="card-head">
       <div class="card-title">${icon('userPlus')}Your application</div>
@@ -5402,6 +5459,26 @@ function applicationTracker(a) {
           <div class="xs t3 mono">${esc(a.id)} · submitted ${esc(fmt.rel(a.submitted))}</div></div>
         <span class="badge">${esc(a.experience)}</span>
       </div>
+
+      ${rejected ? '' : `
+      <div class="row gap-14 wrap mb-16" style="align-items:flex-start;padding:14px;
+           border-radius:var(--r);background:var(--panel-2);
+           border:1px solid ${approved ? 'rgba(62,207,142,.30)' : 'var(--accent-line)'}">
+        <span class="stat-ico" style="flex:none;color:${approved ? 'var(--ok)' : 'var(--accent)'}">
+          ${icon(approved ? 'checkCircle' : 'clock')}</span>
+        <div class="grow" style="min-width:220px">
+          <div class="b7 lg">${approved
+            ? 'Welcome to Gaming Nation, ' + esc(firstName)
+            : 'In progress'}</div>
+          <p class="t2 sm mt-4">${approved
+            ? 'Your application was approved and your Driver ID has been issued. '
+              + 'The Gaming Nation Trucker client is yours to download.'
+            : esc(stage[2])}</p>
+          ${approved ? `<button class="btn btn-sm btn-primary mt-12"
+            data-act="go" data-href="#/downloads">${icon('download')}Get the client</button>` : ''}
+        </div>
+      </div>`}
+
       ${rejected ? `<div class="row gap-10" style="padding:12px;border-radius:var(--r);border:1px solid rgba(239,95,95,.3)">
           <span style="width:16px;height:16px;color:var(--danger)">${icon('alert')}</span>
           <div class="sm t2">This application was not successful. You are welcome to apply again after 30 days.</div>
@@ -7826,17 +7903,28 @@ function handleAction(act, t, ev) {
 
         try {
           const data = await readAvatarFile(file);
-          const me = Store.driver(state.user.id) || state.user;
 
-          me.avatar = data;
+          /* Both records, not whichever one the `||` happened to pick. The
+             roster row is what the company blob carries and what every
+             other screen draws from; state.user is the copy this session is
+             rendering. Writing only one of them is how the photo went
+             missing between sessions. */
+          const record = Store.driver(state.user.id);
+          if (record) record.avatar = data;
           state.user.avatar = data;
 
           /* Store.save() offers the change to the company service itself,
              so the face reaches the console and the client without this
              having to ask. */
           Store.save();
-          toast('Photo updated', 'ok', 'It shows anywhere your name does.');
           render();
+
+          /* And to the driver's own row, which is what survives a sign-out. */
+          const kept = await persistAvatar(data);
+
+          toast('Photo updated', 'ok', kept
+            ? 'It shows anywhere your name does, on any machine you sign in on.'
+            : 'It shows anywhere your name does.');
 
         } catch (err) {
           toast('Could not use that image', 'err', err.message);
@@ -7848,10 +7936,12 @@ function handleAction(act, t, ev) {
     }
 
     case 'avatar-clear': {
-      const me = Store.driver(state.user.id) || state.user;
-      delete me.avatar;
+      const record = Store.driver(state.user.id);
+      if (record) delete record.avatar;
       delete state.user.avatar;
       Store.save();
+      /* Cleared on their own row too, or it comes back on the next sign-in. */
+      persistAvatar('');
       toast('Photo removed', 'ok', 'Your initials are used again.');
       render();
       return;
@@ -14618,6 +14708,24 @@ function dismissSplash() {
 
 const PRESENCE_WINDOW = 6 * 60 * 1000;
 
+/* How often a heartbeat is allowed to reach Supabase.
+
+   Presence is a heartbeat, and a heartbeat that rewrites the whole company
+   record is what made the version climb for ever. refreshPresence() saved
+   unconditionally — `if (u || changed)`, and u is truthy for anybody signed
+   in — so every open tab pushed the entire company blob every thirty
+   seconds. Every other tab's ten-second poll then found a version it had
+   not seen, replaced its copy of the company, re-normalised it and
+   repainted, which is where the endless "Company pulled from Supabase"
+   came from. Nothing had happened.
+
+   A third of the window: PRESENCE_WINDOW decides who counts as here, so
+   sending at this cadence keeps every driver inside it with room to spare
+   while cutting the writes by four. A real change — somebody going online
+   or offline — still goes out at once. */
+const PRESENCE_PUSH_EVERY = PRESENCE_WINDOW / 3;
+let lastPresencePush = 0;
+
 /* Stamps the signed-in driver as here, then rewrites everyone's presence from
    how recently their record was last touched. 'driving' is only ever set by a
    client reporting a live run, so it is left alone while it is still fresh. */
@@ -14628,6 +14736,17 @@ function refreshPresence() {
   if (u) {
     u.lastSeen = new Date(now).toISOString();
     if (u.status === 'offline') u.status = 'online';
+
+    /* state.user is a copy built by Accounts.fromRow, not a handle on the
+       roster row, so stamping it alone left the signed-in driver's own
+       presence recorded nowhere the rest of the company could read it —
+       the loop below then read the untouched roster row and decided they
+       were offline. */
+    const record = Store.driver(u.id);
+    if (record && record !== u) {
+      record.lastSeen = u.lastSeen;
+      record.status = u.status;
+    }
   }
   let changed = false;
   (Store.db.drivers || []).forEach((d) => {
@@ -14652,7 +14771,13 @@ function refreshPresence() {
 
     if (d.status !== next) { d.status = next; changed = true; }
   });
-  if (u || changed) Store.save();
+  /* A status that actually moved is worth telling everyone about now. A
+     heartbeat that moved nothing waits its turn — see PRESENCE_PUSH_EVERY. */
+  if (changed || (u && now - lastPresencePush >= PRESENCE_PUSH_EVERY)) {
+    lastPresencePush = now;
+    Store.save();
+  }
+
   if (changed && (state.route.name === 'community' || state.route.name === 'drivers'
     || state.route.name === 'dashboard')) render();
 }
