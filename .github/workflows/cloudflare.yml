@@ -63,15 +63,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
           command: pages deploy www --project-name=gaming-nation --branch=main
 
-      - name: Deploy to Heavyline
-        if: steps.check.outputs.ready == 'yes'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
-          command: pages deploy www --project-name=heavyline --branch=main
-
       - name: Deployment complete
         run: |
           echo "Gaming Nation: https://gaming-nation.pages.dev"
-          echo "Heavyline: https://heavyline.pages.dev"
