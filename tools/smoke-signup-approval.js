@@ -203,6 +203,76 @@ app.whenReady().then(async () => {
 
     await js(`window.gmnSupabase.__db.applications[0].status = 'approved';`);
 
+    /* ---- 4b. approved while the driver is sitting on the page ----
+
+       clientAccess was only ever worked out at sign-in, so a driver who was
+       already signed in when the recruiter approved them stayed locked out.
+       They got the notification saying the client was ready, followed it to
+       #/downloads, and were told they were still waiting on the application
+       that had just been approved. Signing out and back in was the only way
+       through and nothing said so — which is why the rest of this file
+       passed while the thing itself was broken. */
+    const live = await js(`
+      (async function () {
+        var S = window.gmnSupabase;
+
+        /* A whole record before anything pulls: pull() repaints, and the
+           shell draws an avatar from the signed-in user, so the three-field
+           stand-in the previous check left behind takes the render down on
+           a name that is not there. */
+        state.user = Accounts.fromRow(S.__db.drivers[0], { email: S.__db.drivers[0].email });
+        state.route = { name: 'downloads', params: [] };
+
+        /* Pull once to settle the list. By this point the fixture has filed
+           under more than one driver code, and what the page reacts to is
+           the merged row rather than the raw table — so the driver under
+           test is taken from what pull() actually produces. */
+        await Applications.pull();
+
+        var app = (Store.db.applications || []).find(a => a && a.submittedBy);
+        var code = app.submittedBy;
+
+        /* Approved where a recruiter approves it: in the table, with this
+           browser told nothing. */
+        S.__db.applications
+          .filter(r => String(r.id) === String(app.supabaseId))
+          .forEach(r => { r.status = 'approved'; });
+
+        /* Signed in, holding what sign-in decided, sitting on the downloads
+           page. Built through Accounts.fromRow rather than hand-written:
+           pull() repaints, and render() draws the whole shell against this
+           record, so a three-field stand-in fails on something that has
+           nothing to do with what is being tested. */
+        var drow = S.__db.drivers.find(d => d.driver_code === code)
+          || { driver_code: code, full_name: 'Driver', email: 'pending@example.test',
+               role: 'driver', status: 'pending' };
+
+        state.user = Accounts.fromRow(drow, { email: drow.email });
+        state.user.clientAccess = false;
+        state.route = { name: 'downloads', params: [] };
+
+        var before = viewDownloads().indexOf('data-act="download-client"') !== -1;
+
+        await Applications.pull();
+
+        return JSON.stringify({
+          before: before,
+          access: !!state.user.clientAccess,
+          after: viewDownloads().indexOf('data-act="download-client"') !== -1,
+          told: (Store.db.notifications || [])
+                  .filter(n => n && n.driverId === code
+                            && n.href === '#/downloads').length,
+        });
+      })()
+    `);
+
+    const l = JSON.parse(live);
+
+    check('signed in and still pending — no download', String(l.before), 'false');
+    check('approved without signing in again — released', String(l.access), 'true');
+    check('and the page offers the download there and then', String(l.after), 'true');
+    check('told once, not once per pull', String(l.told), '1');
+
     /* ---- 5. and now it opens ----------------------------------- */
 
     const again = await js(`

@@ -9163,6 +9163,7 @@ const Applications = {
   on() { return !!window.gmnSupabase; },
 
   timer: null,
+  busy: false,        /* a pull is in flight — see pull() */
 
   /* Applications used to be pulled in exactly one place: the last two
      lines of Sync.pull(), the COMPANY sync.
@@ -9276,11 +9277,91 @@ const Applications = {
       && String(a.email || '').toLowerCase() === email) || null;
   },
 
+  /* The signed-in driver's own application.
+
+     Scoped to them rather than taking the first row: a recruiter sees every
+     application in this list, and the newest of their own is the one that
+     decides anything — somebody who applied twice is answered by the
+     application they filed last. */
+  mine() {
+    const u = state.user;
+    if (!u || !u.id) return null;
+    return (Store.db.applications || [])
+      .filter((a) => a && a.submittedBy === u.id)
+      .sort((a, b) => new Date(b.submitted || 0) - new Date(a.submitted || 0))[0] || null;
+  },
+
+  /* Release the client to a driver whose application has just been approved.
+
+     clientAccess is worked out once, at sign-in, from the application row.
+     Nothing recomputed it afterwards, and that is the whole bug: a driver
+     who was ALREADY SIGNED IN when the recruiter approved them got the
+     notification saying the client was ready, followed it to #/downloads,
+     and was still told they were waiting on their application. Signing out
+     and back in was the only way through, and nothing on the page said so.
+
+     The question the sign-in path asks is asked again here, every time the
+     table is read, so the wait is a sync cycle rather than a session.
+
+     Grants only, never revokes. Staff can release the client by hand from
+     the driver record, and a pull that also took it away would undo that
+     within the minute. Sign-in remains the place where a refusal is
+     recomputed from scratch. */
+  releaseClientIfApproved() {
+    const u = state.user;
+    if (!u || u.clientAccess) return false;
+
+    const app = this.mine();
+    if (!app || app.status !== 'approved') return false;
+
+    u.clientAccess = true;
+
+    /* state.user is a copy built by Accounts.fromRow, not a handle on the
+       roster row, so the record has to be told separately — otherwise the
+       grant is gone again on the next reload. */
+    const record = Store.driver(u.id);
+    if (record && record !== u) record.clientAccess = true;
+
+    /* The recruiter's machine files this notification too, and it arrives
+       here on the company blob where one is configured. Two of them saying
+       the same thing reads like the approval happened twice. */
+    const told = (Store.db.notifications || []).some((n) =>
+      n && n.driverId === u.id && n.href === '#/downloads' && n.icon === 'download');
+
+    if (!told) {
+      Store.notify(u.id, {
+        type: 'ok', icon: 'download',
+        title: 'Welcome to Gaming Nation',
+        body: 'Your application is approved. The Gaming Nation Trucker client is ready to download.',
+        href: '#/downloads',
+      });
+    }
+
+    console.log('[GMN] Application approved — the client is released to', u.id);
+    return true;
+  },
+
 async pull() {
   if (!this.on()) return false;
-  if (!(await Sync.signedIn())) return false;
+
+  /* One at a time.
+
+     This ends by calling render(), and the downloads page asks for a pull
+     when it draws for a driver who has not been released the client yet —
+     so a pull could start a render that started another pull, both of them
+     part-way through replacing Store.db.applications. Sync.pull() has
+     guarded itself this way from the start; this one never needed to until
+     a screen began asking for it. */
+  if (this.busy) return false;
+
+  this.busy = true;
 
   try {
+    /* Asked from inside the guard. A check that yields before the flag is
+       set is not a guard: both callers reach the await, both find busy
+       false, and both carry on. */
+    if (!(await Sync.signedIn())) return false;
+
     const { data, error } = await window.gmnSupabase
       .from('applications')
       .select(this.COLUMNS)
@@ -9324,28 +9405,40 @@ async pull() {
 
     Store.db.applications = merged;
 
+    /* Before anything decides whether to repaint: this pull is the only
+       thing that ever tells a signed-in driver their application was
+       approved, so it is where the client gets released to them. */
+    const released = this.releaseClientIfApproved();
+
     this.status = 'ok';
     this.lastError = null;
     this.lastAt = Date.now();
 
-    if (changed) {
+    if (changed || released) {
       Store.save();
 
-      console.log('[GMN] Applications pulled from Supabase:', {
-        rows: remoteRows.length,
-        previous: previous.length,
-        current: merged.length,
-        notYetInSupabase: unsent.length
-      });
+      if (changed) {
+        console.log('[GMN] Applications pulled from Supabase:', {
+          rows: remoteRows.length,
+          previous: previous.length,
+          current: merged.length,
+          notYetInSupabase: unsent.length
+        });
+      }
 
       /*
-       * Repaint only recruitment-related screens.
+       * Repaint the screens that show any of this. 'downloads' is on the
+       * list because it is where an approved driver is sent and what they
+       * are looking at when the answer changes; leaving it off meant the
+       * grant landed and the page went on saying they were waiting.
        */
       const showing =
         state.route &&
-        ['recruitment', 'admin', 'dashboard'].includes(state.route.name);
+        ['recruitment', 'admin', 'dashboard', 'downloads'].includes(state.route.name);
 
-      if (showing) render();
+      /* A release changes the onboarding banner and the nav on every screen,
+         not only the four above. */
+      if (showing || released) render();
     }
 
     return true;
@@ -9361,6 +9454,9 @@ async pull() {
     );
 
     return false;
+
+  } finally {
+    this.busy = false;
   }
 },
 
@@ -14357,6 +14453,16 @@ function routeView() {
     case 'ops':           return viewOps();
     case 'downloads':
       if (Downloads.state === 'unknown') Downloads.check().then(() => render());
+      /* A driver who followed the "your client is ready" notification here
+         should not then wait out the 45-second applications tick to be told
+         the same thing by this page. Ask now; pull() releases the client and
+         repaints if the answer has moved.
+
+         Only for somebody still waiting, and not again within five seconds
+         — this runs on every draw of the page, and a repaint is not a
+         reason to ask the question a second time. */
+      if (state.user && !state.user.clientAccess && Applications.on()
+          && Date.now() - Applications.lastAt > 5000) Applications.pull();
       return viewDownloads();
     case 'settings':      return viewSettings();
     case 'admin':
@@ -14552,7 +14658,7 @@ function refreshPresence() {
 }
 
 
-function boot() {
+async function boot() {
   /* The driver terminal is the other thing in login.html.
 
      driver-login.html and driver-dashboard.html were merged into that
@@ -14596,7 +14702,7 @@ function boot() {
      good. */
   const s = Store.readSession();
   if (s) state.user = Store.driver(s.id) || null;
-  restoreSupabaseSession();
+   await restoreSupabaseSession();
 
   state.route = parseHash();
 
