@@ -1698,12 +1698,26 @@ function openFleetSetup() {
           placeholder="http://your-server:7040"></div>
       <div class="t3 xs mt-8">Positions go out every
         <b>${esc(String(s.heartbeatSec || 15))}s</b> — the heartbeat set in Settings.</div>
+      <!-- What the app already knows, said before it asks. Telling somebody
+           to run a terminal command is a poor answer from a program that is
+           carrying the service and can start it itself. -->
+      ${HostedService.can() ? `
+      <div class="t3 xs mt-8">
+        ${HostedService.status && HostedService.status.running
+          ? 'This app is running the service itself, on port '
+            + esc(String(HostedService.status.port || 7040))
+            + (HostedService.status.lan
+              ? ' — the rest of the crew can reach it here.'
+              : ' — this machine only. Open it to the network in Settings to let the crew in.')
+          : 'Leave this empty and the app starts the service it carries, on this '
+            + 'machine, by itself. Fill it in only to point at a server somewhere else.'}
+      </div>` : `
       <div class="t3 xs mt-8">
         Run the bundled service with <span class="mono">npm run fleet</span> — it has no
         dependencies. Point every driver's client at the same address. With no service
         configured everything still works, but it stays on this machine — the map shows
         only your own truck and a sign-up here never reaches anybody else.
-      </div>
+      </div>`}
       <div class="t3 xs mt-8">Status: ${Fleet.enabled()
         ? (Fleet.online ? '<span class="pill ok">connected</span>' : '<span class="pill err">' + esc(Fleet.lastError || 'not reachable') + '</span>')
         : '<span class="pill warn">not configured</span>'}</div>`,
@@ -7591,8 +7605,37 @@ function startServices() {
      so. Now it keeps looking, and joins up the moment the service appears.
      The probe is one request to localhost with a 1.2s deadline, so a
      minute between attempts costs nothing worth measuring. */
+  /* Nothing to find, and this build ships the thing that was missing.
+
+     The driver was shown a box asking for "http://your-server:7040" — an
+     address that does not exist until somebody runs the service, quite
+     possibly on the machine they are sitting at. The desktop app CARRIES
+     that service (service-host.js) and can start it, and until now would
+     only do so if the driver had already found the setting and ticked it.
+     So the app held the answer and asked the question anyway, and the
+     honest reply to "Company service address" was "I do not know, you tell
+     me" from the one program that did know.
+
+     Local-only unless they have asked for the network. Starting a server on
+     somebody's machine is a fair thing to do quietly while nothing outside
+     that machine can reach it; opening it to the LAN stays their decision.
+
+     An address set by hand always wins — a company with a real server is
+     never quietly replaced by a local one. */
+  const hostItOurselves = () => {
+    if (startServices.hosting) return;          /* once per session */
+    if (Sync.configured()) return;              /* they named a server */
+    if (!HostedService.can()) return;           /* browser or phone */
+    if (HostedService.status && HostedService.status.running) return;
+
+    startServices.hosting = true;
+
+    Store.log('info', 'No company service found — starting the one built into this app');
+    HostedService.start(!!Store.db.settings.hostServiceLan);
+  };
+
   const findService = () => discoverLocalService().then((found) => {
-    if (!found) return;
+    if (!found) { hostItOurselves(); return; }
 
     clearInterval(startServices.findTimer);
     startServices.findTimer = null;

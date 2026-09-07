@@ -8463,12 +8463,52 @@ function replyToApplicant(id) {
   render();
 }
 
+/* The driver an application belongs to.
+
+   submittedBy first: it is the driver code the row was filed against, and it
+   is exact. Then the Supabase row the application carries a link to. Then
+   the email address, which is the only other thing both sides hold.
+
+   That last step is the one that was missing, and its absence is expensive.
+   An application whose driver_id never made it — filed before the column was
+   populated, or by a browser with no session — has no submittedBy at all. So
+   approving it minted a BRAND NEW driver code for somebody already on the
+   roster, named the new record after the application, and released the
+   client to it. Nobody can sign in as that record. The real driver went on
+   being told they were waiting on an application that had been approved.
+
+   The comment inside approveApplication has described this failure for a
+   while. The guard above it only ever covered half of it. */
+function applicantDriver(a) {
+  if (!a) return null;
+
+  if (a.submittedBy) {
+    const byCode = Store.driver(a.submittedBy);
+    if (byCode) return byCode;
+  }
+
+  const drivers = Store.db.drivers || [];
+
+  if (a.driverSupabaseId != null && a.driverSupabaseId !== '') {
+    const key = String(a.driverSupabaseId);
+    const byRow = drivers.find((d) => d
+      && (String(d.supabaseId) === key || String(d.id) === key));
+    if (byRow) return byRow;
+  }
+
+  const email = String(a.email || '').trim().toLowerCase();
+  if (!email) return null;
+
+  return drivers.find((d) => d
+    && String(d.email || '').trim().toLowerCase() === email) || null;
+}
+
 function approveApplication(id) {
   const a = Store.application(id); if (!a) return;
   /* Somebody who registered themselves already has a driver record — the
      application names it. Making a second one here would leave them with two
      rows on the roster and a login pointing at only one of them. */
-  const existing = a.submittedBy ? Store.driver(a.submittedBy) : null;
+  const existing = applicantDriver(a);
 
   confirmDialog('Approve application?',
     existing
@@ -8497,6 +8537,17 @@ function approveApplication(id) {
         };
         Store.db.drivers.push(d);
       }
+      /* Point the row at whoever this turned out to be, before anything
+         reads it back. Without this the application stays filed against
+         nobody, and the download check — which asks for the row whose
+         driver_id is this driver's code — goes on finding nothing however
+         many times they sign in. */
+      if (a.submittedBy !== d.id) {
+        a.submittedBy = d.id;
+        a.driverSupabaseId = d.supabaseId || a.driverSupabaseId || null;
+        Applications.linkDriver(a, d.id);
+      }
+
       Store.logActivity(d.id, 'join', 'userPlus', `${d.name} joined Gaming Nation`);
 
       d.clientAccess = true;
@@ -9608,6 +9659,51 @@ async pull() {
     this.busy = false;
   }
 },
+
+  /* Point the application at the driver it actually belongs to.
+
+     applications.driver_id is what every download check reads: the sign-in
+     path asks for the row whose driver_id is this driver's code, and so does
+     functions/api/download-link.js, as the driver, under RLS. An application
+     approved without ever being linked leaves both of them finding nothing —
+     so the driver is approved, and refused, and there is nothing on the page
+     that could tell them why.
+
+     Writing the code here is what closes that loop, and it is deliberately
+     done at approval rather than left for the next sync: this is the moment
+     somebody is entitled to the client. */
+  async linkDriver(app, driverCode) {
+    if (!this.on() || !app || !app.supabaseId || !driverCode) return false;
+
+    try {
+      const { data, error } = await window.gmnSupabase
+        .from('applications')
+        .update({ driver_id: driverCode })
+        .eq('id', app.supabaseId)
+        .select('id');
+
+      if (error) throw error;
+
+      /* An update that matched nothing is row level security filtering it
+         out, not a missing row — the same silent refusal setStatus guards
+         against below. */
+      if (!data || !data.length) {
+        console.warn('[GMN] the application was not linked to a driver:', {
+          id: app.supabaseId, driverCode,
+          reason: 'the update matched no row — check this account may update applications'
+        });
+        return false;
+      }
+
+      console.log('[GMN] application', app.supabaseId, 'linked to', driverCode);
+      return true;
+
+    } catch (error) {
+      console.error('[GMN] could not link the application to a driver:',
+        supabaseError(error), error);
+      return false;
+    }
+  },
 
   /* A recruiter moving somebody through the stages. Written straight to the
      shared table so the next person to look sees the same thing, rather than

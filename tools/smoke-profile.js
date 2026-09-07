@@ -296,6 +296,85 @@ app.whenReady().then(async () => {
       check('the applicant is thanked by name', String(f.thanked), 'true');
     }
 
+    /* ---- 5. approving does not mint a second driver ------------
+
+       approveApplication() resolved the applicant from a.submittedBy alone.
+       An application whose driver_id never made it has none — so approving
+       it minted a BRAND NEW driver code for somebody already on the roster,
+       named that record after the application, and released the client to
+       it. Nobody can sign in as that record. The real driver went on being
+       told they were waiting on an application that had been approved.
+
+       This is where "GMN DRIVER APPLICATION" came from as a driver name. */
+    const approve = await js(`
+      (async function () {
+        var S = window.gmnSupabase;
+
+        /* A driver on the roster, and an application for them that was
+           never linked to their code.
+
+           The stray row is cleared too: a run against the broken code
+           creates one and localStorage keeps it, so the next run would
+           start already holding the thing it is checking for and fail
+           whatever the code does. */
+        Store.db.drivers = (Store.db.drivers || []).filter(function (d) {
+          return d.id !== 'GMN7001' && d.name !== 'GMN DRIVER APPLICATION';
+        });
+
+        Store.db.drivers.push({
+          id: 'GMN7001', name: 'Real Driver', initials: 'RD',
+          email: 'real@example.test', country: 'Kenya', role: 'driver',
+          status: 'offline', accountStatus: 'active', clientAccess: false,
+          km: 0, deliveries: 0, convoys: 0, attendance: 100,
+          achievements: [], rankIdx: 0, supabaseId: 7001,
+          joined: new Date().toISOString(), lastSeen: new Date().toISOString()
+        });
+
+        S.__db.applications = [{
+          id: 9001, driver_id: null, full_name: 'GMN DRIVER APPLICATION',
+          email: 'real@example.test', country: 'Kenya', status: 'pending'
+        }];
+
+        Store.db.applications = [{
+          id: 'APP-9001', supabaseId: 9001, name: 'GMN DRIVER APPLICATION',
+          email: 'real@example.test', country: 'Kenya', status: 'pending',
+          submitted: new Date().toISOString(), submittedBy: null,
+          notes: [], messages: []
+        }];
+
+        var before = Store.db.drivers.length;
+
+        /* confirmDialog puts a button in front of a recruiter; what this
+           tests is what happens when they press it */
+        var realConfirm = window.confirmDialog;
+        window.confirmDialog = function (t, b, yes) { yes(); };
+        try { approveApplication('APP-9001'); }
+        finally { window.confirmDialog = realConfirm; }
+
+        await new Promise(function (r) { setTimeout(r, 600); });
+
+        var mine = Store.db.drivers.find(function (d) { return d.id === 'GMN7001'; });
+
+        return JSON.stringify({
+          added: Store.db.drivers.length - before,
+          released: !!(mine && mine.clientAccess),
+          linkedHere: Store.db.applications[0].submittedBy,
+          linkedThere: S.__db.applications[0].driver_id,
+          noStrayRoster: !Store.db.drivers.some(function (d) {
+            return d.name === 'GMN DRIVER APPLICATION';
+          })
+        });
+      })()
+    `);
+
+    const ap = JSON.parse(approve);
+
+    check('approving mints no second driver', String(ap.added), '0');
+    check('and no roster row named after the form', String(ap.noStrayRoster), 'true');
+    check('the client goes to the real driver', String(ap.released), 'true');
+    check('the application is linked here', ap.linkedHere, 'GMN7001');
+    check('and in the shared table', ap.linkedThere, 'GMN7001');
+
   } catch (err) {
     fails.push('the walk stopped: ' + (err && err.message ? err.message : err));
   }
