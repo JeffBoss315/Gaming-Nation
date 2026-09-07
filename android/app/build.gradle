@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.heavyline.jobtrucker"
+    namespace = "com.gamingnation.trucker"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.heavyline.jobtrucker"
+        applicationId "com.gamingnation.trucker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

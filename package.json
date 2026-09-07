@@ -1,5 +1,5 @@
 {
-  "name": "heavyline-trucker",
+  "name": "gaming-nation-trucker",
   "productName": "Gaming Nation Trucker",
   "version": "1.0.0",
   "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
@@ -57,7 +57,7 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.heavyline.trucker",
+    "appId": "com.gamingnation.trucker",
     "productName": "Gaming Nation Trucker",
     "directories": {
       "output": "dist"

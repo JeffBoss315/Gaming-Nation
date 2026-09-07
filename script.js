@@ -594,7 +594,7 @@ const Accounts = {
                Without this, Supabase builds the link from the project's
                Site URL — a value set once in a dashboard, invisible from
                here, and wrong the moment the site moves. It was wrong: it
-               named heavyline.pages.dev, which no longer exists, so the
+               named the platform's previous address, since deleted, so the
                confirmation link in every one of those emails resolved to
                nothing.
 
@@ -1649,7 +1649,7 @@ const DISCORD_INVITE = 'https://discord.gg/zWvwPsyDK';
    https, and not a loopback address.
 
    That ordering was written when the platform answered on two addresses at
-   once — gaming-nation.pages.dev and the older heavyline.pages.dev — and a
+   once — gaming-nation.pages.dev and an older name since retired — and a
    build-time constant could only name one of them, so a reset asked for on
    the other host emailed a link that worked but landed the driver somewhere
    they never chose. Only gaming-nation is left now, and the ordering stays

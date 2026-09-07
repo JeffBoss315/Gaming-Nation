@@ -1,4 +1,4 @@
-package com.heavyline.jobtrucker;
+package com.gamingnation.trucker;
 
 import com.getcapacitor.BridgeActivity;
 

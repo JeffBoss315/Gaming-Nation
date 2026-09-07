@@ -89,7 +89,7 @@ const bucket = (has = true) => ({
 const postLink = (build, authorization, env = ENV()) =>
   linkFn.onRequestPost({
     env,
-    request: new Request('https://heavyline.pages.dev/api/download-link', {
+    request: new Request('https://gaming-nation.pages.dev/api/download-link', {
       method: 'POST',
       headers: authorization ? { Authorization: authorization } : {},
       body: JSON.stringify({ build }),
@@ -100,7 +100,7 @@ const getFile = (build, token, env = ENV({ RELEASES: bucket() })) =>
   fileFn.onRequestGet({
     env,
     params: { build },
-    request: new Request('https://heavyline.pages.dev/api/download/' + build
+    request: new Request('https://gaming-nation.pages.dev/api/download/' + build
       + (token == null ? '' : '?t=' + encodeURIComponent(token))),
   });
 

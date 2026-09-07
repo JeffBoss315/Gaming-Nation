@@ -2,7 +2,7 @@
   "name": "Gaming Nation Trucker",
   "short_name": "Gaming Nation Trucker",
   "description": "Gaming Nation driver client \u2014 records your ETS2 runs and syncs them to your driver record.",
-  "id": "/heavyline-trucker",
+  "id": "/gaming-nation-trucker",
   "start_url": "./tracker.html",
   "scope": "./",
   "display": "standalone",
