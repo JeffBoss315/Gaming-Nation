@@ -6197,6 +6197,12 @@ function adminPanel(tab) {
           <div class="stat-val" style="font-size:23px">${apps.filter((a) => a.status === s).length}</div>
           <div class="stat-lbl">${esc(statusLabel(s))}</div></div>`).join('')}
       </div>
+      <div class="row-b mb-12">
+        <span class="xs t3">${Applications.lastAt
+          ? 'Checked ' + esc(fmt.rel(new Date(Applications.lastAt).toISOString()))
+          : 'Not yet checked against Supabase'}</span>
+        <button class="btn btn-sm" data-act="apps-refresh">${icon('refresh')}Refresh</button>
+      </div>
       ${apps.length ? '' : applicationsEmptyState()}
       ${apps.length ? `<div class="table-wrap"><table class="tbl">
         <thead><tr><th>Applicant</th><th>Country</th><th>Experience</th><th class="right">Hours</th>
@@ -7766,6 +7772,22 @@ function handleAction(act, t, ev) {
 
     /* support */
     case 'support-filter': state.ui.supportFilter = v; render(); return;
+    case 'apps-refresh': {
+      toast('Checking Supabase…', 'info');
+      Applications.pull().then((ran) => {
+        render();
+        if (!ran) {
+          return toast('Could not check', 'danger',
+            Applications.lastError ? String(Applications.lastError)
+              : 'Not signed in to Supabase, so the applications table cannot be read.');
+        }
+        const n = (Store.db.applications || []).length;
+        toast(n ? n + (n === 1 ? ' application' : ' applications') : 'No applications',
+          n ? 'ok' : 'warn',
+          n ? 'Read from Supabase just now.' : 'The query worked; the table returned nothing.');
+      });
+      return;
+    }
     case 'ticket-new': openTicketModal(); return;
     case 'ticket-save': saveTicket(); return;
     case 'ticket-resolve': case 'ticket-progress': {
@@ -8389,6 +8411,7 @@ const Sync = {
      sync off — pull() and sendNow() talk to Supabase and need nothing else. */
   on() { return !!window.gmnSupabase; },
 
+
   /* Having the library is not the same as being signed in.
 
      The company record belongs to the people in the company, and every
@@ -8998,6 +9021,34 @@ const Applications = {
     + 'reviewed_by, reviewed_at',
 
   on() { return !!window.gmnSupabase; },
+
+  timer: null,
+
+  /* Applications used to be pulled in exactly one place: the last two
+     lines of Sync.pull(), the COMPANY sync.
+
+     So the recruitment screen depended on something that has nothing to do
+     with recruitment. Sync.pull() returns early when it is already
+     applying, and again when there is no Supabase session — both perfectly
+     reasonable for the company record, and both of which silently took
+     applications down with them. One early return and the screen stayed
+     empty for the rest of the session, with the table full and nothing
+     saying so.
+
+     Its own timer, so a company sync that is off, stuck or failing cannot
+     hide people who have applied. */
+  start() {
+    if (!this.on()) return;
+    this.stop();
+    this.pull();
+    this.timer = setInterval(() => this.pull(), 45000);
+    console.log('[GMN] Applications sync started.');
+  },
+
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  },
 
   /* A row is not the shape the recruitment screen draws with. Identity comes
      from Supabase; everything with no column keeps coming from the local
@@ -14388,6 +14439,7 @@ function boot() {
   });
 
   Sync.start();          /* one company across every machine, when a service is set */
+  Applications.start();  /* on its own clock, so a company sync problem cannot hide applicants */
 
   /* The fleet board and the live channel, when a company service is there
      to provide them. This was only reached by saving the service address,
