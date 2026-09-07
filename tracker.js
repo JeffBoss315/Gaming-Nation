@@ -6604,7 +6604,7 @@ function handle(act, t) {
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'hll-logbook.csv';
+      a.href = url; a.download = 'gaming-nation-logbook.csv';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 800);
       Store.log('ok', 'Logbook exported to CSV');

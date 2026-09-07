@@ -12482,7 +12482,7 @@ function exportData() {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url; link.download = `hll-${state.user.id}-export.json`;
+  link.href = url; link.download = `gaming-nation-${state.user.id}-export.json`;
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast('Export ready', 'ok', 'Your driver data has been downloaded.');
