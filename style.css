@@ -2172,3 +2172,95 @@ a.link:hover{background-size:100% 1px}
 @media (prefers-reduced-motion:reduce){
   .call-card.ring{animation:none;border-color:var(--accent)}
 }
+
+
+/* ==========================================================================
+   FLUID TYPE
+
+   Everything above is fixed px, with eight breakpoints doing the catching
+   up. That has two costs. Text and padding STEP between sizes as the
+   window crosses a breakpoint instead of growing with it, and above the
+   last breakpoint nothing grows at all — so on a 27-inch monitor the whole
+   interface sat at the size it was drawn for a laptop, which is the single
+   thing that made it read as cramped.
+
+   These scale continuously between a phone (360px) and a large desktop
+   (1920px) and need no breakpoint of their own. The floor of every one is
+   the size the app already used, so nothing anywhere gets smaller than it
+   is today; only the ceiling is new.
+   ========================================================================== */
+:root{
+  --fs-2xs:  clamp(9.5px,  0.096vw + 9.15px,  11px);    /* micro labels */
+  --fs-xs:   clamp(10.5px, 0.128vw + 10.04px, 12.5px);  /* eyebrow, captions */
+  --fs-sm:   clamp(12px,   0.128vw + 11.54px, 14px);    /* secondary text */
+  --fs-md:   clamp(13px,   0.128vw + 12.54px, 15px);    /* card titles */
+  --fs-body: clamp(14px,   0.128vw + 13.54px, 16px);    /* body copy */
+  --fs-lg:   clamp(15px,   0.192vw + 14.31px, 18px);    /* section leads */
+  --fs-xl:   clamp(21px,   0.577vw + 18.92px, 30px);    /* page titles */
+}
+
+body{font-size:var(--fs-body)}
+
+.page-title{font-size:var(--fs-xl)}
+.page-sub{font-size:var(--fs-sm)}
+.eyebrow{font-size:var(--fs-2xs)}
+.card-title{font-size:var(--fs-md)}
+.empty-state .page-title{font-size:var(--fs-xl)}
+
+/* The page gutter grows with the window for the same reason the type does:
+   at 1920px a 20px gutter puts the content hard against the chrome. */
+.page{padding:clamp(20px,1.6vw + 14px,34px) clamp(16px,2vw + 8px,40px) 56px}
+
+
+/* ==========================================================================
+   THINGS THAT ARE CLICKABLE NOW LOOK CLICKABLE
+
+   Fifteen places in script.js hand a row or a card `style="cursor:pointer"`
+   and a data-act, and nothing in this file ever answered it. The cursor
+   changed and the element itself did not move, so the only feedback for
+   "this opens a driver" was the mouse pointer — and on a touch screen
+   there is no pointer, so there was none at all.
+
+   Buttons, links and form controls are excluded: they have their own
+   states above and would end up with two.
+   ========================================================================== */
+:where([data-act]):not(.btn,button,a,input,select,textarea,label){
+  transition:background var(--t-fast), border-color var(--t-fast),
+             box-shadow var(--t-fast), transform var(--t-fast);
+}
+
+/* A card lifts, the way a card does. */
+:where(.card,.truck-card)[data-act]:hover{
+  border-color:var(--line-2);
+  transform:translateY(-2px);
+  box-shadow:0 14px 34px -20px rgba(0,0,0,.95);
+}
+:where(.card,.truck-card)[data-act]:active{
+  transform:translateY(0);
+  box-shadow:0 6px 16px -14px rgba(0,0,0,.95);
+}
+
+/* A row inside a card cannot take padding without moving everything around
+   it, so the highlight is spread outwards with a spread-only shadow. It
+   paints a halo the row does not have to make room for, and the layout
+   does not shift by a pixel on hover. */
+:where(.row,.row-b)[data-act]:not(.btn):hover{
+  background:var(--panel-2);
+  box-shadow:0 0 0 6px var(--panel-2);
+  border-radius:var(--r-sm);
+}
+:where(.row,.row-b)[data-act]:not(.btn):active{
+  background:var(--panel-3);
+  box-shadow:0 0 0 6px var(--panel-3);
+}
+
+/* Anything else carrying a data-act — a bare div, a heading used as a link
+   — at least answers the press. */
+:where(div,span,h1,h2,h3,li)[data-act]:not(.btn):not(.card):not(.truck-card):not(.row):not(.row-b):active{
+  opacity:.72;
+}
+
+@media (prefers-reduced-motion:reduce){
+  :where(.card,.truck-card)[data-act]:hover,
+  :where(.card,.truck-card)[data-act]:active{transform:none}
+}
