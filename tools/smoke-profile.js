@@ -227,6 +227,75 @@ app.whenReady().then(async () => {
     check('an unsuccessful one says neither', String(t.rejectedHasNeither), 'true');
     check('approval offers the client', String(t.getTheClient), 'true');
 
+    /* ---- 4. the apply form actually files something -------------
+
+       It did not. The handler built the application object, told the
+       driver it had been sent, and stored it nowhere — a `return true`
+       left over from an edit sat in the middle of the function, so the
+       second success modal was unreachable and render() never ran. A
+       driver who reached this form was told they had applied and no
+       recruiter ever saw them. */
+    const filed = await js(`
+      (async function () {
+        var S = window.gmnSupabase;
+
+        /* a signed-in driver with no application, which is the only state
+           in which this form is shown at all */
+        state.user = Store.db.drivers[0];
+        state.user.role = 'driver';
+        Store.db.applications = [];
+        S.__db.applications = [];
+        state.ui.applyDraft = {};
+        state.route = { name: 'recruitment', params: [] };
+
+        render();
+
+        var af = document.getElementById('applyForm');
+        if (!af) return JSON.stringify({ noForm: true });
+
+        af.querySelector('[name="name"]').value = 'Ada Lovelace';
+        af.querySelector('[name="email"]').value = 'ada@example.test';
+        af.querySelector('[name="discord"]').value = 'ada';
+        af.querySelector('[name="why"]').value = 'I have driven for years.';
+
+        var country = af.querySelector('[name="country"]');
+        country.selectedIndex = 1;               /* the first real country */
+
+        document.getElementById('ap-agree').checked = true;
+
+        af.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        await new Promise(function (r) { setTimeout(r, 500); });
+
+        var local = (Store.db.applications || [])[0];
+        var remote = (S.__db.applications || [])[0];
+
+        return JSON.stringify({
+          noForm: false,
+          localCount: (Store.db.applications || []).length,
+          remoteCount: (S.__db.applications || []).length,
+          name: local ? local.name : null,
+          mine: local ? local.submittedBy === state.user.id : false,
+          keyed: remote ? remote.driver_id === state.user.id : false,
+          linked: local ? local.supabaseId != null : false,
+          thanked: document.body.innerText.indexOf('Thank you, Ada') !== -1,
+        });
+      })()
+    `);
+
+    const f = JSON.parse(filed);
+
+    if (f.noForm) {
+      fails.push('the apply form was not shown, so nothing could be tested');
+    } else {
+      check('applying files the application here', String(f.localCount), '1');
+      check('under the name they gave', f.name, 'Ada Lovelace');
+      check('and against the driver who filed it', String(f.mine), 'true');
+      check('it reaches the shared table too', String(f.remoteCount), '1');
+      check('keyed on the driver code', String(f.keyed), 'true');
+      check('and the local copy knows its row', String(f.linked), 'true');
+      check('the applicant is thanked by name', String(f.thanked), 'true');
+    }
+
   } catch (err) {
     fails.push('the walk stopped: ' + (err && err.message ? err.message : err));
   }

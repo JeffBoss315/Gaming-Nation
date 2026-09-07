@@ -60,7 +60,19 @@ const fmt = {
   },
 };
 
-const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+/* Both of these are guarded, and the guard is the point.
+
+   A record reaches the screen with no name more often than it looks: an
+   application filed with only an email, a driver row still being
+   provisioned, a roster entry this browser has pulled a half of. Neither
+   of these used to survive that — and because avatar() calls initials()
+   from inside shellHTML(), one nameless record did not blank an avatar,
+   it threw and took the whole page down with it. */
+const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean)
+  .slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
+/* The name somebody is greeted by, which is only ever their first. */
+const firstNameOf = (name) => String(name || '').trim().split(/\s+/)[0] || 'driver';
 
 /* ---------------- 2. Icon set (inline SVG, no CDN) ---------------- */
 const ICON_PATHS = {
@@ -3888,7 +3900,7 @@ function doLogin(driver, msg) {
 
     // Show welcome message without crashing
     toast(
-        msg || `Welcome back, ${driverName.split(' ')[0]}`,
+        msg || `Welcome back, ${firstNameOf(driverName)}`,
         'ok',
         `${driver.rank || 'Driver'} · ${driverId}`
     );
@@ -4179,7 +4191,7 @@ function viewDashboard() {
     <section class="page-head reveal" style="margin-bottom:18px">
       <div>
         <div class="eyebrow">${esc(greeting())} · ${esc(db.meta.season)}</div>
-        <h1 class="page-title" style="font-size:23px">Welcome back, ${esc(u.name.split(' ')[0])}</h1>
+        <h1 class="page-title" style="font-size:23px">Welcome back, ${esc(firstNameOf(u.name))}</h1>
         <div class="row gap-12 wrap mt-8 sm t2">
           ${rankChip(u)}
           <span class="t3">·</span><span class="mono t3">${esc(u.id)}</span>
@@ -4592,7 +4604,7 @@ function viewDriver(id) {
                   }).join('')}
                 </div></div>` : `<div class="card card-body row gap-12">
                   <span class="stat-ico" style="color:var(--accent)">${icon('star')}</span>
-                  <div><div class="b7">Top of the ladder</div><div class="sm t2">${esc(d.name.split(' ')[0])} holds the highest rank Gaming Nation awards.</div></div></div>`}
+                  <div><div class="b7">Top of the ladder</div><div class="sm t2">${esc(firstNameOf(d.name))} holds the highest rank Gaming Nation awards.</div></div></div>`}
 
               <div class="card"><div class="card-head"><div class="card-title">${icon('activity')}Distance — last 6 months</div></div>
                 <div class="card-body">${areaChart([{ name: 'Distance', values: monthly, color: '#b9e87a' }], monthLabels,
@@ -4931,7 +4943,7 @@ function convoyCard(e, i) {
       <div class="row-b">
         <div class="row gap-8">
           ${avatarStack(regs, 4, 24)}
-          ${leader ? `<span class="xs t3">Led by ${esc(leader.name.split(' ')[0])}</span>` : ''}
+          ${leader ? `<span class="xs t3">Led by ${esc(firstNameOf(leader.name))}</span>` : ''}
         </div>
         ${e.status === 'completed'
           ? `<span class="badge ${my && my.state === 'completed' ? 'ok' : ''}">${my && my.state === 'completed' ? 'You attended' : 'Completed'}</span>`
@@ -6481,7 +6493,7 @@ function adminPanel(tab) {
             <td><div class="b6">${esc(e.name)}</div><div class="xs t3">${esc(e.start)} → ${esc(e.dest)}</div></td>
             <td><span class="badge ${e.tone}">${esc(e.typeLabel)}</span></td>
             <td class="sm t2 nowrap">${esc(fmt.date(e.date))}<div class="xs t3">${esc(fmt.time(e.date))}</div></td>
-            <td>${l ? `<div class="row gap-8">${avatar(l, 24)}<span class="sm">${esc(l.name.split(' ')[0])}</span></div>` : '—'}</td>
+            <td>${l ? `<div class="row gap-8">${avatar(l, 24)}<span class="sm">${esc(firstNameOf(l.name))}</span></div>` : '—'}</td>
             <td class="right mono">${e.registered.length}/${e.maxSlots}</td>
             <td>${statusBadge(e.status)}</td>
             <td class="right"><div class="row gap-6" style="justify-content:flex-end">
@@ -7123,7 +7135,7 @@ const ConvoyMap = {
           html: `<span class="ft-arrow" style="transform:rotate(${deg.toFixed(0)}deg);color:${colour}">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l7 19-7-4.5L5 21z" fill="currentColor"/></svg>
             </span>
-            <span class="ft-name">${esc(p.name.split(' ')[0])}${p.leader ? ' ★' : ''}</span>`,
+            <span class="ft-name">${esc(firstNameOf(p.name))}${p.leader ? ' ★' : ''}</span>`,
         }),
         title: p.name,
       }).bindTooltip('<b>' + esc(p.name) + (p.leader ? ' — leader' : '') + '</b>'
@@ -12544,7 +12556,7 @@ function bindAuth() {
         type: 'ok', icon: 'shield', title: 'You own this company',
         body: 'Add drivers, vehicles and convoys from the admin console.',
       });
-      doLogin(driver, 'Welcome, ' + name.split(' ')[0]);
+      doLogin(driver, 'Welcome, ' + firstNameOf(name));
     });
   }
 
@@ -12666,7 +12678,7 @@ function bindAuth() {
       }
 
       const driver = Store.driver(res.driver.driver_code);
-      toast('Account created', 'ok', 'Welcome to Gaming Nation, ' + name.split(' ')[0]);
+      toast('Account created', 'ok', 'Welcome to Gaming Nation, ' + firstNameOf(name));
       Store.notify(driver.id, {
         type: 'info', icon: 'userPlus', title: 'Application received',
         body: 'A recruiter will review your application shortly.',
@@ -12785,7 +12797,7 @@ function bindViewForms() {
         };
       }
 
-        af.addEventListener('submit', (e) => {
+        af.addEventListener('submit', async (e) => {
 
             e.preventDefault();
 
@@ -12888,110 +12900,109 @@ function bindViewForms() {
                 submittedBy: state.user.id
             };
 
+            /* File it.
 
-  
-        // Keep local store synchronized
-// Keep local store synchronized
+               This is the whole point of the form, and it is the one thing
+               the handler did not do. The object above was built, a modal
+               said "sent", and nothing ever stored it anywhere — so a
+               driver who reached this form was told they had applied and no
+               recruiter ever saw them.
 
-// Notify GMN management
-notifyStaff('recruitment.manage', {
-    type: 'info',
-    icon: 'userPlus',
-    title: 'New driver application',
-    body:
-        app.name +
-        ' has applied to drive. Approve them to release the client.',
-    href: '#/admin'
-}, state.user.id);
+               What hid it was a `return true` left over from an edit,
+               sitting in the middle of the function: the better of the two
+               success modals below it was unreachable, and so was render(),
+               so the page did not even repaint to show the tracker. */
+            Store.db.applications.unshift(app);
+            Store.save();
 
-// Show success modal
-openModal({
-    title: 'Application sent',
-    size: 'narrow',
-    body: `
-        <div class="center col gap-12" style="padding:8px 0">
+            /* And to the shared table, or a recruiter on any other machine
+               never sees it. The same columns Accounts.ensureApplication
+               files at sign-in — this is that row, reached by hand. */
+            if (window.gmnSupabase) {
+                try {
+                    const { data: saved, error } = await window.gmnSupabase
+                        .from('applications')
+                        .insert({
+                            full_name: app.name,
+                            email: app.email,
+                            country: app.country || 'Not set',
+                            status: 'pending',
 
-            <div style="
-                width:52px;
-                height:52px;
-                border-radius:50%;
-                display:grid;
-                place-items:center;
-                margin:auto;
-                background:rgba(34,197,94,.12);
-                color:#22c55e;
-                font-size:26px;
-            ">✓</div>
+                            /* The GMN driver code, which is what this column
+                               holds. A bigint here files a row its own owner
+                               cannot read — see ensureApplication. */
+                            driver_id: state.user.id,
+                            onboarding_status: 'pending'
+                        })
+                        .select()
+                        .maybeSingle();
 
-            <div class="b8">
-                Your application has been sent.
-            </div>
+                    if (error) throw error;
 
-            <p class="t2 sm" style="text-align:center">
-                GMN management will review your application.
-                You will be notified when a decision is made.
-            </p>
+                    /* the row this application is, so setStatus can move it
+                       through the stages later */
+                    app.supabaseId = saved ? saved.id : null;
+                    Store.save();
 
-        </div>
-    `,
-    foot: `
-        <button
-            class="btn btn-primary"
-            data-act="modal-close">
-            Done
-        </button>
-    `
-});
+                } catch (err) {
+                    /* Kept locally either way, so this says what actually
+                       happened rather than claiming the application failed
+                       when it is sitting in front of the recruiter here. */
+                    console.error('[GMN] the application was not shared:',
+                        supabaseError(err));
 
-return true;
+                    toast('Filed here, but not shared', 'warn',
+                        'Recruitment can see it on this machine. It will go '
+                        + 'out when the connection is back.');
+                }
+            }
 
-openModal({
-    title: 'Application sent',
-    size: 'narrow',
+            notifyStaff('recruitment.manage', {
+                type: 'info',
+                icon: 'userPlus',
+                title: 'New driver application',
+                body: app.name
+                    + ' has applied to drive. Approve them to release the client.',
+                href: '#/admin'
+            }, state.user.id);
 
-    body: `
-        <div class="center col gap-12" style="padding:8px 0">
+            openModal({
+                title: 'Application sent',
+                size: 'narrow',
 
-            <span
-                class="stat-ico"
-                style="
-                    margin:0 auto;
-                    width:52px;
-                    height:52px;
-                    color:var(--ok);
-                    border-color:rgba(62,207,142,.30)
-                "
-            >
-                ${icon('checkCircle')}
-            </span>
+                body: `
+                    <div class="center col gap-12" style="padding:8px 0">
 
-            <div class="b7 lg">
-                Thank you, ${esc(app.name.split(' ')[0])}
-            </div>
+                        <span class="stat-ico" style="margin:0 auto;width:52px;
+                            height:52px;color:var(--ok);
+                            border-color:rgba(62,207,142,.30)">
+                            ${icon('checkCircle')}
+                        </span>
 
-            <p class="t2 sm">
-                Your application
-                <span class="mono">${esc(app.id)}</span>
-                has gone straight to recruitment.
-                You will get a notification here as soon as
-                they have looked at it, and the Gaming Nation Trucker
-                download is released with it.
-            </p>
+                        <div class="b7 lg">
+                            Thank you, ${esc(firstNameOf(app.name))}
+                        </div>
 
-        </div>
-    `,
+                        <p class="t2 sm">
+                            Your application
+                            <span class="mono">${esc(app.id)}</span>
+                            has gone straight to recruitment. You will get a
+                            notification here as soon as they have looked at
+                            it, and the Gaming Nation Trucker download is
+                            released with it.
+                        </p>
 
-    foot: `
-        <button
-            class="btn btn-primary"
-            data-act="modal-close"
-        >
-            Close
-        </button>
-    `
-});
+                    </div>
+                `,
 
-render();
+                foot: `
+                    <button class="btn btn-primary" data-act="modal-close">
+                        Close
+                    </button>
+                `
+            });
+
+            render();
     });
   }
 
@@ -14445,7 +14456,7 @@ function paintCall() {
       <div class="room-peers">
         <span class="room-peer me">${esc(initials(state.user.name))}<i>You</i></span>
         ${peers.map((p) => `<span class="room-peer ${p.stream ? 'on' : ''}">${
-          esc(initials(p.name))}<i>${esc(String(p.name).split(' ')[0])}</i></span>`).join('')}
+          esc(initials(p.name))}<i>${esc(firstNameOf(p.name))}</i></span>`).join('')}
       </div>
 
       <div class="call-state xs">${
