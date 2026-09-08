@@ -59,7 +59,10 @@ const CFG = {
   name: flag('name', file.name || (process.env.GMN_NAME || process.env.HLL_NAME) || ''),
   key: flag('key', file.key || (process.env.GMN_API_KEY || process.env.HLL_API_KEY) || ''),
   game: (flag('game', file.game || 'ets2') === 'ats') ? 'ats' : 'ets2',
-  telemetryHost: flag('telemetry-host', file.telemetryHost || 'localhost'),
+  /* 127.0.0.1, not localhost. The adapter binds that literal IPv4 address,
+     and Windows resolves localhost to ::1 first — where nothing is
+     listening, and where it takes two seconds to say so. */
+  telemetryHost: flag('telemetry-host', file.telemetryHost || '127.0.0.1'),
   telemetryPort: flag('telemetry-port', file.telemetryPort || '25555'),
   pollMs: Number(flag('poll', file.pollMs || 400)),
   outbox: flag('outbox', file.outbox || path.join(__dirname, 'gmn-outbox.json')),
@@ -78,7 +81,7 @@ function usage() {
     --name <name>            overrides the name on the roster
     --key <key>              the service's API key, if it requires one
     --game ets2|ats          which game to read (default ets2)
-    --telemetry-host <host>  where the telemetry server is (default localhost)
+    --telemetry-host <host>  where the telemetry server is (default 127.0.0.1)
     --telemetry-port <port>  its port (default 25555)
     --poll <ms>              how often to read the game (default 400)
     --config <file>          settings file (default hll-connector.json)

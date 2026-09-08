@@ -310,13 +310,65 @@ const Telemetry = {
   lastFrame: null,
   poll: null,
   consecutiveFailures: 0,
+  diagnostics: null,      /* the adapter's own account of itself — see diagnose() */
+  diagnosedAt: 0,
 
   endpoint() {
     const s = Store.db.settings;
-    const host = (s.telemetryHost || 'localhost').trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    let host = (s.telemetryHost || '127.0.0.1').trim()
+      .replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+    /* "localhost" is not a synonym for this machine here, it is a way to
+       fail. The adapter binds 127.0.0.1 — that literal IPv4 address — while
+       Windows resolves localhost to ::1 first, and nothing is listening
+       there. Measured against the running adapter:
+
+         127.0.0.1   answers in 0.10s
+         localhost   answers in 0.22s
+         [::1]       refuses, and takes 2.04s to say so
+
+       fetchFrame() aborts at 1500ms. So when the IPv6 attempt is the one
+       that happens, the poll gives up BEFORE it ever reaches IPv4 — the
+       adapter is running, answering, and the client calls it timed out.
+
+       Rewritten rather than only defaulted, so an install that already has
+       "localhost" saved in its settings is fixed without anybody having to
+       go and change it. A real host — a PC's LAN address, from a phone —
+       passes through untouched. */
+    if (/^(localhost|\[?::1\]?)$/i.test(host)) host = '127.0.0.1';
+
     const port = (s.telemetryPort || '25555').trim();
     const game = s.game === 'ats' ? 'ats' : 'ets2';
     return 'http://' + host + ':' + port + '/api/' + game + '/telemetry';
+  },
+
+  /* Where the adapter says what it can and cannot see.
+
+     The frame endpoint can only say "not connected". This one says why —
+     which memory maps exist, which is being read, which were found but not
+     understood, and where the plugin DLL has to go. It is the difference
+     between a dead end and something a driver can act on. */
+  diagnosticsUrl() {
+    return this.endpoint().replace(/\/api\/(ets2|ats)\/telemetry$/, '/api/diagnostics');
+  },
+
+  async diagnose() {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    try {
+      const res = await fetch(this.diagnosticsUrl(), { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      this.diagnostics = body;
+      return body;
+    } catch (e) {
+      clearTimeout(timer);
+      /* An adapter too old to have this endpoint 404s, which is not an
+         error worth showing — it just means there is nothing more to say. */
+      this.diagnostics = null;
+      return null;
+    }
   },
 
   /* one poll of the real server; resolves null when it is not there */
@@ -2931,7 +2983,7 @@ function seed() {
       startWithWindows: false,
       minimiseToTray: true,
       telemetryPort: '25555',
-      telemetryHost: 'localhost',
+      telemetryHost: '127.0.0.1',   /* not localhost — see Telemetry.endpoint() */
       hostService: false,       /* run the company service on this machine */
       hostServiceLan: false,    /* and let the rest of the crew reach it */
       liveTelemetry: true,      /* poll the real game when the server is reachable */
@@ -3826,6 +3878,29 @@ function runCardInner() {
        cannot put there. Which is exactly why it has to be said out loud. */
     const hearing = Telemetry.mode === 'live';
 
+    /* Ask the adapter what it can see, but only while something is wrong and
+       only now and then — this runs on every draw of the page. The answer
+       lands in Telemetry.diagnostics and the next repaint shows it. */
+    if (!hearing && db.conn.ets2 === 'running'
+        && Date.now() - Telemetry.diagnosedAt > 15000) {
+      Telemetry.diagnosedAt = Date.now();
+      Telemetry.diagnose().then((d) => { if (d) render(); });
+    }
+
+    /* What the adapter said, in its own words. It knows things this page
+       cannot: which memory maps exist on the machine, whether one is being
+       read, and whether a plugin is running that it recognises but cannot
+       parse. Saying "no telemetry" when the adapter can name the reason is
+       throwing away the only useful information anybody has. */
+    const d = Telemetry.diagnostics;
+    const adapterSays = !hearing && d
+      ? (d.foreign && d.foreign.length
+        ? d.foreign[0].plugin + ' is running and writing ' + d.foreign[0].map
+          + ', but Gaming Nation cannot read that plugin’s format — reading it '
+          + 'anyway would invent a delivery. Install the plugin this client expects.'
+        : (d.advice || ''))
+      : '';
+
     return `
       <div class="run-top">
         <div>
@@ -3836,12 +3911,14 @@ function runCardInner() {
           <div class="run-meta">${db.conn.ets2 === 'running'
             ? (hearing
               ? 'The game is running. Take a load in game and it appears here on its own.'
-              : 'The client can see ' + mapFor(db.settings.game).short + ' running but is '
+              /* The adapter's own account wins when there is one: it can see
+                 the machine, and this page cannot. */
+              : (adapterSays || ('The client can see ' + mapFor(db.settings.game).short + ' running but is '
                 + 'receiving nothing from it, so a delivery cannot be picked up however '
                 + 'far you drive. The telemetry plugin has to sit in the game’s own '
                 + 'plugins folder, and it has to match the build you play: 64-bit ' + mapFor(db.settings.game).short
                 + ' loads bin\\win_x64\\plugins and never looks at win_x86. '
-                + 'Add it there and restart the game.')
+                + 'Add it there and restart the game.')))
             : GameWatch.supported
               ? 'Start ' + mapFor(db.settings.game).label + ' however you like — the client sees it open and starts tracking by itself.'
               : Launcher.api()
@@ -4922,8 +4999,8 @@ function viewSettings() {
         <input class="input" id="setProfile" value="${esc(s.profileName)}" placeholder="Leave blank to use the active profile"></div>
       <div class="row gap-8 wrap">
         <div class="field grow"><label for="setHost">Telemetry host</label>
-          <input class="input" id="setHost" value="${esc(s.telemetryHost || 'localhost')}"
-            placeholder="localhost — on a phone use the PC's LAN address"></div>
+          <input class="input" id="setHost" value="${esc(s.telemetryHost || '127.0.0.1')}"
+            placeholder="127.0.0.1 — on a phone use the PC's LAN address"></div>
         <div class="field" style="max-width:120px"><label for="setPort">Port</label>
           <input class="input" id="setPort" value="${esc(s.telemetryPort)}"></div>
       </div>
