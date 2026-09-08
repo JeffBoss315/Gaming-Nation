@@ -56,13 +56,40 @@ function die(msg) {
 
 /* wrangler, with whatever credential is going. Output captured so the
    caller can read it; pass loud:true to let the user watch instead. */
+/* npm's own npx script, which node can launch directly. */
+const NPX_CLI = path.join(path.dirname(process.execPath),
+  'node_modules', 'npm', 'bin', 'npx-cli.js');
+
 function wrangler(args, loud) {
-  return spawnSync(NPX, ['--yes', 'wrangler@4'].concat(args), {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: loud ? 'inherit' : 'pipe',
-    env: process.env,
-  });
+  const argv = ['--yes', 'wrangler@4'].concat(args);
+
+  /* Go through node rather than the npx.cmd shim.
+
+     Node refuses to spawn .cmd and .bat files unless shell:true is set -
+     the fix for CVE-2024-27980, in Node 18.20.2, 20.12.2 and 21.7.3. So
+     spawnSync('npx.cmd', ...) returns EINVAL and a null status on every
+     up-to-date Windows machine, and this script read that null as "not
+     authenticated" and told the operator to run `wrangler login`. They had
+     already run it. They were logged in. The deploy could not have worked
+     from Windows at all, and the message sent them to fix the one thing
+     that was not broken.
+
+     Spawning node with the npx script keeps the argument array intact, so
+     a project path with spaces in it - this one has two - still works,
+     which is exactly what shell:true would put at risk. */
+  const viaNode = fs.existsSync(NPX_CLI);
+
+  return spawnSync(
+    viaNode ? process.execPath : NPX,
+    viaNode ? [NPX_CLI].concat(argv) : argv,
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: loud ? 'inherit' : 'pipe',
+      env: process.env,
+      /* only as a fallback, and only where it is the sole option */
+      shell: !viaNode && process.platform === 'win32',
+    });
 }
 
 /* Nothing to publish is worth catching here: a deploy of an empty
