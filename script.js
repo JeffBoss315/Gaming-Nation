@@ -10301,6 +10301,41 @@ async pull() {
     const remoteRows = data || [];
     const previous = Store.db.applications || [];
 
+    /* An empty answer is the most ambiguous thing this query can return, and
+       "every one of them was deleted" is the most destructive way to read it.
+
+       Supabase answers with data [] and error NULL when row-level security
+       refuses the read. An expired session, a role that lost its grant, a
+       policy edited in the dashboard - none of those are deletions, none of
+       them raise an error for the catch below, and all of them look exactly
+       like an empty table from here. Read as authority to delete, that
+       answer destroyed three real applications on a console that had simply
+       stopped being allowed to see them:
+
+         Applications pulled from Supabase:
+         {rows: 0, previous: 3, current: 0, notYetInSupabase: 0}
+
+       and Store.save() then made it permanent. Nothing else in this file
+       ever removes an application, so that path was the only way one could
+       disappear, and it disappeared silently.
+
+       So an empty answer reconciles nothing. Deletions are still honoured
+       out of an answer that HAS rows, where an id that is missing really
+       does mean that row is gone; it is only the all-or-nothing case that is
+       refused. The cost is that emptying the table remotely now leaves this
+       console showing rows that are no longer there - visible, and
+       recoverable by the next real answer. Losing somebody's application is
+       neither. */
+    if (!remoteRows.length && previous.some((a) => a && a.supabaseId)) {
+      this.status = 'ok';
+      this.lastError = null;
+      this.lastAt = Date.now();
+      console.warn('[GMN] Supabase returned no applications while ' + previous.length
+        + ' are held here, so nothing was changed. An empty answer is also what a '
+        + 'blocked read looks like, and it is not evidence that anything was deleted.');
+      return false;
+    }
+
     const matched = new Set();
     const next = remoteRows.map((row) => {
       const local = this.localFor(previous, row);
