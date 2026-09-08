@@ -239,10 +239,31 @@ app.whenReady().then(async () => {
       (async function () {
         var S = window.gmnSupabase;
 
-        /* a signed-in driver with no application, which is the only state
-           in which this form is shown at all */
-        state.user = Store.db.drivers[0];
-        state.user.role = 'driver';
+        /* A signed-in driver with no application, which is the only state
+           in which this form is shown at all.
+
+           Its OWN driver, not Store.db.drivers[0].
+
+           drivers[0] is the owner. This used to take that record and set
+           role to 'driver' on it, which does not describe a fixture — it
+           demotes the person who runs the company, in the local database,
+           permanently. Store.save() then mirrors that to the company
+           service, the service hands it to the next machine that pulls,
+           and the owner is a plain driver everywhere: no admin console, no
+           recruitment screen, no approvals. The live service was found in
+           exactly that state, with HLL-1001 recorded as role 'driver'.
+
+           Nothing here needs to be an existing person, so it is not one. */
+        Store.db.drivers = (Store.db.drivers || []).filter((d) => d.id !== 'GMN-APPLY');
+        state.user = {
+          id: 'GMN-APPLY', name: 'Ada Applicant', initials: 'AA',
+          email: 'ada@example.test', country: 'Netherlands',
+          role: 'driver', accountStatus: 'active', status: 'offline',
+          clientAccess: false, joined: new Date().toISOString(),
+          km: 0, deliveries: 0, convoys: 0, attendance: 100,
+          achievements: [], rankIdx: 0,
+        };
+        Store.db.drivers.push(state.user);
         Store.db.applications = [];
         S.__db.applications = [];
         state.ui.applyDraft = {};

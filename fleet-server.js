@@ -63,6 +63,32 @@ const FILES_DIR = (process.env.GMN_FILES_DIR || process.env.HLL_FILES_DIR) || pa
 const MAX_UPLOAD = Number((process.env.GMN_MAX_UPLOAD || process.env.HLL_MAX_UPLOAD) || 25 * 1024 * 1024);
 const SITE_DIR = (process.env.GMN_SITE_DIR || process.env.HLL_SITE_DIR) || ROOT;
 
+/* ---------------- the Supabase project this company signs in to ----------
+
+   Read out of supabase-client.js rather than repeated here, for the same
+   reason tools/check-supabase.js does it: two copies of a project URL
+   drift, and then the service is verifying tokens against a different
+   project from the one the client signed in to — which fails as "not
+   accepted" and looks exactly like a wrong password.
+
+   Environment variables win, so a test can point at a stand-in. */
+function readSupabaseConfig() {
+  const url = process.env.GMN_SUPABASE_URL;
+  const key = process.env.GMN_SUPABASE_KEY;
+  if (url && key) return { url: url.replace(/\/$/, ''), key };
+
+  try {
+    const src = fs.readFileSync(path.join(ROOT, 'supabase-client.js'), 'utf8');
+    const u = src.match(/SUPABASE_URL\s*=\s*'([^']+)'/);
+    const k = src.match(/SUPABASE_KEY\s*=\s*'([^']+)'/);
+    if (u && k) return { url: u[1].replace(/\/$/, ''), key: k[1] };
+  } catch (e) { /* a packaged service without the file simply has none */ }
+
+  return null;
+}
+
+const SUPABASE = readSupabaseConfig();
+
 /* ---------------- how calls find each other ----------------
 
    Both clients used to carry the same hard-coded line:
@@ -692,6 +718,112 @@ async function api(req, res, url) {
     sessions[token] = { driverId: account.driverId, at: Date.now() };
     save(SESSION_FILE, sessions);
     return json(res, 200, { token, driver: driverRecord(account.driverId) });
+  }
+
+  /* Sign in with the session the driver already has.
+
+     The endpoint above checks a password against a hash in the company
+     record. That stopped being the driver's password: accounts moved to
+     Supabase, the hash in the blob is whatever it was when the row was
+     last written locally, and the two have no reason to agree. So a
+     driver typed the password that had just let them into the app, and
+     the service refused it — correctly, and unfixably, because there was
+     nothing they could have typed instead. "Connect this device" was a
+     dialog that could not succeed.
+
+     This takes the access token the client is already holding, asks
+     Supabase whose it is, and issues a service session for that person.
+     Nothing in the body is trusted: the token is verified upstream, and
+     the driver code comes from the drivers table rather than from the
+     caller. A forged or expired token gets a 401 from Supabase and
+     nothing from here. */
+  if (p === '/api/auth/supabase' && method === 'POST') {
+    if (!SUPABASE) {
+      return json(res, 501, {
+        error: 'this service has no Supabase project configured',
+        hint: 'set GMN_SUPABASE_URL and GMN_SUPABASE_KEY, or run it beside supabase-client.js',
+      });
+    }
+    if (typeof fetch !== 'function') {
+      return json(res, 501, { error: 'this node build has no fetch' });
+    }
+
+    const b = await body(req);
+    const access = String((b && b.access_token) || '').trim();
+    if (!access) return json(res, 400, { error: 'no access token' });
+
+    let user = null;
+    try {
+      const who = await fetch(SUPABASE.url + '/auth/v1/user', {
+        headers: { apikey: SUPABASE.key, Authorization: 'Bearer ' + access },
+      });
+      if (who.status === 401 || who.status === 403) {
+        return json(res, 401, { error: 'that session was not accepted' });
+      }
+      if (!who.ok) return json(res, 502, { error: 'Supabase did not answer' });
+      user = await who.json();
+    } catch (e) {
+      /* The service is often on the same machine as the client and may
+         have no way out to the internet. That is not a rejection, and
+         saying so lets the client fall back rather than sign the driver
+         out. */
+      return json(res, 502, { error: 'could not reach Supabase: ' + e.message });
+    }
+
+    if (!user || !user.id) return json(res, 401, { error: 'that session names nobody' });
+
+    /* The driver code comes from the database, read AS the driver — the
+       "Drivers can read their own profile" policy is what makes this
+       work without a service key, and what stops it being usable to read
+       anybody else's row. */
+    let row = null;
+    try {
+      const q = await fetch(SUPABASE.url + '/rest/v1/drivers'
+        + '?select=driver_code,full_name,email,role,status'
+        + '&auth_user_id=eq.' + encodeURIComponent(user.id) + '&limit=1', {
+        headers: { apikey: SUPABASE.key, Authorization: 'Bearer ' + access },
+      });
+      if (q.ok) {
+        const rows = await q.json();
+        row = Array.isArray(rows) ? rows[0] : null;
+      }
+    } catch (e) { /* fall through to the company record */ }
+
+    /* No row, or the drivers table could not be read: fall back to the
+       company record this service already holds, matched on the email
+       the verified token carries. An offline-ish install still connects. */
+    if (!row || !row.driver_code) {
+      const email = String(user.email || '').toLowerCase();
+      const known = email && drivers().find((d) => d
+        && String(d.email || '').toLowerCase() === email);
+      if (!known) {
+        return json(res, 404, {
+          error: 'no driver record for that account',
+          hint: 'send the company record first, then try again',
+        });
+      }
+      row = { driver_code: known.id, full_name: known.name, role: known.role };
+    }
+
+    if (String(row.status || '').toLowerCase() === 'suspended') {
+      return json(res, 403, { error: 'this account is suspended' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions[token] = { driverId: row.driver_code, at: Date.now() };
+    save(SESSION_FILE, sessions);
+
+    /* driverRecord() answers from the company record and falls back to a
+       bare identity, so a driver the blob has not caught up with still
+       gets a usable one rather than nothing. */
+    const known = driverRecord(row.driver_code);
+    return json(res, 200, {
+      token,
+      driver: Object.assign({}, known, {
+        name: known.name === row.driver_code ? (row.full_name || known.name) : known.name,
+        role: known.role || row.role || 'driver',
+      }),
+    });
   }
 
   if (p === '/api/auth/me' && method === 'GET') {

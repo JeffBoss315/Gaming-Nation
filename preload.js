@@ -19,6 +19,14 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   /* which of the games are running right now */
   gameRunning: ()    => ipcRenderer.invoke('game:running'),
 
+  /* how the telemetry adapter — the process that reads the game — is
+     getting on, so the client can say something better than "no signal" */
+  adapterStatus: () => ipcRenderer.invoke('telemetry:adapter'),
+
+  /* put the telemetry plugin into the game's own plugins folder, which is
+     the only thing that makes the game report anything at all */
+  installPlugin: () => ipcRenderer.invoke('telemetry:installPlugin'),
+
   /* a real photo of the drop, taken from the screen the game is on */
   captureScreen: () => ipcRenderer.invoke('capture:screen'),
 

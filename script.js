@@ -1108,6 +1108,18 @@ const Accounts = {
 
       Store.save();
 
+      /* The photo they chose on the form, now that there is a driver
+         record to hang it on.
+
+         Awaited, unlike most of this, because the very next thing that
+         happens is a render — and a driver who has just uploaded a
+         picture of themselves and is then shown their initials has every
+         reason to think it did not work. */
+      if (account.avatar) {
+        await saveAvatarFor(driverId, account.avatar);
+        clearPendingAvatar();
+      }
+
       console.log('[GMN] Registration completed successfully:', {
         auth_user_id: user.id,
         driver_code: driverId,
@@ -1177,7 +1189,15 @@ fromRow(row, authUser) {
            sign in on; the local record is the fallback for a project that
            has not run 20260907_driver_avatar.sql yet, where the photo still
            only travels in the company blob. */
-        avatar: row.avatar || (local && local.avatar) || '',
+        /* A row that came back without the key at all is a table with no
+           avatar column — PostgREST returns the columns that exist, so
+           the absence IS the answer. Noticed here, on the first driver
+           read, rather than only when somebody uploads a photo and it
+           quietly fails to travel. */
+        avatar: (() => {
+          if (row && !('avatar' in row)) avatarColumnMissing = true;
+          return row.avatar || (local && local.avatar) || rememberedAvatar(id) || '';
+        })(),
 
         /* --- no column yet: local record, then a safe default --- */
 
@@ -1592,6 +1612,21 @@ async verify(handle, password) {
 
         record.clientAccess = released;
 
+        /* The photo they chose while creating this account, if they did.
+
+           With email confirmation on there was no driver record at that
+           point and nowhere to put it, so it waited. This is the first
+           moment there is somewhere — and it is the only moment, because
+           a driver who confirms their email on their phone and signs in
+           there gets it applied there instead. */
+        try {
+            const claimed = await claimPendingAvatar(user.email, driver.driver_code);
+            if (claimed || pendingAvatarFor(user.email)) {
+                record.avatar = record.avatar
+                    || rememberedAvatar(driver.driver_code) || record.avatar;
+            }
+        } catch (e) { /* a photo is not worth failing a sign-in over */ }
+
         return {
             account: {
                 email: user.email,
@@ -1802,6 +1837,50 @@ const OWNER_SEED = {
 
    A password changed from Settings clears `ownerSeed`, and from then on this
    leaves the account alone. */
+/* The owner's standing, re-asserted.
+
+   Split out of provisionOwner() so every company merge can call it too.
+   It is the same three facts that function has always insisted on — the
+   owner is active, holds the top role, and is never gated out of their
+   own client download — and the only reason they need insisting on more
+   than once is that a merged company record can carry a copy that
+   disagrees.
+
+   Deliberately does NOT save. It is called from inside a merge, and
+   Store.save() during a merge pushes back the copy that has just been
+   read, overwriting whatever another machine changed in the meantime.
+   The caller records that a repair happened and pushes once, when
+   applying is clear — the same discipline normaliseCompany() follows,
+   and for the same reason.
+
+   Returns whether anything had to be put back. */
+function repairOwnerRole() {
+  const db = Store.db;
+  if (!db || !Array.isArray(db.drivers)) return false;
+
+  const rec = db.drivers.find((d) => d && d.id === OWNER_SEED.driverId);
+  if (!rec) return false;
+
+  if (rec.role === 'super_admin' && rec.accountStatus === 'active' && rec.clientAccess) {
+    return false;
+  }
+
+  console.warn('[GMN] the company record demoted the owner; putting it back');
+  rec.role = 'super_admin';
+  rec.accountStatus = 'active';
+  rec.clientAccess = true;
+
+  /* the copy on screen too, or this session carries on with the rights
+     the bad record gave them until something re-reads the roster */
+  if (state.user && state.user.id === rec.id) {
+    state.user.role = 'super_admin';
+    state.user.accountStatus = 'active';
+    state.user.clientAccess = true;
+  }
+
+  return true;
+}
+
 function provisionOwner() {
   const list = Accounts.all();
   const created = new Date().toISOString();
@@ -2353,6 +2432,188 @@ function gmnEmblem(size = 'md', cls = '') {
   </span>`;
 }
 
+/* The photo this browser was given, kept where nothing can sync it away.
+
+   Every other copy of a driver's photo is on a record that something else
+   owns. The roster row is replaced wholesale by a company pull; the copy
+   in state.user is rebuilt from the drivers table on every sign-in and
+   every restore, and that table only carries a photo where
+   drivers.avatar exists — it does not on a project that has not run
+   supabase/migrations/20260908_driver_messaging.sql, and the write that
+   should have created it is caught and logged rather than shown.
+
+   So on a reload the photo was read back off a record that no longer had
+   it, and a driver watched their face turn back into initials for no
+   reason they could see.
+
+   One entry per driver code, so signing in as somebody else on a shared
+   machine does not show their face. Wrapped, because private mode throws
+   on write and a browser with storage disabled must still render. */
+const AVATAR_KEEP = 'gmn.avatar.';
+
+/* The Gaming Nation mark, for a photo that is set but will not load.
+
+   Relative, not the published address. icons/ ships with the desktop
+   build (see build.files), so this resolves on the website, the console
+   and a packaged client opened with no internet — which the hosted URL
+   would not. The hosted one is the second try, for a page served from
+   somewhere that has no icons directory beside it. */
+const AVATAR_FALLBACK = 'icons/mark.png';
+const AVATAR_FALLBACK_REMOTE = 'https://gaming-nation.pages.dev/icons/mark.png';
+
+/* What may be put in an img src.
+
+   This used to accept `data:image/` and nothing else, which is the whole
+   of "the photo is set and still does not show": the moment
+   drivers.avatar holds a normal https:// address — a file in Supabase
+   Storage, a Discord avatar, anything anybody pastes — it was thrown
+   away and the driver fell back to their initials, with no error
+   anywhere.
+
+   Still a whitelist rather than a pass-through. This value comes out of
+   a database row that a driver can write, and it goes straight into an
+   src attribute, so `javascript:` and friends have to be refused here
+   rather than trusted to be sensible. */
+function avatarSrc(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v) return '';
+  if (v.startsWith('data:image/')) return v;
+  if (/^https?:\/\//i.test(v)) return v;
+  /* a path shipped beside the page, like icons/mark.png */
+  if (/^[\w./-]+\.(png|jpe?g|webp|gif|svg)$/i.test(v)) return v;
+  return '';
+}
+
+/* Swap in the mark when the photo does not load, once.
+
+   The guard matters: without clearing onerror first, a fallback that is
+   itself missing fires onerror again and the browser loops on it for as
+   long as the element exists. */
+const AVATAR_ONERROR = 'this.onerror=null;this.src=&quot;' + AVATAR_FALLBACK + '&quot;;'
+  + 'this.onerror=function(){this.onerror=null;this.src=&quot;'
+  + AVATAR_FALLBACK_REMOTE + '&quot;};';
+
+function rememberedAvatar(id) {
+  if (!id) return '';
+  try {
+    return avatarSrc(localStorage.getItem(AVATAR_KEEP + id));
+  } catch (e) {
+    return '';
+  }
+}
+
+function rememberAvatar(id, dataUrl) {
+  if (!id) return;
+  try {
+    if (dataUrl) localStorage.setItem(AVATAR_KEEP + id, dataUrl);
+    else localStorage.removeItem(AVATAR_KEEP + id);
+  } catch (e) {
+    /* out of quota or private mode: the record still carries it */
+  }
+}
+
+/* ---------------- the photo chosen before there was an account ----------
+
+   Registration cannot save a photo to a driver record, because at that
+   moment there is no driver record: email confirmation is on by default,
+   signUp() returns no session, and the row is made later — at first
+   sign-in, by Accounts.provision().
+
+   So the photo waits here, against the address it was chosen for, and is
+   claimed by the first sign-in that matches. Keyed on the email because
+   that is the only thing the two moments have in common: the driver code
+   does not exist yet either. */
+const PENDING_AVATAR = 'gmn.pendingAvatar.v1';
+
+function keepRegisterDraft() {
+  const d = state.ui.regDraft || {};
+  try {
+    if (d.avatar && d.email) {
+      localStorage.setItem(PENDING_AVATAR,
+        JSON.stringify({ email: String(d.email).trim().toLowerCase(), avatar: d.avatar }));
+    } else if (!d.avatar) {
+      localStorage.removeItem(PENDING_AVATAR);
+    }
+  } catch (e) { /* it simply will not survive a reload */ }
+}
+
+function pendingAvatarFor(email) {
+  const want = String(email || '').trim().toLowerCase();
+  if (!want) return '';
+  try {
+    const held = JSON.parse(localStorage.getItem(PENDING_AVATAR) || 'null');
+    if (held && held.avatar && String(held.email || '') === want) return held.avatar;
+  } catch (e) { /* nothing kept */ }
+  return '';
+}
+
+function clearPendingAvatar() {
+  try { localStorage.removeItem(PENDING_AVATAR); } catch (e) { /* fine */ }
+}
+
+/* Put a photo everywhere a photo lives, in one call.
+
+   Four places, and every bug in this area has been one of them being
+   missed: the roster row the company record carries, the copy this
+   session renders, this browser's own keep — which is what survives a
+   reload when the database has nowhere to put it — and the driver's own
+   row in Supabase, which is what makes it follow them to another machine.
+
+   The Supabase write is best effort on purpose. A project that has not
+   run the migration has no drivers.avatar column, and refusing to set the
+   photo at all over that would leave the driver worse off than before. */
+async function saveAvatarFor(code, dataUrl) {
+  if (!code) return false;
+
+  const record = Store.driver(code);
+  if (record) {
+    if (dataUrl) record.avatar = dataUrl;
+    else delete record.avatar;
+  }
+
+  if (state.user && String(state.user.id) === String(code)) {
+    if (dataUrl) state.user.avatar = dataUrl;
+    else delete state.user.avatar;
+  }
+
+  rememberAvatar(code, dataUrl);
+  Store.save();
+
+  if (!window.gmnSupabase) return false;
+
+  try {
+    const { error } = await window.gmnSupabase
+      .from('drivers')
+      .update({ avatar: dataUrl || null })
+      .eq('driver_code', code);
+
+    if (error) throw error;
+    avatarColumnMissing = false;
+    return true;
+
+  } catch (err) {
+    const errCode = String((err && err.code) || '');
+    if (errCode === 'PGRST204' || errCode === '42703'
+      || /avatar/i.test(String((err && err.message) || ''))) {
+      avatarColumnMissing = true;
+    }
+    console.warn('[GMN] the photo was not stored on the driver record — run '
+      + 'supabase/migrations/20260908_driver_messaging.sql:', supabaseError(err));
+    return false;
+  }
+}
+
+/* A driver record has just come into existence, or been signed in to.
+   If a photo was chosen for this address while creating the account, this
+   is the first moment it can be put anywhere. */
+async function claimPendingAvatar(email, code) {
+  const held = pendingAvatarFor(email);
+  if (!held || !code) return false;
+  const kept = await saveAvatarFor(code, held);
+  clearPendingAvatar();
+  return kept;
+}
+
 function avatar(d, size = 40, ring = false) {
   const pres = d.status ? `<span class="presence ${d.status}"></span>` : '';
   /* one neutral tone for everyone; only the signed-in driver is tinted, so the
@@ -2367,11 +2628,27 @@ function avatar(d, size = 40, ring = false) {
 
      The tint is dropped when there is a picture: it would sit on top of
      the face rather than behind initials. */
-  const src = typeof d.avatar === 'string' && d.avatar.startsWith('data:image/')
-    ? d.avatar : '';
+  const kept = rememberedAvatar(d.id);
+  const own = avatarSrc(d.avatar);
 
+  /* The record first, then this browser's own copy.
+
+     The second half is what stops the photo vanishing on reload. The
+     record is rebuilt from Supabase on every sign-in and merged from the
+     company blob on every pull, and it only carries a photo if
+     drivers.avatar exists — which it does not on a project that has not
+     run the migration. So the one place the photo was actually written
+     was the place most likely to be replaced. This copy belongs to the
+     browser, is written when the photo is chosen, and nothing that syncs
+     can reach it. */
+  const src = own || kept;
+
+  /* alt is their name, not empty. A broken photo that falls all the way
+     through to nothing should still say who it is, and a screen reader
+     going down a roster should read names rather than skipping them. */
   const body = src
-    ? `<img class="avatar-img" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    ? `<img class="avatar-img" src="${esc(src)}" alt="${esc(d.name || d.id || 'Driver')}"
+        loading="lazy" decoding="async" onerror="${AVATAR_ONERROR}">`
     : esc(d.initials || initials(d.name));
 
   return `<span class="avatar a-${size} ${src ? 'has-img' : me} ${ring ? 'avatar-ring' : ''}"
@@ -2482,14 +2759,34 @@ async function persistAvatar(dataUrl) {
       .eq('id', state.user.supabaseId);
 
     if (error) throw error;
+    avatarColumnMissing = false;
     return true;
 
   } catch (err) {
+    /* A column that is not there is not a failed request, it is an
+       un-run migration, and the difference matters to whoever has to fix
+       it. PostgREST answers PGRST204 for a column it cannot find in the
+       schema cache; Postgres answers 42703 when it reaches the table.
+
+       Recorded rather than only logged, so Settings can say it out loud.
+       The console line this used to be is the reason it went unnoticed
+       for as long as it did. */
+    const code = String((err && err.code) || '');
+    if (code === 'PGRST204' || code === '42703'
+      || /avatar/i.test(String((err && err.message) || ''))) {
+      avatarColumnMissing = true;
+    }
+
     console.warn('[GMN] the photo was not stored on the driver record — run '
-      + 'supabase/migrations/20260907_driver_avatar.sql:', supabaseError(err));
+      + 'supabase/migrations/20260908_driver_messaging.sql:', supabaseError(err));
     return false;
   }
 }
+
+/* Set by persistAvatar when drivers.avatar is not there. Drawn in
+   Settings so the one person who can fix it is told, rather than the
+   photo simply being local for ever with no explanation. */
+let avatarColumnMissing = false;
 
 function avatarStack(drivers, max = 5, size = 32) {
   const shown = drivers.slice(0, max);
@@ -3898,6 +4195,37 @@ function registerFormHTML() {
     <p class="t2 sm mt-4">This also files your application to drive for Gaming Nation.</p>
 
     <form id="registerForm" class="mt-20" novalidate>
+      <!-- The photo, here rather than only in Settings.
+
+           A driver who is never offered one at the point they are filling
+           in who they are mostly never goes looking for it afterwards, and
+           the roster stays a column of initials. It is optional and it is
+           first, because it is the one field that is about them rather
+           than about paperwork. -->
+      <div class="field">
+        <label>Profile photo <span class="t3">(optional)</span></label>
+        <div class="row gap-14" style="align-items:center">
+          <span class="avatar a-96 ${d.avatar ? 'has-img' : ''}" id="rg-photo-face">
+            ${d.avatar
+              ? `<img class="avatar-img" src="${esc(avatarSrc(d.avatar))}" alt="Your photo"
+                  onerror="${AVATAR_ONERROR}">`
+              : esc(initials(d.name || 'GMN'))}
+          </span>
+          <div class="grow" style="min-width:160px">
+            <input type="file" id="rg-photo-file" accept="image/*" hidden>
+            <div class="row gap-8 wrap">
+              <button class="btn btn-sm" type="button" data-act="reg-photo">
+                ${icon('upload')}${d.avatar ? 'Change photo' : 'Add a photo'}</button>
+              ${d.avatar
+                ? `<button class="btn btn-sm btn-ghost" type="button" data-act="reg-photo-clear">
+                     ${icon('trash')}Remove</button>`
+                : ''}
+            </div>
+            <div class="xs t3 mt-8">It shows on the roster, the convoy board and
+              in the driver app. You can change it later in Settings.</div>
+          </div>
+        </div>
+      </div>
       <div class="field">
         <label for="rg-name">Full name</label>
         <input class="input" id="rg-name" name="name" value="${esc(d.name || '')}" placeholder="Alex Mercer" autocomplete="name">
@@ -3995,6 +4323,12 @@ function doLogin(driver, msg) {
     go(going);
 
     render();
+
+    /* And their conversations. Only now is there a session for the
+       messaging transport to run on — started at boot it found none, and
+       nothing asked it again, so a driver who signed in during the
+       session was told messages were not connected until they reloaded. */
+    if (typeof startMessaging === 'function') startMessaging();
 }
 
 /* Ending a session means ending it in all three places that hold one: the
@@ -4007,6 +4341,9 @@ function signOutEverywhere() {
   Sync.driverKey = null;         /* the next person in gets their own row */
   window.currentDriver = null;
   ServiceAuth.logout();
+  /* The live message channel was opened for the person leaving. Left
+     running it delivers their conversations to whoever signs in next. */
+  if (typeof stopMessaging === 'function') stopMessaging();
   if (window.gmnSupabase) {
     window.gmnSupabase.auth.signOut()
       .catch((err) => console.warn('[GMN] Supabase sign-out failed', err));
@@ -4063,9 +4400,10 @@ async function restoreSupabaseSession() {
    happens next and where to do it. Shown until a recruiter approves them. */
 function onboardingBannerHTML(u) {
   if (u.clientAccess || can('admin.view')) return '';
-  const app = Store.db.applications
-    .filter((a) => a.submittedBy === u.id)
-    .sort((a, b) => new Date(b.submitted) - new Date(a.submitted))[0];
+  /* Resolved the same way the recruitment screen does it, or the two
+     disagree: the banner says "your application is with recruitment" on a
+     screen whose own tracker says approved. */
+  const app = applicationOf(u);
 
 
 
@@ -5323,12 +5661,21 @@ function viewRankings() {
   const fmtV = { km: fmt.km, deliveries: fmt.n, convoys: fmt.n, attendance: (v) => fmt.pct(v) }[lbMetric];
   const metricLabel = { km: 'Distance driven', deliveries: 'Deliveries completed', convoys: 'Convoys attended', attendance: 'Attendance rate' }[lbMetric];
 
+  const leader = lb.length ? lb[0].value : 0;
+
+  /* Nobody has driven anything yet. Worth saying, because the alternative
+     is a podium of three drivers on 0 km and a column of empty bars,
+     which looks like a broken page rather than a new season. */
+  const nothingYet = !lb.some((r) => r.value > 0);
+
+  const periodWord = { week: 'this week', month: 'this month', year: 'this year', all: 'all time' }[lbPeriod];
+
   return `
   <div class="page">
     <div class="page-head">
       <div><div class="eyebrow">Fleet standings · ${esc(Store.db.meta.season)}</div>
         <h1 class="page-title">Rankings</h1>
-        <p class="page-sub">${esc(metricLabel)} · ${{ week: 'this week', month: 'this month', year: 'this year', all: 'all time' }[lbPeriod]}</p></div>
+        <p class="page-sub">${esc(metricLabel)} · ${periodWord}</p></div>
       <div class="row gap-8 wrap">
         <div class="seg">${[['week', 'Weekly'], ['month', 'Monthly'], ['year', 'Yearly'], ['all', 'All-time']]
           .map(([v, l]) => `<button class="${lbPeriod === v ? 'on' : ''}" data-act="lb-period" data-v="${v}">${l}</button>`).join('')}</div>
@@ -5341,54 +5688,98 @@ function viewRankings() {
           <span style="width:14px;height:14px">${icon(ic)}</span>${l}</button>`).join('')}
     </div>
 
-    <!-- podium -->
-    <div class="grid g-3 mb-20">
+    ${nothingYet ? `
+    <!-- No podium when nobody has driven anything.
+
+         Three drivers on nought kilometres, awarded gold, silver and
+         bronze in whatever order the roster happens to be in, is worse
+         than no podium at all: it presents an accident of sort order as
+         a result, and it is the first thing on the page. -->
+    <div class="card reveal mb-20" style="border-color:var(--accent-line);
+         background:linear-gradient(160deg,var(--accent-soft),var(--panel) 62%)">
+      <div class="card-body row gap-14 wrap" style="align-items:center">
+        <span class="stat-ico" style="flex:none">${icon('flag')}</span>
+        <div class="grow" style="min-width:240px">
+          <div class="b8 lg">The board is open</div>
+          <p class="t2 sm mt-4">Nothing has been recorded ${esc(periodWord)}, so there is no
+            podium yet. The first delivered run puts somebody on it.</p>
+        </div>
+        <button class="btn btn-sm" data-act="go" data-href="#/convoys">${icon('route')}Find a convoy</button>
+      </div>
+    </div>`
+    : top3.length ? `
+    <!-- The podium reads second, first, third across the page, and the
+         plinths under the cards are what make that an order rather than
+         three cards in a row. -->
+    <div class="podium mb-20">
       ${[1, 0, 2].map((idx) => {
-        const r = top3[idx]; if (!r) return '<div></div>';
+        const r = top3[idx];
+        if (!r) return '';
         const place = idx + 1;
-        const hue = ['#ffd76e', '#e2e8f0', '#e0a06a'][idx];
-        return `<div class="card hover card-body center reveal d${place}" data-act="go" data-href="#/driver/${r.driver.id}"
-          style="cursor:pointer;${place === 1 ? 'border-color:rgba(255,176,32,.4);background:linear-gradient(180deg,rgba(255,176,32,.09),var(--panel))' : ''}">
-          <div class="col center gap-12">
-            <div style="position:relative">
-              ${avatar(r.driver, 96, true)}
-              <span class="podium-medal">${medal(place, 38)}</span>
-            </div>
-            <div>
-              <div class="b8 lg">${esc(r.driver.name)}</div>
-              <div class="xs t3 mono">${esc(r.driver.id)}</div>
-            </div>
-            ${rankChip(r.driver)}
-            <div><div class="b8" style="font-size:24px;color:${hue}">${fmtV(r.value)}</div>
-              <div class="xs t3 cap b7">${esc(metricLabel)}</div></div>
-            <div class="row gap-14 xs t3">
-              <span>${fmt.n(r.driver.convoys)} convoys</span><span>${r.driver.attendance}% attendance</span>
-            </div>
-          </div></div>`;
+        const m = MEDALS[idx];
+        const me = r.driver.id === state.user.id;
+
+        return `<article class="pod p${place} reveal d${place}"
+          data-act="go" data-href="#/driver/${r.driver.id}"
+          style="--pod:${m.mid};--pod-glow:${m.glow}"
+          tabindex="0" role="link" aria-label="${esc(r.driver.name)}, ${place}${ordinal(place)}">
+          <div class="pod-top">
+            <span class="pod-medal">${medal(place, place === 1 ? 40 : 34)}</span>
+            ${me ? '<span class="badge brand xs pod-you">You</span>' : ''}
+          </div>
+          <div class="pod-face">${avatar(r.driver, place === 1 ? 120 : 96, true)}</div>
+          <div class="pod-name b8">${esc(r.driver.name)}</div>
+          <div class="pod-id mono xs">${esc(r.driver.id)}</div>
+          <div class="pod-rankchip">${rankChip(r.driver)}</div>
+          <div class="pod-value">${fmtV(r.value)}</div>
+          <div class="pod-metric">${esc(metricLabel)}</div>
+          <div class="pod-stats">
+            <span>${icon('truck')}${fmt.n(r.driver.convoys)}</span>
+            <span>${icon('checkCircle')}${r.driver.attendance}%</span>
+          </div>
+          <div class="pod-plinth"><span>${place}</span></div>
+        </article>`;
       }).join('')}
-    </div>
+    </div>` : ''}
 
     <div class="card clip reveal d4">
       <div class="card-head"><div class="card-title">${icon('trophy')}Full standings</div>
-        <span class="badge brand">You are #${myPos}</span></div>
-      <div class="table-wrap"><table class="tbl">
-        <thead><tr><th style="width:60px">#</th><th>Driver</th><th>Rank</th>
-          <th class="right">${esc(metricLabel)}</th><th style="width:180px">Share of leader</th><th>Status</th></tr></thead>
+        ${myPos
+          ? `<span class="badge brand">${icon('target')}You are #${myPos} of ${lb.length}</span>`
+          : `<span class="badge" title="Only active drivers are ranked.">${icon('info')}Unranked</span>`}
+      </div>
+
+      ${nothingYet ? `<div class="card-body" style="padding-bottom:0">
+        <div class="row gap-10" style="padding:12px 14px;border-radius:var(--r);
+             border:1px solid var(--accent-line);background:var(--panel-2)">
+          <span style="width:16px;height:16px;flex:none;color:var(--accent)">${icon('info')}</span>
+          <div class="xs t2">Everybody is on nothing, so this is the roster in its own order —
+            not a result. It becomes a ranking as soon as there is something to rank.</div>
+        </div></div>` : ''}
+
+      ${lb.length ? `
+      <div class="table-wrap"><table class="tbl lb-tbl">
+        <thead><tr><th style="width:64px">#</th><th>Driver</th><th>Rank</th>
+          <th class="right">${esc(metricLabel)}</th><th style="width:190px">Share of leader</th><th>Status</th></tr></thead>
         <tbody>${lb.map((r, i) => {
           const me = r.driver.id === state.user.id;
-          const share = lb[0].value ? r.value / lb[0].value * 100 : 0;
-          return `<tr class="clickable" data-act="go" data-href="#/driver/${r.driver.id}"
-            style="${me ? 'background:var(--panel-2)' : ''}">
-            <td>${i < 3 ? medal(i + 1, 26) : `<span class="rank-num">${i + 1}</span>`}</td>
+          const share = leader ? r.value / leader * 100 : 0;
+          return `<tr class="clickable${me ? ' is-me' : ''}" data-act="go" data-href="#/driver/${r.driver.id}">
+            <td>${i < 3 && !nothingYet
+              ? medal(i + 1, 26)
+              : `<span class="rank-num">${i + 1}</span>`}</td>
             <td><div class="row gap-10">${avatar(r.driver, 32)}
-              <div><div class="b6">${esc(r.driver.name)}${me ? ' <span class="badge brand xs">You</span>' : ''}</div>
+              <div style="min-width:0"><div class="b6 trunc">${esc(r.driver.name)}${me ? ' <span class="badge brand xs">You</span>' : ''}</div>
               <div class="xs t3 mono">${esc(r.driver.id)}</div></div></div></td>
             <td>${rankChip(r.driver)}</td>
             <td class="right mono b7">${fmtV(r.value)}</td>
-            <td>${bar(share, i === 0 ? '' : 'info', 'thin')}</td>
+            <td><div class="lb-share">${bar(share, i === 0 ? '' : 'info', 'thin')}
+              <span class="lb-share-n mono xs t3">${leader ? Math.round(share) + '%' : '—'}</span></div></td>
             <td>${statusBadge(r.driver.status)}</td></tr>`;
         }).join('')}</tbody>
-      </table></div>
+      </table></div>`
+      : `<div class="card-body">${emptyState('trophy', 'Nobody to rank yet',
+          'Drivers appear here once their account is active.')}</div>`}
     </div>
   </div>`;
 }
@@ -5451,10 +5842,68 @@ function viewAchievements() {
 }
 
 /* ---------------- 24. Recruitment (spec §11) ---------------- */
+
+/* This driver's own application, however it happens to be filed.
+
+   submittedBy is the driver code the row was filed against and it is
+   exact — when it is there. It is not always. An application pulled from
+   Supabase carries whatever applications.driver_id held, which is the
+   code on a row filed by this build and the drivers.id bigint on an older
+   one; an application filed from the website before the account existed
+   has no submittedBy at all.
+
+   Matching on submittedBy alone is the whole of the reported bug: an
+   approved driver opened Recruitment and was shown a blank application
+   form, with their own approved application listed further down the same
+   screen. The form was not wrong about the data it had — it simply could
+   not see that the application was theirs.
+
+   Same order and the same reasoning as applicantDriver() resolving this
+   in the other direction: the code, then the row it links to, then the
+   email, which is the only other thing both sides hold. */
+function applicationOf(u) {
+  if (!u) return null;
+
+  const id     = String(u.id || '');
+  const rowId  = u.supabaseId != null ? String(u.supabaseId) : '';
+  const email  = String(u.email || '').trim().toLowerCase();
+
+  return (Store.db.applications || [])
+    .filter((a) => {
+      if (!a) return false;
+      if (id && a.submittedBy && String(a.submittedBy) === id) return true;
+      /* driverSupabaseId carries the code on some rows and the bigint on
+         others, so it is compared against both rather than against
+         whichever one this record happens to have. */
+      if (a.driverSupabaseId != null && a.driverSupabaseId !== '') {
+        const link = String(a.driverSupabaseId);
+        if ((id && link === id) || (rowId && link === rowId)) return true;
+      }
+      if (email && String(a.email || '').trim().toLowerCase() === email) return true;
+      return false;
+    })
+    .sort((a, b) => new Date(b.submitted || 0) - new Date(a.submitted || 0))[0] || null;
+}
+
+/* Somebody already in the company, as opposed to somebody asking to be.
+
+   Three ways to be in, and the form should be offered to none of them:
+   an approved application, the client released to them — which is what
+   approval does — or a staff role, which nobody holds without having
+   been let in first. The owner is the case that has none of the first
+   two and is obviously not applying to join their own company. */
+function alreadyDriving(u) {
+  if (!u) return false;
+  if (u.clientAccess) return true;
+  if (u.role && u.role !== 'driver') return true;
+
+  const app = applicationOf(u);
+  return !!app && app.status === 'approved';
+}
+
 function viewRecruitment() {
-  const mine = Store.db.applications
-    .filter((a) => a.submittedBy === state.user.id)
-    .sort((a, b) => new Date(b.submitted) - new Date(a.submitted))[0];
+  const mine = applicationOf(state.user);
+  const joined = alreadyDriving(state.user);
   const manage = can('recruitment.manage');
   const apps = Store.db.applications.slice().sort((a, b) => new Date(b.submitted) - new Date(a.submitted));
   const stages = ['pending', 'review', 'interview', 'approved', 'rejected'];
@@ -5483,7 +5932,8 @@ function viewRecruitment() {
             </div>
           </div></div>
 
-        ${mine ? applicationTracker(mine) : `
+        ${mine ? applicationTracker(mine)
+          : joined ? alreadyDrivingCard(state.user) : `
         <div class="card reveal d1"><div class="card-head"><div class="card-title">${icon('userPlus')}Driver application</div>
           <span class="badge ok">${icon('clock')}Takes a minute</span></div>
           <div class="card-body">${applyFormHTML()}</div></div>`}
@@ -5529,6 +5979,45 @@ const APPLICATION_STAGES = [
   ['interview', 'Interview / assessment','You will be invited to a voice chat and an assessment drive.'],
   ['approved',  'Approved',             'Welcome aboard — your Driver ID has been issued.'],
 ];
+/* What Recruitment says to somebody who is already in it.
+
+   The alternative — which is what shipped — was a blank application form
+   offered to a driver who has been on the roster for months, asking them
+   to apply to the company they are standing in. */
+function alreadyDrivingCard(u) {
+  const since = u.joined ? fmt.dayMon(u.joined) : '';
+  const r = rankOf(u);
+
+  return `<div class="card reveal d1 joined-card">
+    <div class="card-head">
+      <div class="card-title">${icon('checkCircle')}You are on the roster</div>
+      <span class="badge ok">${icon('shield')}Member</span>
+    </div>
+    <div class="card-body">
+      <div class="row gap-16 wrap" style="align-items:center">
+        ${avatar(u, 96, true)}
+        <div class="grow" style="min-width:200px">
+          <div class="b8 lg">${esc(u.name || 'Driver')}</div>
+          <div class="xs t3 mono mt-4">${esc(u.id)}${since ? ' · joined ' + esc(since) : ''}</div>
+          <div class="row gap-8 mt-8 wrap">${rankChip(u)}${roleBadge(u.role)}</div>
+        </div>
+      </div>
+
+      <p class="t2 sm mt-16">Recruitment is where drivers apply to join Gaming Nation.
+        You are already through it, so there is nothing here for you to fill in —
+        this page is kept so you can point somebody else at it.</p>
+
+      <div class="row gap-8 wrap mt-16">
+        <button class="btn btn-sm" data-act="go" data-href="#/driver/${esc(String(u.id))}">${icon('user')}Your profile</button>
+        <button class="btn btn-sm" data-act="go" data-href="#/downloads">${icon('download')}Get the client</button>
+        ${can('recruitment.manage')
+          ? `<button class="btn btn-sm btn-primary" data-act="go" data-href="#/admin">${icon('shield')}Review applications</button>`
+          : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
 function applicationTracker(a) {
   const rejected = a.status === 'rejected';
   const approved = a.status === 'approved';
@@ -6222,6 +6711,19 @@ function viewSettings() {
                     ? 'Your photo shows on the website, the console and in the client.'
                     : 'Until you add one, your initials are used across Gaming Nation.'}
                 </div>
+                ${avatarColumnMissing ? `
+                <div class="row gap-8 mt-10" style="padding:10px 12px;border-radius:var(--r);
+                     border:1px solid rgba(255,176,32,.30);background:rgba(255,176,32,.08)">
+                  <span style="width:16px;height:16px;flex:none;color:var(--warn)">${icon('alert')}</span>
+                  <div class="xs t2">Your photo is kept on this machine only, so it will not
+                    follow you to another browser or into the driver app. The database has no
+                    <span class="mono">drivers.avatar</span> column to put it in.
+                    <br><br>Run this once in Supabase → SQL editor:
+                    <code class="mono" style="display:block;margin-top:6px;padding:8px 10px;
+                      border-radius:var(--r-sm);background:var(--panel-2);border:1px solid var(--line)"
+                      >alter table public.drivers add column if not exists avatar text;</code>
+                  </div>
+                </div>` : ''}
               </div>
             </div>
             <form id="profileForm">
@@ -8018,6 +8520,42 @@ function handleAction(act, t, ev) {
     /* The hidden file input is opened from a real button, so the control
        matches every other button on the page instead of being the one
        piece of unstyled browser chrome on it. */
+    /* The photo chosen while creating an account.
+
+       It cannot be saved anywhere yet — there is no account, and with
+       email confirmation on there will not be one for some minutes. So it
+       is held on the draft, drawn straight back so they can see what they
+       picked, and written to the driver record the moment one exists. */
+    case 'reg-photo': {
+      const input = $('#rg-photo-file');
+      if (!input) return;
+
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        input.value = '';        /* or the same file twice fires nothing */
+        if (!file) return;
+
+        try {
+          const data = await readAvatarFile(file);
+          state.ui.regDraft = Object.assign({}, state.ui.regDraft, { avatar: data });
+          keepRegisterDraft();
+          render();
+        } catch (err) {
+          toast('Could not use that image', 'danger', err.message);
+        }
+      };
+
+      input.click();
+      return;
+    }
+
+    case 'reg-photo-clear': {
+      state.ui.regDraft = Object.assign({}, state.ui.regDraft, { avatar: '' });
+      keepRegisterDraft();
+      render();
+      return;
+    }
+
     case 'avatar-pick': {
       const input = $('#avatarFile');
       if (!input) return;
@@ -8041,6 +8579,11 @@ function handleAction(act, t, ev) {
           if (record) record.avatar = data;
           state.user.avatar = data;
 
+          /* And this browser's own copy, which is the one that survives a
+             reload whatever the company record and the drivers table do
+             next. */
+          rememberAvatar(state.user.id, data);
+
           /* Store.save() offers the change to the company service itself,
              so the face reaches the console and the client without this
              having to ask. */
@@ -8052,7 +8595,10 @@ function handleAction(act, t, ev) {
 
           toast('Photo updated', 'ok', kept
             ? 'It shows anywhere your name does, on any machine you sign in on.'
-            : 'It shows anywhere your name does.');
+            : avatarColumnMissing
+              ? 'Kept on this machine. To have it follow you to any browser, run '
+                + 'supabase/migrations/20260908_driver_messaging.sql.'
+              : 'It shows anywhere your name does.');
 
         } catch (err) {
           toast('Could not use that image', 'err', err.message);
@@ -8067,6 +8613,9 @@ function handleAction(act, t, ev) {
       const record = Store.driver(state.user.id);
       if (record) delete record.avatar;
       delete state.user.avatar;
+      /* including this browser's own copy, or the photo comes straight
+         back on the next render */
+      rememberAvatar(state.user.id, '');
       Store.save();
       /* Cleared on their own row too, or it comes back on the next sign-in. */
       persistAvatar('');
@@ -8657,26 +9206,48 @@ function approveApplication(id) {
 /* ---------------- medals ----------------
    First, second and third get a medal; everyone below carries on as a plain
    number, so the order reads as one chain rather than two lists. */
+/* A hexagonal medallion rather than the ribbon-and-disc this used to
+   draw. Two reasons, and neither is taste alone.
+
+   The ribbon version was 40x52 — half again as tall as it was wide — so
+   every place it appeared had to leave room for a shape that is round
+   everywhere else in the interface, and in the standings table it sat in
+   a 26px cell as a smear. This is square, so it drops into an avatar
+   slot, a table cell or a badge without any of them being built around
+   it.
+
+   The second is that it read as a school sports day. A hexagon with a
+   metal gradient is the mark a competitive fleet expects, and it is
+   still legible at 22px, which the ribbon was not. */
 const MEDALS = [
-  { key: 'gold',   name: 'Gold',   face: '#f6cf5c', edge: '#c9962a', ribbon: '#c0392b', text: '#5a4108' },
-  { key: 'silver', name: 'Silver', face: '#dfe6ef', edge: '#9aa8ba', ribbon: '#41597a', text: '#414c5c' },
-  { key: 'bronze', name: 'Bronze', face: '#e3a56b', edge: '#a86a33', ribbon: '#2f6f4f', text: '#4d2c0c' },
+  { key: 'gold',   name: 'Gold',   face: '#ffe9a8', mid: '#f3c65a', edge: '#b8801c', text: '#4a3406', glow: '255,193,60' },
+  { key: 'silver', name: 'Silver', face: '#f2f6fb', mid: '#cdd7e4', edge: '#8b9bb0', text: '#39424f', glow: '203,214,230' },
+  { key: 'bronze', name: 'Bronze', face: '#f2c193', mid: '#d4915a', edge: '#96602a', text: '#432508', glow: '212,145,90' },
 ];
 
 function medal(place, size = 34) {
   const m = MEDALS[place - 1];
   if (!m) return `<span class="rank-num">${place}</span>`;
+
   const id = 'm' + place + Math.random().toString(36).slice(2, 6);
-  return `<span class="medal ${m.key}" title="${esc(m.name)} — ${place}${ordinal(place)} place" aria-label="${place}${ordinal(place)} place">
-    <svg viewBox="0 0 40 52" width="${size}" height="${size * 1.3}" aria-hidden="true">
-      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${m.face}"/><stop offset="100%" stop-color="${m.edge}"/>
-      </linearGradient></defs>
-      <path d="M11 2 19 20 L13 24 4 8z" fill="${m.ribbon}"/>
-      <path d="M29 2 21 20 L27 24 36 8z" fill="${m.ribbon}" opacity=".82"/>
-      <circle cx="20" cy="35" r="14.5" fill="url(#${id})" stroke="${m.edge}" stroke-width="1.6"/>
-      <circle cx="20" cy="35" r="10.5" fill="none" stroke="${m.edge}" stroke-width="1" opacity=".55"/>
-      <text x="20" y="40.5" text-anchor="middle" font-size="14" font-weight="800"
+  const hex = 'M22 3.2 36.4 11.6v16.8L22 36.8 7.6 28.4V11.6z';
+
+  return `<span class="medal ${m.key}" style="--medal-glow:${m.glow}"
+    title="${esc(m.name)} — ${place}${ordinal(place)} place"
+    aria-label="${place}${ordinal(place)} place">
+    <svg viewBox="0 0 44 40" width="${size}" height="${size * 0.91}" aria-hidden="true">
+      <defs>
+        <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="${m.face}"/>
+          <stop offset="48%"  stop-color="${m.mid}"/>
+          <stop offset="100%" stop-color="${m.edge}"/>
+        </linearGradient>
+      </defs>
+      <path d="${hex}" fill="url(#${id})" stroke="${m.edge}" stroke-width="1.4"
+        stroke-linejoin="round"/>
+      <path d="M22 8.4 31.6 14v11.2L22 30.8 12.4 25.2V14z" fill="none"
+        stroke="${m.text}" stroke-width="1" stroke-linejoin="round" opacity=".22"/>
+      <text x="22" y="25.4" text-anchor="middle" font-size="14.5" font-weight="800"
         fill="${m.text}" font-family="inherit">${place}</text>
     </svg>
   </span>`;
@@ -8822,7 +9393,7 @@ const Sync = {
   lastError: null,
   lastAt: 0,
   applying: false,
-  driverKey: null,      /* whose driver row is already loaded */
+  driverKey: null,      /* the auth user whose driver row is already loaded */
   starting: false,
 
   url() {
@@ -8883,11 +9454,22 @@ const Sync = {
     return Array.from(by.values());
   },
 
+  /* set by a merge that had to put the owner's role back, so pull() can
+     push the correction once rather than every merge racing to */
+  ownerRepaired: false,
+
   merge(remote) {
     const db = Store.db;
     if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return;
     try { this.mergeInner(db, remote); }
     catch (e) { console.warn('[GMN] the service sent something unusable', e); }
+
+    /* Here rather than after the pull, because there is more than one
+       merge in a pull: the Supabase company, then absorbService() with
+       the legacy service's copy. Repairing between the two left the
+       second one free to demote the owner again, which is the same bug
+       one step later. Every merge, no exceptions. */
+    if (repairOwnerRole()) this.ownerRepaired = true;
   },
 
 mergeInner(db, remote) {
@@ -9148,6 +9730,16 @@ this.lastAt = Date.now();
 await this.absorbService();
 await Applications.pull();
 
+/* Both merges are done, so if either had to put the owner's role back,
+   this is the moment the correction is worth sending — once, with the
+   record whole, rather than from inside a merge where sendNow() refuses
+   to write anyway. Left unsent, every machine would go on repairing the
+   same demotion on every pull, for ever. */
+if (this.ownerRepaired) {
+  this.ownerRepaired = false;
+  repairedHere = true;
+}
+
       if (moved) {
         console.log('[GMN] Company pulled from Supabase:', {
           version: this.version,
@@ -9176,7 +9768,7 @@ await Applications.pull();
          and a full render() each time, which is where the repeating
          "Dashboard driver loaded" came from. driverKey is cleared on sign-out,
          so the next person to sign in is fetched fresh. */
-      if (state.user && window.gmnSupabase && this.driverKey !== state.user.id) {
+      if (state.user && window.gmnSupabase) {
         try {
           const { data: { user } = {}, error: authError } =
             await window.gmnSupabase.auth.getUser();
@@ -9185,6 +9777,20 @@ await Applications.pull();
             console.error('[GMN] Could not get Supabase user:', authError);
             return true;
           }
+
+          /* Keyed on the ACCOUNT, not on state.user.id.
+
+             Those are different questions, and asking the second one turned
+             "load this driver once" into "load again whenever the record on
+             screen changes" — so a ten-second timer went back to Supabase
+             every time anything else assigned state.user, and then assigned
+             over the top of it. Two writers, one variable, and whichever
+             landed second won.
+
+             The account cannot change without a sign-out, and sign-out
+             clears driverKey, so this is once per session in the way the
+             comment above always claimed. */
+          if (this.driverKey === user.id) return true;
 
           const { data: driver, error: driverError } =
             await window.gmnSupabase
@@ -9198,15 +9804,27 @@ await Applications.pull();
             return true;
           }
 
+          this.driverKey = user.id;
+
+          /* the driver pages read the raw row off this */
+          window.currentDriver = driver;
+
+          /* Refreshing the record on screen, not deciding who is signed in.
+
+             That decision belongs to restoreSupabaseSession(), which makes
+             it once at boot and signs out when the session and the driver
+             record disagree. Making it here as well meant a background poll
+             could silently replace the person being looked at, mid-screen,
+             with no action from anybody — and whichever of the two writers
+             finished last was the one you ended up as. */
+          const code = String(driver.driver_code || driver.id);
+          if (String(state.user.id) !== code) return true;
+
           /* fromRow, not a raw spread of the row. driver.id is a Supabase uuid
              and the platform is keyed on driver_code, so spreading the row
              straight in sets state.user.id to the uuid and leaves name
              undefined — which takes the next render down. */
           state.user = Accounts.fromRow(driver, user);
-          this.driverKey = state.user.id;
-
-          /* the driver pages read the raw row off this */
-          window.currentDriver = driver;
           render();
 
         } catch (err) {
@@ -9586,9 +10204,7 @@ const Applications = {
   mine() {
     const u = state.user;
     if (!u || !u.id) return null;
-    return (Store.db.applications || [])
-      .filter((a) => a && a.submittedBy === u.id)
-      .sort((a, b) => new Date(b.submitted || 0) - new Date(a.submitted || 0))[0] || null;
+    return applicationOf(u);
   },
 
   /* Release the client to a driver whose application has just been approved.
@@ -11256,6 +11872,72 @@ const ServiceAuth = {
 
   on() { return !!this.token; },
 
+  connecting: null,     /* the attempt in flight, so ten callers make one */
+
+  /* Get a token with the Supabase session this browser already holds.
+
+     login() below compares a password against a hash in the company
+     record the service keeps, and that hash has not been the driver's
+     password since accounts moved to Supabase. So the password path
+     rejects the only password anybody has, and the honest fix is not to
+     use it: the service can verify a Supabase session directly and issue
+     its own.
+
+     Quiet by design. No service, an older service, or no session yet are
+     all ordinary, and every screen that needs this already says what is
+     missing when it is missing. */
+  async connect() {
+    if (this.connecting) return this.connecting;
+    this.connecting = this._connect().then((ok) => {
+      this.connecting = null;
+      return ok;
+    });
+    return this.connecting;
+  },
+
+  async _connect() {
+    const base = Sync.url();
+    if (!base) { this.status = 'off'; return false; }
+    if (!window.gmnSupabase) return false;
+
+    let access = '';
+    try {
+      const { data } = await window.gmnSupabase.auth.getSession();
+      access = (data && data.session && data.session.access_token) || '';
+    } catch (e) { /* nothing to offer */ }
+    if (!access) return false;
+
+    try {
+      const res = await fetch(base + '/api/auth/supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: access }),
+      });
+
+      if (!res.ok) {
+        this.status = (res.status === 401 || res.status === 403)
+          ? 'rejected' : 'unreachable';
+        return false;
+      }
+
+      const body = await res.json();
+      if (!body || !body.token) { this.status = 'unreachable'; return false; }
+
+      this.token = body.token;
+      this.driver = body.driver || null;
+      this.status = 'signed-in';
+      this.lastError = null;
+      this.keep();
+      this.reopenStream();
+      return true;
+
+    } catch (err) {
+      this.status = 'unreachable';
+      this.lastError = err.message;
+      return false;
+    }
+  },
+
   /* Exchange the credentials the browser just accepted for a token. Called
      from the sign-in path, so a driver never types their password twice. */
   async login(email, password) {
@@ -12464,10 +13146,10 @@ const CLIENT_RELEASE = {
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
       file: 'release/Gaming-Nation-Trucker-1.0.0-windows-setup.exe',
-      size: '80.8 MB', note: 'Installs to your machine and adds a Start menu entry.' },
+      size: '103.4 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
       file: 'release/Gaming-Nation-Trucker-1.0.0-windows-portable.exe',
-      size: '80.4 MB', note: 'No installation — just run it. Good for a USB stick.' },
+      size: '103.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
       file: 'release/Gaming-Nation-Trucker-1.0.0-android.apk',
       size: '6.7 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
@@ -12646,7 +13328,7 @@ const Downloads = {
 function viewDownloads() {
   const u = state.user;
   const allowed = !!u.clientAccess || can('admin.view');
-  const app = Store.db.applications.find((a) => a.submittedBy === u.id);
+  const app = applicationOf(u);
 
   return `
   <div class="page">
@@ -12927,7 +13609,12 @@ function bindAuth() {
          too, with the same credentials, so the identity on anything we send
          is one the service derived rather than one we asserted. Not fatal if
          it fails — the app runs, and the parts that need proof say why. */
-      await ServiceAuth.login(res.account ? res.account.email : handle, pw);
+      /* The Supabase session first: the service's password check compares
+         against a hash in the company record, and that has not been the
+         driver's password since accounts moved to Supabase. */
+      if (!(await ServiceAuth.connect())) {
+        await ServiceAuth.login(res.account ? res.account.email : handle, pw);
+      }
 
       if (!$('#li-remember').checked) sessionOnly = true;
       doLogin(res.driver);
@@ -12971,7 +13658,13 @@ function bindAuth() {
       const pw = $('#rg-pw').value;
       const pw2 = $('#rg-pw2').value;
       const agreed = $('#rg-agree').checked;
-      state.ui.regDraft = { name, email, country, discord, agree: agreed };
+      state.ui.regDraft = { name, email, country, discord, agree: agreed,
+        avatar: (state.ui.regDraft || {}).avatar || '' };
+      /* Kept against the address so the first sign-in can claim it — see
+         claimPendingAvatar(). Written before the account is made, because
+         with email confirmation on, this browser may well be closed before
+         anybody comes back to it. */
+      keepRegisterDraft();
 
       let ok = true;
       ok = showErr(rf, 'name', name.length >= 3 ? '' : 'Enter your full name.') && ok;
@@ -12988,7 +13681,8 @@ function bindAuth() {
       let res;
       try {
         res = await Accounts.register(
-          { name, email, discord, created: new Date().toISOString() },
+          { name, email, discord, created: new Date().toISOString(),
+            avatar: (state.ui.regDraft || {}).avatar || '' },
           pw, country);
       } catch (err) {
         btn.disabled = false;
@@ -12998,6 +13692,8 @@ function bindAuth() {
       btn.disabled = false;
 
       state.ui.regDraft = {};
+      /* Deliberately NOT clearing the pending photo. The account may not
+         exist yet, and outliving this form is the whole point of it. */
 
       /* Email confirmation is on, so there is no session and nothing to
          log in to yet. The account is real and the driver record is made
@@ -13195,18 +13891,31 @@ function bindViewForms() {
             if (!ok) return;
 
 
-            /* one open application per person is enough */
-            const already = Store.db.applications.find(
-                (a) =>
-                    a.submittedBy === state.user.id &&
-                    (
-                        a.status === 'pending' ||
-                        a.status === 'review' ||
-                        a.status === 'interview'
-                    )
-            );
+            /* Somebody who is already in the company is not applying to
+               join it. The screen no longer offers them the form, but the
+               handler is what actually files a row and it has to refuse on
+               its own — a stale page, a back button or a second tab all
+               reach here with the form still on screen. */
+            if (alreadyDriving(state.user)) {
+                toast(
+                    'You are already a Gaming Nation driver',
+                    'ok',
+                    'There is nothing to apply for.'
+                );
 
-            if (already) {
+                closeAllLayers();
+                render();
+                return;
+            }
+
+            /* one open application per person is enough */
+            const already = applicationOf(state.user);
+
+            if (already && (
+                already.status === 'pending' ||
+                already.status === 'review' ||
+                already.status === 'interview'
+            )) {
                 toast(
                     'You already have an application in',
                     'warn',
@@ -13620,6 +14329,303 @@ function tickCountdowns() {
    said it is decided from the token rather than believed from the
    body. Attachments go to the service as bytes and come back by id.
    ============================================================ */
+/* ------------------------------------------------------------
+   The conversation, over Supabase
+
+   Everything else on the platform moved to Supabase and messages did
+   not, so a driver on the website was told to start a service that
+   only ever ran in the office. The conversation could not leave one
+   machine.
+
+   This is the same conversation over the company's own database:
+   public.conversations, conversation_participants and messages, with
+   the SECURITY DEFINER functions in
+   supabase/migrations/20260908_driver_messaging.sql doing the parts
+   the browser is not allowed to do.
+
+   The one thing worth knowing about the seam: this file is keyed on
+   the GMN driver code and those tables are keyed on auth uuids. The
+   translation happens in the database — dm_with(), dm_threads() and
+   dm_history() take and return codes — because a plain driver may
+   only read their OWN drivers row and so cannot resolve anybody
+   else's uuid from here however hard it tries.
+   ------------------------------------------------------------ */
+const SupaDM = {
+  session: false,      /* a Supabase session is present */
+  missing: false,      /* the dm_* functions are not in the database */
+  lastError: null,
+
+  channel: null,
+  ids: {},             /* driver code (or #fleet) -> conversation id */
+  people: [],          /* the directory, for a browser with no company record */
+  joinedRoom: false,
+
+  signed: {},          /* storage path -> { url, until } */
+  pending: {},         /* paths with a signature already being fetched */
+
+  on() { return !!window.gmnSupabase && this.session && !this.missing; },
+
+  /* Having the library is not being signed in. getSession() reads what
+     is already in local storage — no request, no cost. */
+  async check() {
+    if (!window.gmnSupabase) { this.session = false; return false; }
+    try {
+      const { data } = await window.gmnSupabase.auth.getSession();
+      this.session = !!(data && data.session);
+    } catch (e) {
+      this.session = false;
+    }
+    return this.session;
+  },
+
+  /* A missing function is not a failed request, it is an un-run
+     migration, and it is worth saying so in those words exactly once
+     rather than logging a 404 on every poll for ever. */
+  note(err) {
+    const code = String((err && (err.code || err.status)) || '');
+    const msg = String((err && err.message) || '');
+
+    if (code === 'PGRST202' || code === '404'
+      || /Could not find the function/i.test(msg)) {
+      this.missing = true;
+      this.lastError = 'The messaging tables are there but the functions the '
+        + 'app calls are not. Run supabase/migrations/20260908_driver_messaging.sql '
+        + 'in the Supabase SQL editor.';
+      return;
+    }
+
+    this.lastError = typeof supabaseError === 'function'
+      ? supabaseError(err) : (msg || 'Supabase refused the request.');
+  },
+
+  async rpc(fn, args) {
+    const { data, error } = await window.gmnSupabase.rpc(fn, args || {});
+    if (error) { this.note(error); throw error; }
+    this.lastError = null;
+    return data;
+  },
+
+  /* ---- the conversation behind a driver code ---- */
+
+  async conversationFor(withId) {
+    const key = String(withId);
+    if (this.ids[key]) return this.ids[key];
+
+    const id = key === FLEET_ROOM
+      ? await this.rpc('dm_room')
+      : await this.rpc('dm_with', { other_code: key });
+
+    this.ids[key] = id;
+    return id;
+  },
+
+  /* ---- the shapes the screen draws with ---- */
+
+  toThread(r) {
+    const room = r.kind === 'room';
+    const withId = room ? FLEET_ROOM : String(r.with_code || '');
+    if (!withId) return null;
+
+    this.ids[withId] = r.conversation_id;
+
+    return {
+      withId,
+      room,
+      withName: room ? 'Fleet room' : (r.with_name || withId),
+      unread: r.unread || 0,
+      online: false,
+      last: r.last_at
+        ? { at: r.last_at, text: r.last_text || '', deleted: !!r.last_deleted }
+        : null,
+    };
+  },
+
+  toMessage(r) {
+    const code = String(r.sender_code || '');
+    /* the staff tag comes off the roster, which is the only place the
+       role is; dm_history deliberately gives out a name and nothing more */
+    const d = code ? Store.driver(code) : null;
+    const staff = d && d.role && d.role !== 'driver';
+
+    return {
+      id: String(r.id),
+      at: r.at,
+      driverId: code,
+      driver: r.sender_name || 'Driver',
+      role: staff ? 'staff' : '',
+      text: r.body || '',
+      attachment: r.attachment || null,
+      deleted: !!r.deleted,
+      /* "read" is only ever shown against your own messages */
+      readAt: r.mine && r.read_by_them ? r.at : null,
+    };
+  },
+
+  /* ---- what Messages asks for ---- */
+
+  async threads() {
+    /* A room nobody has opened has no membership row, so it is not in
+       anybody's thread list — including the list of the person about to
+       open it. Joining once a session is what puts it there. */
+    if (!this.joinedRoom) {
+      try { await this.conversationFor(FLEET_ROOM); this.joinedRoom = true; }
+      catch (e) { /* the room is not worth failing the whole list over */ }
+    }
+
+    const rows = await this.rpc('dm_threads');
+    return (rows || []).map((r) => this.toThread(r)).filter(Boolean);
+  },
+
+  async history(withId, beforeId) {
+    const conversation = await this.conversationFor(withId);
+    const rows = await this.rpc('dm_history', {
+      conversation,
+      before_id: beforeId == null ? null : Number(beforeId),
+      limit_n: 200,
+    });
+    return (rows || []).map((r) => this.toMessage(r));
+  },
+
+  async send(withId, text, attachment) {
+    await this.rpc('dm_send', {
+      other_code: String(withId),
+      body: text || null,
+      attach: attachment || null,
+    });
+    return true;
+  },
+
+  async markRead(withId) {
+    const conversation = await this.conversationFor(withId);
+    await this.rpc('dm_mark_read', { conversation });
+  },
+
+  async remove(id) {
+    return !!(await this.rpc('dm_delete', { message_id: Number(id) }));
+  },
+
+  /* Everybody this driver could talk to, from the table that owns the
+     roster rather than from the company record — which is correct on a
+     machine that has pulled it and empty on one that has not. */
+  async directory() {
+    try {
+      const rows = await this.rpc('dm_directory');
+      this.people = (rows || [])
+        .filter((r) => r && r.code)
+        .map((r) => ({
+          id: String(r.code),
+          name: r.name || String(r.code),
+          role: r.role || 'driver',
+        }));
+    } catch (e) {
+      /* the company record is still there to draw from */
+    }
+    return this.people;
+  },
+
+  /* ---- attachments ----
+
+     The bytes go to the 'dm' bucket under the conversation's id, which
+     is what the storage policy resolves back to a membership check. The
+     bucket is private, so what comes back is a path and not a URL. */
+  async upload(file, withId) {
+    const conversation = await this.conversationFor(withId);
+
+    const safe = String(file.name || 'file')
+      .replace(/[^\w.\- ]+/g, '_')
+      .slice(0, 80);
+    const path = conversation + '/'
+      + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+      + '-' + safe;
+
+    const { error } = await window.gmnSupabase.storage
+      .from('dm')
+      .upload(path, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    return {
+      path,
+      name: file.name,
+      size: file.size,
+      type: file.type || '',
+      image: /^image\//.test(file.type || ''),
+    };
+  },
+
+  /* A private object has no address until one is signed for it, and
+     signing is a request — which the renderer cannot make, because it
+     is drawing right now.
+
+     So: answer with whatever is already signed, and if there is
+     nothing, start signing and repaint when it lands. One request per
+     path, not one per render, or scrolling a conversation with photos
+     in it signs the same file forty times. */
+  fileUrl(att) {
+    if (!att || !att.path) return '';
+
+    const hit = this.signed[att.path];
+    if (hit && hit.until > Date.now()) return hit.url;
+
+    if (!this.pending[att.path] && window.gmnSupabase) {
+      this.pending[att.path] = true;
+
+      window.gmnSupabase.storage.from('dm')
+        .createSignedUrl(att.path, 3600)
+        .then(({ data }) => {
+          if (data && data.signedUrl) {
+            this.signed[att.path] = {
+              url: data.signedUrl,
+              /* signed for an hour, trusted for fifty minutes */
+              until: Date.now() + 50 * 60000,
+            };
+            paintMessages();
+          }
+        })
+        .catch(() => { /* the link simply stays absent */ })
+        .then(() => { delete this.pending[att.path]; });
+    }
+
+    return hit ? hit.url : '';
+  },
+
+  /* ---- live ----
+
+     postgres_changes re-checks the SELECT policy for the subscribing
+     user before it forwards a row, so this only ever sees messages in
+     conversations this driver is in. What arrives is a row and not the
+     shape the screen draws, so rather than translate it here the
+     change is treated as "something moved" and the open conversation
+     is re-read — one small query, and it cannot drift out of step with
+     what the list says. */
+  subscribe() {
+    if (!this.on() || this.channel) return;
+
+    try {
+      this.channel = window.gmnSupabase
+        .channel('gmn-dm')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'messages' },
+          () => Messages.supaChanged())
+        .subscribe();
+    } catch (e) {
+      /* the poll in the render loop still covers it, just slower */
+    }
+  },
+
+  unsubscribe() {
+    if (!this.channel) return;
+    try { window.gmnSupabase.removeChannel(this.channel); } catch (e) { /* gone anyway */ }
+    this.channel = null;
+    this.joinedRoom = false;
+    this.ids = {};
+  },
+};
+
+
 const Messages = {
   threads: [],
   withId: null,        /* the conversation on screen */
@@ -13630,23 +14636,66 @@ const Messages = {
   error: null,         /* no-service | no-identity | null */
   online: {},          /* driverId -> boolean, from presence frames */
 
-  on() { return !!Sync.url() && ServiceAuth.on(); },
+  /* Which of the two this company is using.
+
+     The service wins when it is there, because it is the only one of
+     the two that can also carry a call. Supabase is what everybody
+     else gets, which until now was nothing at all. */
+  transport() {
+    if (Sync.url() && ServiceAuth.on()) return 'service';
+    if (SupaDM.on()) return 'supabase';
+    return null;
+  },
+
+  on() { return !!this.transport(); },
+
+  /* Calls and the fleet room's call need the service specifically.
+     Asking on() for that was fine while the service was the only
+     transport and is wrong now: it would offer a call the company has
+     no way to place. */
+  hasService() { return this.transport() === 'service'; },
 
   /* Why the screen is empty, in terms somebody can act on. */
   reason() {
+    if (SupaDM.missing) return SupaDM.lastError;
+
+    if (window.gmnSupabase && !SupaDM.session) {
+      return 'Sign in to Gaming Nation to read your messages.';
+    }
+
+    if (!window.gmnSupabase && !Sync.url()) {
+      return 'This copy has no connection to the company — no Supabase and no '
+        + 'company service. Messages need one of the two.';
+    }
+
+    if (SupaDM.lastError) return SupaDM.lastError;
+
     if (!Sync.url()) {
       return 'Messages need the company service. Start it with npm run service, '
         + 'or set its address in Settings.';
     }
+
     if (!ServiceAuth.on()) {
       return ServiceAuth.reason && ServiceAuth.reason()
         ? ServiceAuth.reason()
         : 'Sign in again to send messages.';
     }
+
     return '';
   },
 
   async pullThreads() {
+    if (this.transport() === 'supabase') {
+      try {
+        this.threads = await SupaDM.threads();
+        this.error = null;
+        return true;
+      } catch (err) {
+        console.warn('[GMN] could not list conversations:', err.message);
+        return false;
+      }
+    }
+
     const base = Sync.url();
     if (!base) { this.error = 'no-service'; return false; }
     if (!ServiceAuth.on()) { this.error = 'no-identity'; return false; }
@@ -13686,10 +14735,25 @@ const Messages = {
   },
 
   async refresh() {
+    if (!this.withId) { this.loading = false; return; }
+
+    if (this.transport() === 'supabase') {
+      try {
+        this.messages = await SupaDM.history(this.withId);
+        this.olderCursor = this.messages.length >= 200
+          ? this.messages[0].id : null;
+        this.error = null;
+      } catch (err) {
+        console.warn('[GMN] could not read the conversation:', err.message);
+      }
+      this.loading = false;
+      paintMessages();
+      return;
+    }
+
     const base = Sync.url();
     if (!base) { this.error = 'no-service'; this.loading = false; return; }
     if (!ServiceAuth.on()) { this.error = 'no-identity'; this.loading = false; return; }
-    if (!this.withId) { this.loading = false; return; }
 
     try {
       const res = await fetch(base + '/api/dm/' + encodeURIComponent(this.withId),
@@ -13710,17 +14774,57 @@ const Messages = {
     paintMessages();
   },
 
-  /* The id the SERVICE knows this browser by. Every id on a message is
-     stamped by the service from the token, so this is what they have to be
+  /* The id the OTHER END knows this browser by. Every id on a message is
+     stamped from the sender's session, so this is what they have to be
      compared against — the local driver record can carry a different code
      and then nothing a driver sends is recognised as their own. */
   me() {
+    if (this.transport() === 'supabase') {
+      return state.user ? String(state.user.id) : '';
+    }
     if (ServiceAuth.driver && ServiceAuth.driver.id) return String(ServiceAuth.driver.id);
     return state.user ? String(state.user.id) : '';
   },
 
-  /* Arriving live. Only repaints when it belongs to what is on screen —
-     a message in another conversation moves a count, not the view. */
+  /* Something moved in public.messages. Which conversation it was in is
+     in the payload, but acting on the row itself would mean rebuilding
+     the screen's shape from a raw record and hoping the two agree;
+     re-reading is one small query and cannot drift.
+
+     Batched, because a burst — somebody sending three lines quickly — is
+     one repaint and not three. */
+  supaChanged() {
+    clearTimeout(this._supaTimer);
+    this._supaTimer = setTimeout(async () => {
+      const before = this.unread();
+
+      if (this.withId) await this.refresh();
+      await this.pullThreads();
+
+      if (state.route && state.route.name === 'messages') paintMessages();
+      paintUnreadBadge();
+
+      const onScreen = state.route && state.route.name === 'messages';
+
+      /* On screen it has already been read; anywhere else it is worth a
+         word, once, for whichever conversation grew. */
+      if (this.unread() > before && !onScreen) {
+        const hot = this.threads.find((t) => t.unread);
+        if (hot) {
+          toast(hot.withName || 'New message', 'info',
+            hot.last && hot.last.text
+              ? String(hot.last.text).slice(0, 90)
+              : 'Sent something');
+        }
+      } else if (this.withId && onScreen) {
+        this.markRead();
+      }
+    }, 180);
+  },
+
+  /* Arriving live from the company service. Only repaints when it belongs
+     to what is on screen — a message in another conversation moves a
+     count, not the view. */
   receive(msg) {
     const me = this.me();
     const mine = !!me && String(msg.driverId) === me;
@@ -13763,8 +14867,20 @@ const Messages = {
   },
 
   async markRead() {
+    if (!this.withId) return;
+
+    if (this.transport() === 'supabase') {
+      try {
+        await SupaDM.markRead(this.withId);
+        const t = this.threads.find((x) => String(x.withId) === this.withId);
+        if (t) t.unread = 0;
+        paintUnreadBadge();
+      } catch (e) { /* it will be marked on the next look */ }
+      return;
+    }
+
     const base = Sync.url();
-    if (!base || !ServiceAuth.on() || !this.withId) return;
+    if (!base || !ServiceAuth.on()) return;
     try {
       await fetch(base + '/api/dm/read', {
         method: 'POST',
@@ -13778,11 +14894,31 @@ const Messages = {
   },
 
   async send(text, attachment) {
-    const base = Sync.url();
-    if (!base) { toast('Messages need the company service', 'warn', this.reason()); return false; }
-    if (!ServiceAuth.on()) { toast('Sign in again to send messages', 'warn'); return false; }
     if (!this.withId) return false;
     if (!text && !attachment) return false;
+
+    if (this.transport() === 'supabase') {
+      this.sending = true;
+      try {
+        await SupaDM.send(this.withId, text, attachment);
+        /* The subscription will bring it back, but not for another round
+           trip, and a message that does not appear when you press send
+           reads as one that did not go. */
+        await this.refresh();
+        await this.pullThreads();
+        paintUnreadBadge();
+        return true;
+      } catch (err) {
+        toast('Message not sent', 'danger', SupaDM.lastError || err.message);
+        return false;
+      } finally {
+        this.sending = false;
+      }
+    }
+
+    const base = Sync.url();
+    if (!base) { toast('Messages are not connected', 'warn', this.reason()); return false; }
+    if (!ServiceAuth.on()) { toast('Sign in again to send messages', 'warn'); return false; }
 
     this.sending = true;
     try {
@@ -13810,10 +14946,28 @@ const Messages = {
     }
   },
 
-  /* The bytes go up on their own and come back as an id. The message that
-     carries it is sent separately, so a slow photo does not hold the
+  /* The bytes go up on their own and come back as a reference. The message
+     that carries it is sent separately, so a slow photo does not hold the
      conversation up and a failed one does not lose what was typed. */
   async upload(file) {
+    if (this.transport() === 'supabase') {
+      if (file.size > 25 * 1024 * 1024) {
+        toast('That file is too large', 'warn', 'The limit is 25 MB.');
+        return null;
+      }
+      try {
+        return await SupaDM.upload(file, this.withId);
+      } catch (err) {
+        const msg = String((err && err.message) || '');
+        toast('Upload failed', 'danger',
+          /bucket/i.test(msg)
+            ? 'The dm storage bucket is missing — run '
+              + 'supabase/migrations/20260908_driver_messaging.sql.'
+            : msg);
+        return null;
+      }
+    }
+
     const base = Sync.url();
     if (!base || !ServiceAuth.on()) { toast('Sign in again to send files', 'warn'); return null; }
 
@@ -13862,6 +15016,17 @@ const Messages = {
   },
 
   async remove(id) {
+    if (this.transport() === 'supabase') {
+      try {
+        const gone = await SupaDM.remove(id);
+        if (gone) { await this.refresh(); await this.pullThreads(); }
+        return gone;
+      } catch (err) {
+        toast('Could not remove the message', 'danger', SupaDM.lastError || err.message);
+        return false;
+      }
+    }
+
     const base = Sync.url();
     if (!base || !ServiceAuth.on()) return false;
     try {
@@ -13878,13 +15043,60 @@ const Messages = {
     }
   },
 
-  /* An attachment's address is relative to the service, not to this page —
-     the site is on Cloudflare and the file is on the company's machine. */
+  /* Where an attachment actually is. Over Supabase that is a signed URL
+     for a private object; over the service it is an address relative to
+     the service, not to this page — the site is on Cloudflare and the
+     file is on the company's machine. */
   fileUrl(att) {
-    if (!att || !att.url) return '';
+    if (!att) return '';
+    if (att.path) return SupaDM.fileUrl(att);
+    if (!att.url) return '';
     return Sync.url() + att.url;
   },
 };
+
+/* Open the conversation for whoever is signed in.
+
+   Called at boot once the session is known, and again on sign-in and
+   sign-out — the transport depends on there being a session, so a
+   browser that started signed out has to be told when that changes
+   rather than discovering it on the next poll.
+
+   Everything in here is best effort. A company with no Supabase and no
+   service still boots; it simply has no messages, which the screen
+   already knows how to say. */
+async function startMessaging() {
+  try {
+    await SupaDM.check();
+
+    if (!Messages.on()) { paintUnreadBadge(); return; }
+
+    if (Messages.transport() === 'supabase') {
+      SupaDM.subscribe();
+      SupaDM.directory();      /* not awaited: the roster is a fallback */
+    }
+
+    await Messages.pullThreads();
+    paintUnreadBadge();
+    if (state.route && state.route.name === 'messages') paintMessages();
+
+  } catch (e) {
+    console.warn('[GMN] messages did not start:', e.message);
+  }
+}
+
+/* Signing out has to take the live subscription with it, or the next
+   person to sign in on this browser inherits a channel opened for
+   somebody else. */
+function stopMessaging() {
+  SupaDM.unsubscribe();
+  SupaDM.session = false;
+  SupaDM.people = [];
+  Messages.threads = [];
+  Messages.messages = [];
+  Messages.withId = null;
+  paintUnreadBadge();
+}
 
 /* ============================================================
    Calling
@@ -14100,8 +15312,10 @@ const RoomCall = {
       toast('You are already on a call', 'warn', 'End it before joining the room.');
       return;
     }
-    if (!Messages.on()) {
-      toast('The room call needs the company service', 'warn', Messages.reason());
+    if (!Messages.hasService()) {
+      toast('The room call needs the company service', 'warn',
+        'The conversation runs on Supabase, but a call does not — it needs the '
+        + 'company service to carry the handshake. Start it with npm run service.');
       return;
     }
 
@@ -14629,11 +15843,25 @@ function dmNameFor(id) {
   return (t && t.withName) || String(id);
 }
 
-/* Everyone this driver could talk to: the roster, minus themselves. */
+/* Everyone this driver could talk to: the roster, minus themselves.
+
+   The company record first, because it is the fuller one — it carries the
+   photo, the rank and the role. Anybody the database knows about who is
+   not in it is added on the end rather than left out: a browser that has
+   not pulled the company yet had an empty picker, which reads as "there
+   is nobody to talk to" rather than "this machine has not caught up". */
 function dmRoster() {
   const me = state.user ? String(state.user.id) : '';
-  return (Store.db.drivers || [])
-    .filter((d) => d && String(d.id) !== me && d.accountStatus !== 'suspended')
+
+  const roster = (Store.db.drivers || [])
+    .filter((d) => d && String(d.id) !== me && d.accountStatus !== 'suspended');
+
+  const known = new Set(roster.map((d) => String(d.id)));
+
+  const extra = (SupaDM.people || [])
+    .filter((p) => String(p.id) !== me && !known.has(String(p.id)));
+
+  return roster.concat(extra)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 }
 
@@ -14751,7 +15979,7 @@ function messagesPanes() {
               ? esc(inCall + (inCall === 1 ? ' person' : ' people') + ' in the call')
               : 'Everyone in the company'}</div>
           </div>
-          ${RoomCall.live
+          ${!Messages.hasService() ? '' : RoomCall.live
             ? `<button class="btn btn-sm btn-danger" data-act="room-leave">
                  ${icon('phoneOff')}Leave call</button>`
             : `<button class="btn btn-sm btn-ok" data-act="room-join" ${
@@ -14772,10 +16000,11 @@ function messagesPanes() {
           <div class="b6 trunc">${esc(otherName)}</div>
           <div class="t3 xs">${online ? 'Online now' : 'Offline'}</div>
         </div>
+        ${Messages.hasService() ? `
         <button class="icon-btn" data-act="dm-call" data-id="${esc(String(withId))}"
           title="Voice call" aria-label="Voice call">${icon('phone')}</button>
         <button class="icon-btn" data-act="dm-video" data-id="${esc(String(withId))}"
-          title="Video call" aria-label="Video call">${icon('video')}</button>
+          title="Video call" aria-label="Video call">${icon('video')}</button>` : ''}
       </div>
 
       ${dmThreadBody(me)}
@@ -14793,10 +16022,16 @@ function viewMessages() {
           <p class="page-sub">Talk to any driver in the company</p></div>
       </div>
       <div class="card"><div class="card-body">
-        <div class="empty">${icon('chat')}
-          <div>Messages are not connected</div>
-          <div class="t3 xs" style="max-width:38rem">${esc(Messages.reason())}</div>
-        </div>
+        ${emptyState('chat', 'Messages are not connected', Messages.reason(),
+          SupaDM.missing
+            ? `<div class="mt-16 col gap-8" style="max-width:34rem;text-align:left">
+                 <div class="xs t3">Open the Supabase dashboard, then the SQL editor, and run
+                   the file below. It is safe to run more than once.</div>
+                 <code class="mono xs" style="display:block;padding:10px 12px;border-radius:var(--r);
+                   background:var(--panel-2);border:1px solid var(--line);color:var(--text-2)"
+                   >supabase/migrations/20260908_driver_messaging.sql</code>
+               </div>`
+            : '')}
       </div></div>
     </div>`;
   }
@@ -14805,7 +16040,9 @@ function viewMessages() {
     <div class="page-head">
       <div><div class="eyebrow">Driver to driver</div>
         <h1 class="page-title">Messages</h1>
-        <p class="page-sub">Photos, files and calls — straight to another driver</p></div>
+        <p class="page-sub">${Messages.hasService()
+          ? 'Photos, files and calls — straight to another driver'
+          : 'Photos and files — straight to another driver, on any machine'}</p></div>
     </div>
     <div class="card"><div class="card-body" style="padding:0">
       <div class="dm" id="dmPanes">${messagesPanes()}</div>
@@ -14925,7 +16162,7 @@ function routeView() {
       }
       /* Who is already in the room call, so the button can say "Join (3)"
          rather than making somebody dial in to find out. */
-      if (Messages.on()) RoomCall.poll();
+      if (Messages.hasService()) RoomCall.poll();
       return viewMessages();
     case 'livemap':       return viewLivemap();
     case 'ops':           return viewOps();
@@ -15207,7 +16444,14 @@ async function boot() {
   if (Sync.url()) LiveMap.start();
 
   ServiceAuth.load();    /* and whatever proof of identity this browser kept */
-  if (ServiceAuth.on()) ServiceAuth.check();
+  /* The kept token first, and if there is none — or it has gone stale — one
+     fetched with the Supabase session this browser already holds. Neither
+     asks anybody for anything. */
+  if (ServiceAuth.on()) {
+    ServiceAuth.check().then((good) => { if (!good) ServiceAuth.connect(); });
+  } else {
+    ServiceAuth.connect();
+  }
 
   /* Restore the session. The local record paints immediately so the app does
      not flash the login screen, then Supabase is asked and has the final say —
@@ -15216,6 +16460,12 @@ async function boot() {
   const s = Store.readSession();
   if (s) state.user = Store.driver(s.id) || null;
    await restoreSupabaseSession();
+
+  /* Messages, now that there is somebody to have them. This has to come
+     after the session is restored, not before: SupaDM.on() is false
+     without one, and starting it earlier subscribed anonymously and then
+     never tried again. */
+  startMessaging();
 
   state.route = parseHash();
 

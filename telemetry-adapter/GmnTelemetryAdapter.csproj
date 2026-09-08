@@ -2,7 +2,35 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
-    <SelfContained>false</SelfContained>
+    <!-- Self-contained on purpose. Framework-dependent, this exe needs .NET 8
+         already on the machine, and on a machine without it the process dies
+         instantly - which the app then reports as "the adapter stopped on its
+         own", forever. A driver installing a trucking app has no reason to
+         have a .NET runtime, so the runtime travels with it. Costs disk space;
+         buys the thing working at all. Trimmed to keep that cost sane. -->
+    <SelfContained>true</SelfContained>
+
+    <!-- NOT trimmed, and this is load-bearing. Trimming took the exe from
+         70 MB to 13 MB and broke it: every frame is serialised from an
+         anonymous type by reflection, the trimmer cannot see those
+         properties, and the result was a process that started, printed its
+         banner, listened on the port and then killed the connection on
+         every single request. The build only warned (IL2026). Turning this
+         on again means giving JsonSerializer a source-generated context
+         first - until then, size is the cheaper thing to spend. -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <InvariantTimezone>true</InvariantTimezone>
+
+    <!-- These live here rather than on the command line because leaving them
+         to the caller is how a broken adapter shipped: PublishSingleFile
+         needs a RuntimeIdentifier, and without one dotnet quietly produces an
+         apphost that looks like a working .exe but exits with "the
+         application to execute does not exist" the moment it is copied away
+         from its .dll. The build script copies exactly one file, so the
+         publish has to be a single file every time and not only when someone
+         remembers the right flags. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
     <InvariantGlobalization>true</InvariantGlobalization>
     <Nullable>enable</Nullable>
     <AssemblyName>gmn-telemetry-adapter</AssemblyName>

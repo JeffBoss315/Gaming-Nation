@@ -311,6 +311,7 @@ const Telemetry = {
   poll: null,
   consecutiveFailures: 0,
   diagnostics: null,      /* the adapter's own account of itself — see diagnose() */
+  adapter: null,          /* what the desktop shell says about the adapter process */
   diagnosedAt: 0,
 
   endpoint() {
@@ -353,6 +354,16 @@ const Telemetry = {
   },
 
   async diagnose() {
+    /* The desktop shell owns the adapter process and knows the one thing the
+       HTTP endpoint can never say: that there is nothing listening because
+       the adapter is not running at all. Ask it first — that answer beats
+       anything the fetch below can return. */
+    const D = window.gmnDesktop;
+    if (D && D.adapterStatus) {
+      try { this.adapter = await D.adapterStatus(); }
+      catch (e) { this.adapter = null; }
+    }
+
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2500);
     try {
@@ -409,13 +420,28 @@ const Telemetry = {
               t.wearChassis || 0, t.wearWheels || 0) * 100, 0, 100)
           : null,
         odometer: t.odometer || 0,
+        engineOn: !!t.engineOn,
       },
       pos: { x: p.x || 0, y: p.y || 0, z: p.z || 0, heading: p.heading || 0 },
-      job: j.cargo || j.destinationCity ? {
+      cargoLoaded: !!(raw.trailer && raw.trailer.attached),
+
+      /* The game's own onJob flag decides this when the adapter sends one.
+         The string test stays for telemetry servers that do not report it —
+         but it is no longer the only thing standing between an empty truck
+         and a fabricated delivery. */
+      job: (j.onJob || j.cargo || j.destinationCity) ? {
         cargo: j.cargo || '', income: j.income || 0,
         from: j.sourceCity || '', to: j.destinationCity || '',
         fromCompany: j.sourceCompany || '', toCompany: j.destinationCompany || '',
         remainingKm: n.estimatedDistance ? Math.round(n.estimatedDistance / 1000) : null,
+
+        /* the run's real length, straight from the game, instead of the
+           longest "distance remaining" this client happened to observe */
+        plannedKm: j.plannedDistanceKm ? Math.round(j.plannedDistanceKm) : null,
+        weight: j.cargoMass ? +(j.cargoMass / 1000).toFixed(1) : 0,
+        cargoDamage: j.cargoDamage != null ? clamp(j.cargoDamage * 100, 0, 100) : null,
+        delivered: !!j.delivered,
+        cancelled: !!j.cancelled,
       } : null,
       speedLimit: n.speedLimit || null,
     };
@@ -489,6 +515,16 @@ const Telemetry = {
       speedLimit: frame.speedLimit,
       near: (mx == null) ? null : nearestCity(frame.game, mx, mz),
       paused: frame.paused,
+
+      /* These are properties of the truck, and the truck exists whether or
+         not a load is aboard. Keeping them on the job alone is why the fuel
+         and damage dials read "—" for a driver sitting in a running game
+         with nothing booked. */
+      fuel: frame.truck.fuel,
+      damage: frame.truck.damage,
+      odometer: frame.truck.odometer,
+      engineOn: frame.truck.engineOn,
+      cargoLoaded: frame.cargoLoaded,
     };
 
     /* breadcrumb trail, thinned so it stays cheap to draw. The schematic
@@ -541,13 +577,16 @@ const Telemetry = {
     const db = Store.db;
 
     if (frame.job && !db.job) {
-      const km = frame.job.remainingKm || 0;
+      /* The game knows how long the run is. Falling back to "distance
+         remaining at the moment we noticed" made every progress bar wrong
+         for any job picked up after the truck had already set off. */
+      const km = frame.job.plannedKm || frame.job.remainingKm || 0;
       db.job = {
         id: 'JOB-' + randI(4300, 4999),
         from: frame.job.from || (db.live.near ? db.live.near.city : '—'),
         to: frame.job.to || '—',
         cargo: frame.job.cargo || 'Cargo',
-        trailer: 'From game', weight: 0,
+        trailer: 'From game', weight: frame.job.weight || 0,
         km: km || 1, drivenKm: 0,
         income: frame.job.income || 0,
         market: 'In-game job',
@@ -590,13 +629,37 @@ const Telemetry = {
       j.speed = frame.truck.speed || j.speed;
       if (frame.truck.fuel != null) j.fuel = frame.truck.fuel;
       if (frame.truck.damage != null) j.damage = frame.truck.damage;
+      if (frame.job.cargoDamage != null) j.cargoDamage = frame.job.cargoDamage;
+      if (frame.job.income) j.income = frame.job.income;
+      if (frame.job.weight) j.weight = frame.job.weight;
+      /* the game cancelled it; remember that, so the run is not filed as
+         delivered when it disappears from telemetry a frame later */
+      if (frame.job.cancelled) j.cancelled = true;
+
+      /* The planned length is the truth about how long this run is, and it
+         arrives with the job rather than being discovered by watching the
+         sat-nav. Progress still comes from distance remaining — the total
+         and the position along it are two different questions. */
+      if (frame.job.plannedKm) j.km = Math.max(frame.job.plannedKm, 1);
+
       if (frame.job.remainingKm != null) {
-        /* the game reports distance remaining; the longest value seen is the
-           full run, so progress is what has been eaten out of it */
-        j.km = Math.max(j.km, frame.job.remainingKm + j.drivenKm, 1);
-        j.drivenKm = Math.max(0, j.km - frame.job.remainingKm);
+        /* with no planned length, the longest "remaining + driven" ever seen
+           is the best available estimate of the whole run */
+        if (!frame.job.plannedKm) {
+          j.km = Math.max(j.km, frame.job.remainingKm + j.drivenKm, 1);
+        }
+        j.drivenKm = clamp(j.km - frame.job.remainingKm, 0, j.km);
       }
       if (frame.job.to && j.to !== frame.job.to) j.to = frame.job.to;
+      return;
+    }
+
+    /* The game said this run was called off. Filing it as a delivery
+       because it then vanished from telemetry would pay for work nobody
+       did. */
+    if (!frame.job && db.job && db.job.live && db.job.cancelled) {
+      Store.log('warn', 'The game cancelled this job — not recording a delivery');
+      GameLink.cancelJob();
       return;
     }
 
@@ -1387,7 +1450,14 @@ const TileMap = {
            majors name the regions; the rest arrive as you close in. */
         const base = this.baseZoom == null ? this.map.getZoom() : this.baseZoom;
         const z = this.map.getZoom() - base;
-        this.container.classList.toggle('hide-city-labels', z < -0.6);
+        /* With the whole continent on screen even the major names sit on
+           top of each other — Stockholm over Tallinn, Amsterdam over
+           Hamburg over Birmingham — and a name that cannot be read is not
+           information, it is just noise over the roads. So the widest view
+           is left to the region names, and the cities arrive as you close
+           in. This used to hold labels back only when zoomed out PAST the
+           fitted view, which is not a zoom anybody actually sits at. */
+        this.container.classList.toggle('hide-city-labels', z < 0.55);
         this.container.classList.toggle('major-labels-only', z < 1.7);
         /* the region names are set relative to the map, not the screen, so
            they stay the same size against the roads at any zoom */
@@ -1632,8 +1702,18 @@ const TileMap = {
     if (!db.settings.showFleet) return;
     const gameKey = (Telemetry.mode === 'live' && db.live && db.live.game) || db.settings.game || 'ets2';
 
+    /* Our own row comes back from the company service like everybody
+       else's, and `self` is a flag this client sets on its own copy — the
+       service has never heard of it. So the id has to be checked too, or
+       the driver is drawn twice: once from live telemetry, once from their
+       own last heartbeat, in two different places, under the same name.
+       The fleet list on the dashboard has always checked both; the map
+       checked only the flag. */
+    const mine = db.driver ? db.driver.gmnId : null;
+
     Fleet.drivers.forEach((d) => {
       if (d.self) return;                       /* our own pin is drawn separately */
+      if (mine && d.id === mine) return;        /* and the service's copy of it */
       if (d.game && d.game !== gameKey) return; /* other game, other map */
       let ll = null;
       if (typeof d.lat === 'number' && typeof d.lon === 'number') {
@@ -1648,7 +1728,13 @@ const TileMap = {
 
       const hauling = d.state === 'delivering';
       const deg = -(d.heading || 0) * 360;
-      const icon = L.divIcon({
+      /* NOT called `icon`: that is the name of the global that renders an
+         SVG glyph, and shadowing it here made the Message and Call buttons
+         below throw "icon is not a function" — which killed drawFleet()
+         entirely, so the whole fleet vanished from the map the moment a
+         driver had both a position and a working service. It survived
+         review because a pin has to actually draw to reach that line. */
+      const pinIcon = L.divIcon({
         className: 'fleet-pin' + (hauling ? ' hauling' : ''),
         iconSize: [22, 22], iconAnchor: [11, 11],
         html: '<div class="fleet-pin-inner" style="transform:rotate(' + deg.toFixed(1) + 'deg)">'
@@ -1682,7 +1768,7 @@ const TileMap = {
         + '<br><span>Job: ' + esc(job) + '</span>'
         + '<br><span>Speed: ' + (d.speed || 0) + ' km/h</span>'
         + reach;
-      L.marker(ll, { icon, title: d.name || d.id, keyboard: true })
+      L.marker(ll, { icon: pinIcon, title: d.name || d.id, keyboard: true })
         .bindTooltip('<b>' + esc(d.name || d.id) + '</b>',
           { direction: 'top', offset: [0, -10], permanent: true, className: 'fleet-name-label' })
         .bindPopup(details, { closeButton: true, maxWidth: 260 })
@@ -1763,7 +1849,12 @@ function openFleetSetup() {
               : ' — this machine only. Open it to the network in Settings to let the crew in.')
           : 'Leave this empty and the app starts the service it carries, on this '
             + 'machine, by itself. Fill it in only to point at a server somewhere else.'}
-      </div>` : `
+      </div>
+      ${HostedService.status && HostedService.status.running && HostedService.status.lanUrl
+        ? `<div class="t3 xs mt-8">The rest of the crew reach it at
+            <span class="mono">${esc(HostedService.status.lanUrl)}</span> — they put that
+            in Settings, or just open it in a browser.</div>`
+        : ''}` : `
       <div class="t3 xs mt-8">
         Run the bundled service with <span class="mono">npm run fleet</span> — it has no
         dependencies. Point every driver's client at the same address. With no service
@@ -1774,6 +1865,11 @@ function openFleetSetup() {
         ? (Fleet.online ? '<span class="pill ok">connected</span>' : '<span class="pill err">' + esc(Fleet.lastError || 'not reachable') + '</span>')
         : '<span class="pill warn">not configured</span>'}</div>`,
     foot: `<button class="btn" data-close>Cancel</button>
+      ${HostedService.can() && HostedService.status && HostedService.status.running
+        ? `<button class="btn" data-act="host-service-stop"
+            title="Stop running the company service on this machine">${
+              icon('phoneOff')}Stop hosting</button>`
+        : ''}
       <button class="btn btn-primary" data-act="fleet-save">${icon('check')}Save</button>`,
   });
 }
@@ -3453,14 +3549,75 @@ const initialsOf = (n) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').t
    the company payload — there is nothing to fetch and nothing to cache.
    Everyone else keeps their initials. */
 function avatarFace(d, cls) {
-  const src = d && typeof d.avatar === 'string' && d.avatar.startsWith('data:image/')
-    ? d.avatar : '';
+  const own = avatarSrc(d && d.avatar);
+
+  /* Then this machine's own copy of the signed-in driver's photo.
+
+     The record is rebuilt from the drivers table on every sign-in and
+     replaced by the company payload on every pull, and it only carries a
+     photo when the database has a column to keep one in. So the record
+     was the least reliable place to read it from, and a driver who had
+     set a photo watched it turn back into initials on the next launch.
+     This copy belongs to the app and nothing that syncs can reach it. */
+  const src = own || keptAvatar(d && d.id);
 
   const inner = src
-    ? `<img class="avatar-img" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
+    ? `<img class="avatar-img" src="${esc(src)}" alt="${esc((d && (d.name || d.id)) || 'Driver')}"
+        loading="lazy" decoding="async" onerror="${AVATAR_ONERROR}">`
     : esc(initialsOf((d && (d.name || d.id)) || '?'));
 
   return `<span class="avatar ${cls || ''}${src ? ' has-img' : ''}">${inner}</span>`;
+}
+
+/* The photo this app was given, kept where nothing can sync it away.
+
+   One entry per driver code, so signing in as somebody else on a shared
+   machine does not show the last person's face. Wrapped, because storage
+   can be unavailable and the app must still draw. */
+const AVATAR_KEEP = 'gmn.trk.avatar.';
+
+/* The Gaming Nation mark, for a photo that is set but will not load.
+
+   Relative: icons/ ships inside the packaged app, so this resolves with
+   no internet — which the published address would not. That address is
+   the second try, for a build served from somewhere without it. */
+const AVATAR_FALLBACK = 'icons/mark.png';
+const AVATAR_FALLBACK_REMOTE = 'https://gaming-nation.pages.dev/icons/mark.png';
+
+/* What may go in an img src.
+
+   It used to be data: URLs and nothing else, so a drivers.avatar holding
+   an ordinary https:// address — a file in Supabase Storage, anything
+   pasted in — was discarded and the driver fell back to their initials
+   with no error anywhere. Still a whitelist, because this value comes
+   from a row a driver can write and goes straight into an attribute. */
+function avatarSrc(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v) return '';
+  if (v.startsWith('data:image/')) return v;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[\w./-]+\.(png|jpe?g|webp|gif|svg)$/i.test(v)) return v;
+  return '';
+}
+
+/* Clearing onerror first is what stops a missing fallback looping. */
+const AVATAR_ONERROR = 'this.onerror=null;this.src=&quot;' + AVATAR_FALLBACK + '&quot;;'
+  + 'this.onerror=function(){this.onerror=null;this.src=&quot;'
+  + AVATAR_FALLBACK_REMOTE + '&quot;};';
+
+function keptAvatar(id) {
+  if (!id) return '';
+  try {
+    return avatarSrc(localStorage.getItem(AVATAR_KEEP + id));
+  } catch (e) { return ''; }
+}
+
+function keepAvatar(id, dataUrl) {
+  if (!id) return;
+  try {
+    if (dataUrl) localStorage.setItem(AVATAR_KEEP + id, dataUrl);
+    else localStorage.removeItem(AVATAR_KEEP + id);
+  } catch (e) { /* out of quota, or private mode */ }
 }
 
 /* one call after the typing stops, rather than one per keystroke */
@@ -3881,8 +4038,7 @@ function runCardInner() {
     /* Ask the adapter what it can see, but only while something is wrong and
        only now and then — this runs on every draw of the page. The answer
        lands in Telemetry.diagnostics and the next repaint shows it. */
-    if (!hearing && db.conn.ets2 === 'running'
-        && Date.now() - Telemetry.diagnosedAt > 15000) {
+    if (!hearing && Date.now() - Telemetry.diagnosedAt > 15000) {
       Telemetry.diagnosedAt = Date.now();
       Telemetry.diagnose().then((d) => { if (d) render(); });
     }
@@ -3893,13 +4049,23 @@ function runCardInner() {
        parse. Saying "no telemetry" when the adapter can name the reason is
        throwing away the only useful information anybody has. */
     const d = Telemetry.diagnostics;
-    const adapterSays = !hearing && d
-      ? (d.foreign && d.foreign.length
+    const a = Telemetry.adapter;
+
+    /* Why there is no telemetry, most specific cause first. The adapter not
+       running at all is the commonest reason and the only one no amount of
+       driving will fix, so it is said ahead of everything else. */
+    let adapterSays = '';
+    if (hearing) adapterSays = '';
+    else if (a && !a.running) {
+      adapterSays = 'The telemetry adapter is not running, so nothing on this '
+        + 'machine can read the game — ' + a.reason + '.';
+    } else if (d) {
+      adapterSays = (d.foreign && d.foreign.length)
         ? d.foreign[0].plugin + ' is running and writing ' + d.foreign[0].map
           + ', but Gaming Nation cannot read that plugin’s format — reading it '
           + 'anyway would invent a delivery. Install the plugin this client expects.'
-        : (d.advice || ''))
-      : '';
+        : (d.advice || '');
+    }
 
     return `
       <div class="run-top">
@@ -3947,15 +4113,7 @@ function runCardInner() {
         <div class="xs t3 mt-8">Progress appears once a load is picked up in game.</div>
       </div>
 
-      <div class="gauges mt-20">
-        ${gauge(0, 'Route', '—', '#2c333d')}
-        ${gauge(0, 'Fuel', '—', '#2c333d')}
-        ${gauge(0, 'Damage', '—', '#2c333d')}
-        <div class="grow">
-          <div class="fact"><div class="k">Awaiting</div>
-            <div class="v t2" style="font-size:12.5px">No cargo assigned</div></div>
-        </div>
-      </div>
+      <div class="gauges mt-20" id="gaugeRow">${idleGaugesInner()}</div>
       ${last ? `<div class="facts">
         <div class="fact"><div class="k">Last run</div><div class="v">${esc(last.from)} → ${esc(last.to)}</div></div>
         <div class="fact"><div class="k">Distance</div><div class="v">${fmt.km(last.km)}</div></div>
@@ -4045,6 +4203,32 @@ function paintRunTimeline() {
   if (el) el.innerHTML = runTimelineInner();
 }
 
+/* The truck's own condition, with no load aboard.
+
+   Fuel, damage and the truck's name belong to the truck, not to the job, so
+   a driver sitting in a running game with nothing booked should still see
+   them. This row used to be three hardcoded dashes, which reads as "the
+   client cannot see your truck" at exactly the moment it can. */
+function idleGaugesInner() {
+  const live = Telemetry.mode === 'live' ? Store.db.live : null;
+  const fuel = live && Number.isFinite(+live.fuel) ? +live.fuel : null;
+  const dmg = live && Number.isFinite(+live.damage) ? +live.damage : null;
+  const truck = (live && live.truck) || '';
+  const dead = '#2c333d';
+  const fuelColor = fuel == null ? dead : fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#b9e87a';
+  const dmgColor = dmg == null ? dead : dmg > 15 ? '#ef5f5f' : dmg > 5 ? '#d99b2b' : '#3ecf8e';
+
+  return gauge(0, 'Route', '—', dead)
+    + gauge(fuel == null ? 0 : fuel, 'Fuel', fuel == null ? '—' : fmt.pct(fuel), fuelColor)
+    + gauge(dmg == null ? 0 : clamp(dmg, 0, 100), 'Damage',
+        dmg == null ? '—' : dmg.toFixed(1) + '%', dmgColor)
+    + `<div class="grow">
+        <div class="fact"><div class="k">${truck ? 'Truck' : 'Awaiting'}</div>
+          <div class="v t2" style="font-size:12.5px">${
+            truck ? esc(truck) : 'No cargo assigned'}</div></div>
+      </div>`;
+}
+
 function gaugeRowInner(job, pct) {
   /* a job carried over from an older build, or one the game never reported
      condition for, still has to draw */
@@ -4060,7 +4244,13 @@ function gaugeRowInner(job, pct) {
 /* repaint only the live values, once per telemetry frame */
 function paintLiveJob() {
   const job = Store.db.job;
-  if (!job) return;
+  if (!job) {
+    /* No run, but the truck's own dials are live and should keep up with
+       the game rather than waiting for the next full render. */
+    const idle = $('#gaugeRow');
+    if (idle) idle.innerHTML = idleGaugesInner();
+    return;
+  }
   const pct = GameLink.progress(job);
   const remaining = Math.max(0, job.km - job.drivenKm);
   const eta = JobTracker.etaMinutes(job);
@@ -4276,10 +4466,8 @@ const HostedService = {
       discoverLocalService().then(() => {
         Sync.start();
         Fleet.start();
-        ServiceAuth.load();
-        Messages.pullThreads();
+        joinService();
         RoomCall.poll();
-        Ice.load();
         this.refresh();
         render();
       });
@@ -4309,7 +4497,7 @@ const HostedService = {
    ServiceAuth.login() now uploads the company before its second attempt,
    so this really does resolve it — and doing it from here means the
    driver never has to guess that a sign-in cycle was the ritual. */
-function connectToService() {
+async function connectToService() {
   const db = Store.db;
   const email = (db.driver && db.driver.email) || '';
 
@@ -4318,13 +4506,33 @@ function connectToService() {
     return;
   }
 
+  /* Try the way that needs nothing from them, again, before asking.
+
+     The service may have been down when boot tried, or started since, and
+     a driver who presses a button labelled Connect should get a connection
+     rather than a form — the form is the fallback, not the offer. */
+  if (await ServiceAuth.connect()) {
+    toast('Connected to the company service', 'ok');
+    Messages.pullThreads();
+    RoomCall.poll();
+    render();
+    return;
+  }
+
   modal({
     title: 'Connect this device',
     body: `
       <p class="t2" style="margin:0 0 14px;line-height:1.6">
-        The company service keeps its own sign-in. Enter the password for
-        <b>${esc(email || 'your account')}</b> once and this device holds
-        the session from then on.
+        This device could not connect on its own, which usually means the
+        service is an older build that cannot check a Gaming Nation
+        sign-in yet. Enter the password for
+        <b>${esc(email || 'your account')}</b> to connect it by hand.
+      </p>
+      <p class="t3 xs" style="margin:0 0 14px;line-height:1.6">
+        The service checks this against its own copy of the company. If
+        your password has been changed on the website since that copy was
+        written, it will not match — updating the service is the fix, not
+        a different password.
       </p>
       <div class="field"><label for="svcPw">Password</label>
         <input class="input" id="svcPw" type="password" autocomplete="current-password"></div>
@@ -4396,16 +4604,29 @@ function dmOffline() {
       : 'Messages and calls between drivers go through Gaming Nation\'s own '
         + 'service. Run it on the company machine, or put its address in '
         + 'Settings. Announcements from management still arrive without it.')
-    : 'The service issues its own session and this device does not hold '
-      + 'one — which is normal if it was started after you signed in. '
-      + 'Connecting asks for your password once and keeps the session.';
+    : !ServiceAuth.tried
+      ? 'The service issues its own session and this device is getting one '
+        + 'now, using the sign-in you already have. Nothing to do.'
+      : ServiceAuth.status === 'rejected'
+        ? 'The service would not accept this device’s sign-in. If it is an '
+          + 'older build it may not know how to check it — connecting by '
+          + 'password still works.'
+        : 'The service could not be reached to get one. It may be starting, '
+          + 'or on a machine that is not answering yet.';
 
-  return `<div class="dm-offline">${icon('alert')}<div class="grow">
+  /* No button while the automatic attempt is still running: it is the
+     thing the button does, and offering it makes a step that needs
+     nobody look like a step that is waiting for somebody. */
+  const offerManual = !noService && ServiceAuth.tried;
+
+  return `<div class="dm-offline">${icon(noService || ServiceAuth.tried ? 'alert' : 'link')}<div class="grow">
     <div class="b6">${noService
       ? 'Driver chat needs the company service'
-      : 'This device has no session with the service'}</div>
+      : !ServiceAuth.tried
+        ? 'Connecting this device to the service'
+        : 'This device has no session with the service'}</div>
     <div class="t3 xs mt-4">${body}</div>
-    ${!noService ? `<div class="dm-offline-acts">
+    ${offerManual ? `<div class="dm-offline-acts">
       <button class="btn btn-sm btn-primary" data-act="service-connect">
         ${icon('link')}Connect this device</button>
     </div>` : ''}
@@ -4418,23 +4639,20 @@ function dmOffline() {
   </div></div>`;
 }
 
-/* Where to point everybody else, once this machine is hosting for them.
-   An address nobody is told is an address nobody can use. */
-function hostedServiceNote() {
-  const st = HostedService.status;
-  if (!HostedService.can() || !st.running) return '';
+/* The banner that used to live here is gone on purpose.
 
-  return `<div class="dm-hosting">${icon('check')}<div class="grow">
-    <div class="b6">This machine is hosting the company service</div>
-    <div class="t3 xs mt-4">${st.lanUrl
-      ? 'Other drivers reach it at <span class="mono">' + esc(st.lanUrl) + '</span> — '
-        + 'they put that in Settings, or just open it in a browser.'
-      : 'This machine only. Use <b>Run it for the whole crew</b> to let others '
-        + 'on this network join.'}</div>
-  </div>
-  <button class="btn btn-sm" data-act="host-service-stop">${icon('phoneOff')}Stop</button>
-  </div>`;
-}
+   The client starts the service by itself when it cannot find one, so by
+   the time this appeared there was nothing left to decide and nothing to
+   do. It sat on the messages screen for as long as the service ran —
+   announcing a success nobody asked about, with a Stop button beside it,
+   on the screen a driver opens to read their messages. Working is the
+   normal case, and the normal case should be quiet.
+
+   The one thing on it worth keeping was the address the rest of the crew
+   connect to, and an address nobody is told is an address nobody can use.
+   That has moved into the Company service dialog, along with the way to
+   stop hosting — which is where somebody goes when they actually want
+   either of them, instead of every time they open their messages. */
 
 /* The composer, and the reason it is not there when it is not. */
 function dmComposer(placeholder) {
@@ -4504,7 +4722,7 @@ function viewMessages() {
   return `
   ${viewHead('Messages', 'Talk to another driver, or read what management sent',
     `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
-  ${dmOffline()}${hostedServiceNote()}
+  ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -4576,7 +4794,7 @@ function viewChats() {
       ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
       : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
     `${callBtn}<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
-  ${dmOffline()}${hostedServiceNote()}
+  ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
@@ -5417,6 +5635,98 @@ const ServiceAuth = {
     return h;
   },
 
+  connecting: null,    /* the attempt in flight, so ten callers make one */
+  tried: false,        /* an automatic attempt has been made and finished */
+
+  /* Connect with the session this device already has.
+
+     This is the one that should happen, and it needs nothing from the
+     driver. They signed in to Supabase to open the app; the service can
+     verify that same session and issue its own. No password, no dialog,
+     no "connect this device".
+
+     It replaces a step that could not work. login() below checks a
+     password against a hash in the company record, and that hash stopped
+     being the driver's password when accounts moved to Supabase — so
+     "Connect this device" asked for something, and then refused the only
+     answer there was. Nobody could get past it by typing more carefully.
+
+     Deliberately quiet. A service that is down, or too old to know this
+     endpoint, is a normal state on a machine that has never run one, and
+     the Messages screen already says what is missing. */
+  async connect() {
+    if (this.connecting) return this.connecting;
+    this.connecting = this._connect().then((ok) => {
+      this.connecting = null;
+      this.tried = true;
+      return ok;
+    });
+    return this.connecting;
+  },
+
+  async _connect(retried) {
+    const base = Sync.url();
+    if (!base) { this.status = 'off'; return false; }
+    if (!window.gmnSupabase) return false;
+
+    let access = '';
+    try {
+      const { data } = await window.gmnSupabase.auth.getSession();
+      access = (data && data.session && data.session.access_token) || '';
+    } catch (e) { /* no session to offer */ }
+
+    if (!access) return false;
+
+    try {
+      const res = await fetch(base + '/api/auth/supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: access }),
+      });
+
+      /* The service knows the account is real — Supabase told it so — but
+         has never been told this driver exists. That is the ordinary case
+         when the app starts the service itself: it comes up holding
+         whatever was last written to disk. Teach it and ask again. */
+      if (res.status === 404 && !retried) {
+        try {
+          await Sync.sendNow();
+          await new Promise((r) => setTimeout(r, 400));
+        } catch (e) { /* the retry reports it */ }
+        return this._connect(true);
+      }
+
+      if (!res.ok) {
+        /* 501 is a service older than this build, or one with no Supabase
+           configured. Both fall back to the password dialog rather than
+           leaving the driver with nothing. */
+        this.status = res.status === 401 || res.status === 403
+          ? 'rejected' : 'unreachable';
+        return false;
+      }
+
+      const body = await res.json();
+      if (!body || !body.token) { this.status = 'unreachable'; return false; }
+
+      this.token = body.token;
+      this.driver = body.driver || null;
+      this.status = 'signed-in';
+      this.keep();
+
+      /* The live channel was opened anonymously at boot — before there was
+         any identity to open it with — so the service cannot route a
+         private message down it. Open it again now that there is. */
+      this.reopenStream();
+      Messages.pullThreads();
+      Ice.load();
+      return true;
+
+    } catch (e) {
+      this.status = 'unreachable';
+      return false;
+    }
+  },
+
   /* Called from the sign-in path, which is the one moment the password
      is in hand. A driver never types it twice. */
   async login(handle, password, retried) {
@@ -5484,6 +5794,9 @@ const ServiceAuth = {
     this.token = null;
     this.driver = null;
     this.status = 'off';
+    /* The next person to sign in on this machine gets their own attempt.
+       Left set, they would be shown the failure the last driver had. */
+    this.tried = false;
     this.keep();
     Messages.reset();
     this.reopenStream();
@@ -5499,6 +5812,37 @@ const ServiceAuth = {
     }
   },
 };
+
+/* Hold a session with the service, without asking anybody anything.
+
+   Three places need this and each used to do it by hand: load whatever
+   token was kept, then pull threads and the call configuration. What none
+   of them did was get a token when there wasn't one — which is why a
+   device that had never held one, or whose token the service had since
+   forgotten, sat on "no session with the service" until somebody found
+   the button and typed a password that could not work.
+
+   Called on boot, when the service is found later, and after signing in.
+   Safe to call repeatedly: connect() folds concurrent attempts into one,
+   and does nothing at all when there is already a token. */
+function joinService() {
+  ServiceAuth.load();
+
+  if (ServiceAuth.on()) {
+    Messages.pullThreads();
+    Ice.load();
+    return Promise.resolve(true);
+  }
+
+  return ServiceAuth.connect().then((ok) => {
+    if (ok) {
+      Store.log('ok', 'Connected to the company service as '
+        + ((ServiceAuth.driver && ServiceAuth.driver.id) || 'this driver'));
+      render();
+    }
+    return ok;
+  });
+}
 
 /* ---------------- the conversations ---------------- */
 const FLEET_ROOM = '#fleet';
@@ -5535,11 +5879,28 @@ const Messages = {
     return this.threads.reduce((n, t) => n + (t.unread || 0), 0);
   },
 
-  async pullThreads() {
+  async pullThreads(retried) {
     if (!this.on()) return;
     try {
       const res = await fetch(Sync.url() + '/api/dm/threads',
         { cache: 'no-store', headers: ServiceAuth.headers() });
+
+      /* The token this device holds is no longer one the service knows —
+         it was restarted with its sessions cleared, or the token expired.
+         Nothing is wrong with the driver's sign-in, so get another one
+         and carry on rather than showing them a dead screen.
+
+         This is polled, so without it a stale token is permanent: every
+         request 401s, nothing says so, and Messages just stays empty. */
+      if (res.status === 401 && !retried) {
+        ServiceAuth.token = null;
+        ServiceAuth.driver = null;
+        ServiceAuth.keep();
+        if (await ServiceAuth.connect()) return this.pullThreads(true);
+        render();
+        return;
+      }
+
       if (!res.ok) return;
       const body = await res.json();
       this.threads = body.threads || [];
@@ -6798,7 +7159,7 @@ function handle(act, t) {
 
     case 'host-service': HostedService.start(false); return;
     case 'host-service-lan': HostedService.start(true); return;
-    case 'host-service-stop': HostedService.stop(); return;
+    case 'host-service-stop': closeModals(); HostedService.stop(); return;
 
     case 'call-driver': Calls.start(t.dataset.id, t.dataset.name); return;
     case 'call-accept': Calls.accept(); return;
@@ -7289,6 +7650,19 @@ const Auth = {
           await window.gmnSupabase.auth.signOut();
           return { error: 'This account is suspended. Contact Gaming Nation management.' };
         }
+        /* The photo, from the driver's own row.
+
+           select('*') already fetched it, so this costs nothing — and
+           without it the app rebuilt the driver record on every sign-in
+           with no avatar on it at all, which is why a photo set on the
+           website never showed up here however many times it was set.
+
+           Kept on this machine too, so it survives the next launch even
+           when the database has no column to hold it. */
+        if (avatarSrc(row.avatar)) {
+          keepAvatar(row.driver_code, row.avatar);
+        }
+
         return {
           account: { email: user.email || email, driverId: row.driver_code },
           driver: {
@@ -7297,6 +7671,7 @@ const Auth = {
             accountStatus: row.account_status || 'active', status: row.status || 'offline',
             joined: row.created_at || new Date().toISOString(), km: row.km || 0,
             deliveries: row.deliveries || 0, truckersmp: row.truckersmp || '',
+            avatar: avatarSrc(row.avatar) || keptAvatar(row.driver_code) || '',
           }, user, session: result.data.session,
         };
       } catch (error) {
@@ -7577,8 +7952,20 @@ function bindSignIn() {
        Not awaited: the service may be down, and a client that will not
        finish signing in because messaging is unavailable is a worse
        client than one whose Messages tab says so. */
-    ServiceAuth.login(handle, pw).then((ok) => {
-      if (!ok && Sync.url()) {
+    /* The Supabase session first, and the password only if the service is
+       too old to know about it.
+
+       That order matters. The password check on the service compares
+       against a hash in the company record, and since accounts moved to
+       Supabase that hash is not the driver's password — so trying it
+       first meant the ordinary path was the one that could not succeed,
+       and the driver was sent to a dialog to type the same wrong thing
+       again. */
+    ServiceAuth.connect().then((ok) => {
+      if (ok) { render(); return null; }
+      return ServiceAuth.login(handle, pw);
+    }).then((ok) => {
+      if (ok === false && Sync.url()) {
         Store.log('warn', 'Signed in here, but the company service did not accept it — '
           + 'messages and calls will be unavailable');
       }
@@ -7657,12 +8044,11 @@ function startServices() {
     HostedService.refresh();
   }
 
-  /* A token kept from last time, so a remembered session can reach the
-     service without being asked for a password again. */
-  ServiceAuth.load();
-  Messages.pullThreads();
+  /* A token kept from last time, and if there is none, one fetched with
+     the Supabase session this device already holds. Neither of those asks
+     the driver for anything. */
+  joinService();
   RoomCall.poll();
-  Ice.load();
   clearInterval(startServices.roomTimer);
   startServices.roomTimer = setInterval(() => RoomCall.poll(), 20000);
 
@@ -7721,10 +8107,8 @@ function startServices() {
     Fleet.start();
 
     /* The service was not there when we signed in, so none of this ran. */
-    ServiceAuth.load();
-    Messages.pullThreads();
+    joinService();
     RoomCall.poll();
-    Ice.load();
 
     Store.log('ok', 'Company service found — messages and calls are available');
     render();

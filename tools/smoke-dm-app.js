@@ -320,13 +320,51 @@ app.whenReady().then(async () => {
         await new Promise(r => setTimeout(r, 900));
         const pins = document.querySelectorAll('.fleet-pin').length;
 
-        return { rows, message, call, onSelf, pins };
+        /* The company service echoes our own row back like anybody else's,
+           and with no self flag on it - that flag is something this client adds
+           to its own copy, so a service has never heard of it. A map that
+           trusts only the flag draws the driver twice: once from live
+           telemetry and once from their own last heartbeat, in two places,
+           under one name. Reported as "there are two of me on the map". */
+        const me = Store.db.driver.gmnId;
+        const myName = Store.db.driver.name;
+
+        /* Two rows in the same spot: somebody else, and us. The first has to
+           draw or this check proves nothing - a count of zero would pass the
+           test whether or not the bug is there. The second must not. */
+        Fleet.drivers = [
+          { id: 'GMN-9998', name: 'Someone Else',
+            lat: 53.55, lon: 9.99, heading: 0.25, speed: 62 },
+          { id: me, name: myName,
+            lat: 53.55, lon: 9.99, heading: 0.25, speed: 62 },
+        ];
+        TileMap.drawFleet();
+        await new Promise(r => setTimeout(r, 400));
+
+        const labels = Array.from(document.querySelectorAll('.fleet-pin-label'))
+          .map((el) => el.textContent);
+        const pinsWithEcho = document.querySelectorAll('.fleet-pin').length;
+        const othersDrawn = labels.filter((t) => t === 'Someone Else').length;
+        const myPins = labels.filter((t) => t === myName).length;
+
+        return { rows, message, call, onSelf, pins,
+                 pinsWithEcho, othersDrawn, myPins, labels };
       } catch (e) {
         return { err: e.message };
       }
     })()`);
 
     if (onMap.err) fail('the map screen threw: ' + onMap.err);
+
+    /* The control: if another driver in the same place does not draw, the
+       real check below is vacuous and would pass with the bug present. */
+    check('another driver in that spot draws a pin',
+      onMap.othersDrawn === 1, onMap.othersDrawn + ' pin(s) for them');
+    check('but the service echoing you back does not double you',
+      onMap.othersDrawn === 1 && onMap.myPins === 0 && onMap.pinsWithEcho === 1,
+      onMap.myPins === 0
+        ? onMap.pinsWithEcho + ' pin on the map, and none of it is you'
+        : onMap.myPins + ' PIN(S) CARRYING YOUR OWN NAME [' + onMap.labels.join(', ') + ']');
 
     check('a driver on the map can be reached from it',
       onMap.message && onMap.call && onMap.onSelf === 0,

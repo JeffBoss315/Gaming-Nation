@@ -38,10 +38,13 @@
     "smoke:company": "node tools/run-electron.js tools/smoke-company.js .",
     "prune": "node tools/prune-builds.js",
     "smoke:messaging": "node tools/smoke-messaging.js",
+    "smoke:svcauth": "node tools/smoke-service-auth.js",
     "smoke:dmweb": "node tools/run-electron.js tools/smoke-dm-web.js .",
+    "smoke:dmsupa": "node tools/run-electron.js tools/smoke-dm-supabase.js .",
     "smoke:terminal": "node tools/run-electron.js tools/smoke-driver-terminal.js .",
     "smoke:signup": "node tools/run-electron.js tools/smoke-signup-approval.js .",
     "smoke:profile": "node tools/run-electron.js tools/smoke-profile.js .",
+    "smoke:avatar": "node tools/run-electron.js tools/smoke-avatar.js .",
     "smoke:search": "node tools/run-electron.js tools/smoke-search.js .",
     "smoke:downloadpage": "node tools/run-electron.js tools/smoke-download-page.js .",
     "smoke:downloads": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-download-gate.mjs",
@@ -52,7 +55,9 @@
     "dev": "node tools/dev.js",
     "smoke:dmapp": "node tools/run-electron.js tools/smoke-dm-app.js .",
     "smoke:host": "node tools/run-electron.js tools/smoke-host-service.js .",
-    "smoke:launch": "node tools/smoke-launch.js ."
+    "smoke:launch": "node tools/smoke-launch.js .",
+    "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
+    "smoke:plugin": "node tools/smoke-plugin-install.js ."
   },
   "devDependencies": {
     "electron": "^31.7.7",
@@ -71,6 +76,7 @@
       "preload.js",
       "game-connector.js",
       "telemetry-bridge.js",
+      "telemetry-plugin.js",
       "desktop-capture.js",
       "tracker.html",
       "tracker.css",
@@ -93,6 +99,16 @@
       "!dist-apk/**/*",
       "!release/**/*",
       "!tools/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "gmn-telemetry-adapter.exe",
+        "to": "gmn-telemetry-adapter.exe"
+      },
+      {
+        "from": "game-plugin",
+        "to": "plugin"
+      }
     ],
     "win": {
       "target": [

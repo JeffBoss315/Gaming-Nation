@@ -35,11 +35,33 @@ gmn-*.jsonl.tmp
 # .NET intermediates for the telemetry adapter. obj/ and bin/ are rebuilt by
 # `dotnet build` every time and churn on every compile — two of them were
 # already showing as modified with nobody having touched the source.
-# gmn-telemetry-adapter.exe stays tracked on purpose: telemetry-bridge.js
-# spawns it at runtime, so a clone without it cannot read the game.
 telemetry-adapter/obj/
 telemetry-adapter/bin/
 *.pdb
 
+# The adapter itself. It used to be tracked on purpose, and that was the
+# right call while it was 194 KB: telemetry-bridge.js spawns it at runtime,
+# so a clone without it could not read the game.
+#
+# It is 65 MB now. Making it self-contained is what made it work on a machine
+# with no .NET runtime — the framework-dependent build died on startup there,
+# which the app then reported as "the adapter stopped on its own", forever.
+# That is worth 65 MB in an installer. It is not worth 65 MB in git history
+# on every adapter change, permanently, with GitHub warning past 50 MB and
+# refusing past 100.
+#
+# Nothing breaks. CI only ever builds www/ and never touches the adapter, the
+# installer carries it through build.extraResources, and a developer rebuilds
+# it with `npm run telemetry:build` (needs the .NET 8 SDK). build-desktop.js
+# checks for it first and says exactly that if it is missing.
+gmn-telemetry-adapter.exe
+
 .fake
 telemetry-adapter/publish/
+
+# Wrangler's local build/temp state for Cloudflare Pages. Regenerated on every
+# `wrangler pages` run and specific to this machine.
+.wrangler/
+
+# Another generated payload, like www/ and app-www/ — built, never edited.
+site/

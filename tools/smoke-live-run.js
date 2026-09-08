@@ -94,12 +94,23 @@ function telemetryPayload() {
       odometer: truck.odometer,
       fuel: 600, fuelCapacity: 1000,
       wearEngine: 0.01, wearTransmission: 0, wearCabin: 0, wearChassis: 0, wearWheels: 0,
+      engineOn: true,
       placement: { x: truck.x, y: 0, z: truck.z, heading: 0.25 },
     },
+    trailer: { attached: !!truck.job },
+    /* The fields the adapter reads out of special_b, config_ull and
+       config_ui — the game's own answer to "is there a job, how long is it,
+       what is it worth" — rather than the client inferring all three from
+       whether some string happened to be non-empty. */
     job: truck.job ? {
+      onJob: true,
       cargo: truck.job.cargo, income: truck.job.income,
       sourceCity: truck.job.from, destinationCity: truck.job.to,
       sourceCompany: 'Euroacres', destinationCompany: 'Posped',
+      plannedDistanceKm: truck.job.plannedKm,
+      cargoMass: truck.job.massKg,
+      cargoDamage: 0.004,
+      delivered: false, cancelled: false,
     } : {},
     navigation: {
       estimatedDistance: truck.job ? truck.job.remainingM : 0,
@@ -224,9 +235,29 @@ app.whenReady().then(async () => {
       `({ stream: HQLive.status, service: LiveMap.service() })`);
     check('the console holds the same stream open', hqUp.stream === 'live', hqUp.stream);
 
+    /* ---- the truck, before there is any load aboard ----
+       Fuel, damage and the truck's name belong to the truck, not to the run.
+       They were only ever written onto the job, so a driver sitting in a
+       running game with nothing booked saw three dashes and no truck — the
+       client could see all of it and showed none of it. */
+    const idle = await driver.webContents.executeJavaScript(`(() => {
+      const l = Store.db.live || {};
+      return { fuel: l.fuel, damage: l.damage, truck: l.truck,
+               odometer: l.odometer,
+               row: typeof idleGaugesInner === 'function' ? idleGaugesInner() : '' };
+    })()`);
+    check('the truck reports its fuel with no job aboard',
+      Math.round(idle.fuel) === 60, Math.round(idle.fuel) + '%');
+    check('and its damage', idle.damage != null && idle.damage >= 0,
+      idle.damage == null ? 'NONE' : idle.damage.toFixed(1) + '%');
+    check('and which truck it is', idle.truck === 'Scania S 730', idle.truck || 'UNKNOWN');
+    check('and the idle dials draw them instead of dashes',
+      /60%/.test(idle.row) && /Scania S 730/.test(idle.row),
+      /60%/.test(idle.row) ? 'fuel and truck on the dials' : 'STILL DASHES');
+
     /* ---- the game hands out a job ---- */
     truck.job = { cargo: 'Steel coils', income: 4200, from: 'Rotterdam', to: 'Hamburg',
-                  remainingM: 480000 };
+                  remainingM: 480000, plannedKm: 480, massKg: 22000 };
     truck.speed = 85;
     /* The client polls telemetry every 300ms and opens the run when it
        sees the job. 2.5s of sleep was usually enough and occasionally
@@ -237,6 +268,7 @@ app.whenReady().then(async () => {
     const started = await driver.webContents.executeJavaScript(`(() => {
       const j = Store.db.job;
       return j ? { from: j.from, to: j.to, cargo: j.cargo, km: j.km,
+                   income: j.income, weight: j.weight,
                    live: j.live, events: (j.events || []).map(e => e.text) } : null;
     })()`);
     check('taking a job in game starts the run', !!started,
@@ -245,6 +277,12 @@ app.whenReady().then(async () => {
       started ? started.km + ' km' : '-');
     check('the run opens its own timeline', !!started && started.events.length > 0,
       started ? (started.events[0] || 'none') : '-');
+    /* Straight off the game rather than guessed: the payout out of
+       config_ull.jobIncome and the weight out of config_f.cargoMass, both of
+       which the adapter used to report as a hardcoded zero. */
+    check('the run takes its payout and weight from the game',
+      !!started && started.income === 4200 && started.weight === 22,
+      started ? started.income + ' / ' + started.weight + ' t' : '-');
 
     /* Wait for the CONSOLE, not for the driver.
 

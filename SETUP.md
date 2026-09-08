@@ -57,6 +57,58 @@ at this version changes nothing.
 This directory used to go unmentioned here, which is how a project set up from
 this page could be missing the trigger above and have no way of finding out.
 
+#### Run this one
+
+[`20260908_driver_messaging.sql`](supabase/migrations/20260908_driver_messaging.sql)
+is the one an existing project is most likely to be missing, because it carries
+two things that are visible to every driver:
+
+- **Messages.** Driver-to-driver conversation used to need `npm run service`
+  running somewhere — which meant, in practice, that a driver on the website
+  had no messages at all. It now goes through `public.conversations`,
+  `conversation_participants` and `messages`, and this file adds the row level
+  security, the realtime publication and the `dm_*` functions the browser
+  calls. Until it is run, the Messages screen says so and names the file.
+- **`drivers.avatar`.** Without the column there is nowhere to put a profile
+  photo, the write is refused, and the photo lives only as long as the browser
+  that took it — which is the whole of "my picture disappears when I reload",
+  and why one set on the website never reaches the driver app. The column is
+  also in
+  [`20260907_driver_avatar.sql`](supabase/migrations/20260907_driver_avatar.sql);
+  running either, or both, is fine. If you run nothing else, run this one line:
+
+  ```sql
+  alter table public.drivers add column if not exists avatar text;
+  ```
+
+  Until it exists the app says so, on the profile card in Settings, with the
+  same line ready to copy.
+
+Attachments need a storage bucket as well, and that part of the file is
+allowed to fail — some projects will not let the SQL editor write policies on
+`storage.objects`. Text messages work either way; if photos do not, the notice
+the script prints says why.
+
+### The company service signs devices in by itself
+
+`fleet-server.js` keeps its own session, separate from Supabase. It used to
+issue one only through `/api/auth/login`, which compares a password against a
+hash in the company record it holds — and that hash has not been anybody's
+password since accounts moved to Supabase. So "Connect this device" asked for
+a password and then refused the only one the driver had.
+
+`POST /api/auth/supabase` takes the access token the client already holds,
+asks Supabase whose it is, and issues a service session for that person. The
+website and the driver app both call it at boot, after signing in, and again
+if a token goes stale — so there is nothing to connect by hand. The password
+path is still there for a client older than this build.
+
+The service reads the project URL and publishable key out of
+`supabase-client.js`, so it needs no configuration when it runs beside the
+repo. Set `GMN_SUPABASE_URL` and `GMN_SUPABASE_KEY` to point it elsewhere.
+Nothing in the request is trusted: the token is verified upstream and the
+driver code is read from the `drivers` table, never from the caller.
+
 ### Check it took
 
 ```sql

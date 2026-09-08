@@ -27,6 +27,26 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 
+/* The telemetry adapter is a build product, not source, and it is no longer
+   in git - 65 MB per adapter change, permanently, was too much to carry.
+   build.extraResources points straight at it, and electron-builder's failure
+   when it is absent names the missing path and nothing else, which tells
+   somebody nothing about what to do. So it is checked here, where the answer
+   can be given. */
+const ADAPTER = path.join(ROOT, 'gmn-telemetry-adapter.exe');
+if (!fs.existsSync(ADAPTER)) {
+  console.error('');
+  console.error('  gmn-telemetry-adapter.exe is not here, and the installer cannot be');
+  console.error('  built without it - the client would have nothing to read the game.');
+  console.error('');
+  console.error('    npm run telemetry:build     builds it (needs the .NET 8 SDK)');
+  console.error('');
+  console.error('  It is deliberately not in git: 65 MB, and rebuilt from');
+  console.error('  telemetry-adapter/ in about ten seconds.');
+  console.error('');
+  process.exit(1);
+}
+
 /* Read it from the one place that decides, rather than working it out
    again here and having the two disagree. */
 const OUT = spawnSync(process.execPath, [path.join(__dirname, 'dist-out.js')], {
