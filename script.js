@@ -518,6 +518,42 @@ function migrateStorageKey(from, to) {
   ['hll.trk.service.v1', 'gmn.trk.service.v1'],
 ].forEach(([from, to]) => migrateStorageKey(from, to));
 
+/* The owner's driver code: HLL-1001 became GMN-001.
+
+   A driver code is not a label. The roster is keyed on it, and so is every
+   truck assignment, convoy registration, ticket, application, session and
+   notification that points at that driver.
+
+   Changing OWNER_SEED alone would not have been a rename, it would have
+   been a fork: provisionOwner() finds the account by EMAIL as well as by
+   code, and its staleness test only looks at salt, hash and email - so the
+   account would have kept the old code, the lookup for a driver row under
+   the new one would have missed, and a second, empty "Jeff Boss" would
+   have been pushed into the roster beside the real one with all the
+   history.
+
+   So the code is rewritten wherever it is stored, before anything reads
+   it. On the raw JSON text on purpose: a code is a whole string value in
+   there, so matching it with its quotes can never catch a fragment of some
+   longer word. It runs once - afterwards the old code is not in the file
+   to find - and it is silent when there is nothing to do, which is every
+   load after the first and every fresh install. */
+function migrateDriverCode(key, from, to) {
+  try {
+    const raw = localStorage.getItem(key);
+    const quoted = '"' + from + '"';
+    if (raw === null || raw.indexOf(quoted) === -1) return;
+    localStorage.setItem(key, raw.split(quoted).join('"' + to + '"'));
+    console.info('[GMN] driver code ' + from + ' is now ' + to + ' in ' + key);
+  } catch (e) {
+    /* private mode, or storage disabled: nothing is stored, so there is
+       nothing pointing at the old code either. */
+  }
+}
+
+['gmn.db.v1', 'gmn.accounts.v1', 'gmn.session.v1', 'gmnwjt.v3'].forEach(
+  (key) => migrateDriverCode(key, 'HLL-1001', 'GMN-001'));
+
 const LS_ACCOUNTS = 'gmn.accounts.v1';
 
 const Accounts = {
@@ -1150,7 +1186,7 @@ const Accounts = {
    renders while the remaining tables do not exist. Every field defaulted here
    is a column still to be added; see MIGRATION below. */
 fromRow(row, authUser) {
-    /* driver_code is the id the whole platform is keyed on — HLL-1001. The
+    /* driver_code is the id the whole platform is keyed on — GMN-001. The
        Supabase uuid is carried alongside for writes, not used as the id: the
        app joins on it in 213 places and every stored reference uses it. */
     const id = row.driver_code || row.id;
@@ -1813,7 +1849,7 @@ function discordLink(label, cls) {
 }
 
 const OWNER_SEED = {
-  driverId: 'HLL-1001',
+  driverId: 'GMN-001',
   name: 'Jeff Boss',
   email: 'jeffboss730@gmail.com',
   country: 'Not set',
@@ -1953,7 +1989,7 @@ async function changePassword() {
   if (!window.gmnSupabase) { toast('Supabase is not connected', 'danger'); return; }
 
   /* Reauthenticate before changing anything. Note this takes the account's
-     email: passing state.user.id sends a driver code — HLL-1001 — to a call
+     email: passing state.user.id sends a driver code — GMN-001 — to a call
      that wants an address, and it is rejected every time. */
   const email = state.user.email;
   if (!email) { toast('This account has no email on record', 'danger'); return; }

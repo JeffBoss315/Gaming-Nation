@@ -116,12 +116,12 @@ const PW = 'DriverPass#7';
 
 const COMPANY = {
   drivers: [
-    { id: 'HLL-1001', name: 'Anna Bergen', role: 'driver', accountStatus: 'active' },
+    { id: 'GMN-1001', name: 'Anna Bergen', role: 'driver', accountStatus: 'active' },
     { id: 'HLL-2002', name: 'Marek Kowal', role: 'driver', accountStatus: 'active' },
     { id: 'HLL-3003', name: 'Nosy Parker', role: 'driver', accountStatus: 'active' },
   ],
   accounts: [
-    { driverId: 'HLL-1001', email: 'anna@example.com', salt: SALT, hash: sha(PW, SALT) },
+    { driverId: 'GMN-1001', email: 'anna@example.com', salt: SALT, hash: sha(PW, SALT) },
     { driverId: 'HLL-2002', email: 'marek@example.com', salt: SALT, hash: sha(PW, SALT) },
     { driverId: 'HLL-3003', email: 'nosy@example.com', salt: SALT, hash: sha(PW, SALT) },
   ],
@@ -189,14 +189,14 @@ const login = async (email) => {
 
   /* ---------- 2. identity is the service's to decide ---------- */
   const forged = await req('POST', '/api/dm/send',
-    { to: 'HLL-1001', text: 'this is control speaking', driverId: 'HLL-9999',
+    { to: 'GMN-1001', text: 'this is control speaking', driverId: 'GMN-9999',
       driver: 'Control', role: 'staff' }, marek);
   check('the sender cannot label themselves',
     forged.status === 200 && forged.body.message.driverId === 'HLL-2002'
       && forged.body.message.role === 'driver',
     forged.body && forged.body.message ? forged.body.message.driver : 'no message');
 
-  const noIdent = await req('POST', '/api/dm/send', { to: 'HLL-1001', text: 'hello' });
+  const noIdent = await req('POST', '/api/dm/send', { to: 'GMN-1001', text: 'hello' });
   check('and a message with no token is refused', noIdent.status === 401,
     'HTTP ' + noIdent.status);
 
@@ -215,19 +215,19 @@ const login = async (email) => {
      is pinned there now, and a test that depends on the order of a list is
      a test that breaks whenever the list gains anything. */
   const all = (threads.body && threads.body.threads) || [];
-  const t = all.find((x) => x.withId === 'HLL-1001');
+  const t = all.find((x) => x.withId === 'GMN-1001');
 
   const room = all.find((x) => x.room);
   check('the fleet room is always there, pinned first',
     !!room && all[0] === room && room.withId === '#fleet',
     room ? room.withName : 'no room');
   check('the conversation is listed with who it is with',
-    !!t && t.withId === 'HLL-1001' && t.withName === 'Anna Bergen',
+    !!t && t.withId === 'GMN-1001' && t.withName === 'Anna Bergen',
     t ? t.withName : 'no thread');
   check('and the unread count is the other side only',
     !!t && t.unread === 1, t ? String(t.unread) : '?');
 
-  const read = await req('POST', '/api/dm/read', { withId: 'HLL-1001' }, marek);
+  const read = await req('POST', '/api/dm/read', { withId: 'GMN-1001' }, marek);
   check('marking read clears it', read.status === 200 && read.body.read === 1,
     (read.body ? read.body.read : '?') + ' marked');
 
@@ -293,7 +293,7 @@ const login = async (email) => {
 
   const heard = sMarek.got.filter((e) => e.kind === 'call');
   check('the call says who is calling',
-    heard.length === 1 && heard[0].data.from === 'HLL-1001'
+    heard.length === 1 && heard[0].data.from === 'GMN-1001'
       && heard[0].data.fromName === 'Anna Bergen',
     heard.length ? heard[0].data.fromName : 'nothing heard');
 
@@ -301,7 +301,7 @@ const login = async (email) => {
   await req('POST', '/api/call/signal',
     { to: 'HLL-2002', kind: 'offer', callId: 'CALL-1', payload: { sdp: 'v=0 offer' } }, anna);
   await req('POST', '/api/call/signal',
-    { to: 'HLL-1001', kind: 'answer', callId: 'CALL-1', payload: { sdp: 'v=0 answer' } }, marek);
+    { to: 'GMN-1001', kind: 'answer', callId: 'CALL-1', payload: { sdp: 'v=0 answer' } }, marek);
   await req('POST', '/api/call/signal',
     { to: 'HLL-2002', kind: 'ice', callId: 'CALL-1', payload: { candidate: 'a=candidate:1' } }, anna);
   await wait(400);
@@ -420,7 +420,7 @@ const login = async (email) => {
     { to: '#fleet', kind: 'join' }, marek);
   check('the second is handed the first to offer to',
     joinB.status === 200 && joinB.body.peers.length === 1
-      && joinB.body.peers[0].driverId === 'HLL-1001',
+      && joinB.body.peers[0].driverId === 'GMN-1001',
     joinB.body && joinB.body.peers[0] ? joinB.body.peers[0].driverId : 'nobody');
 
   await wait(320);
@@ -438,7 +438,7 @@ const login = async (email) => {
   /* A mesh is still one peer talking to one peer, so the ordinary
      signalling has to keep working while the room call is up. */
   const meshOffer = await req('POST', '/api/call/signal',
-    { to: 'HLL-1001', kind: 'offer', payload: { sdp: 'x' } }, marek);
+    { to: 'GMN-1001', kind: 'offer', payload: { sdp: 'x' } }, marek);
   check('peer signalling inside the room still goes to one driver',
     meshOffer.status === 200 && meshOffer.body.delivered === 1,
     'delivered ' + (meshOffer.body ? meshOffer.body.delivered : '?'));

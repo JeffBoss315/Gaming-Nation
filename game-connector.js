@@ -6,7 +6,7 @@
    own — it starts with Windows and is never thought about again.
 
      node game-connector.js --service http://gmn-host:7040 \
-                            --driver HLL-1001
+                            --driver GMN-001
 
    Or put the settings in gmn-connector.json beside it and just
    run it.
@@ -77,7 +77,7 @@ function usage() {
 
   Options
     --service <url>          the Gaming Nation company service, e.g. http://gmn:7040
-    --driver <id>            the driver's Gaming Nation id, e.g. HLL-1001
+    --driver <id>            the driver's Gaming Nation id, e.g. GMN-001
     --name <name>            overrides the name on the roster
     --key <key>              the service's API key, if it requires one
     --game ets2|ats          which game to read (default ets2)
@@ -90,7 +90,7 @@ function usage() {
 
   Or put any of these in gmn-connector.json beside this file:
 
-    { "service": "http://gmn:7040", "driverId": "HLL-1001" }
+    { "service": "http://gmn:7040", "driverId": "GMN-001" }
 
   Needs the SCS telemetry plugin in <game>/bin/win_x64/plugins/ and the
   telemetry server running. Start it before or after the game — it waits.

@@ -58,7 +58,8 @@
     "smoke:launch": "node tools/smoke-launch.js .",
     "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
     "smoke:plugin": "node tools/smoke-plugin-install.js .",
-    "smoke:apploss": "node tools/run-electron.js tools/smoke-application-loss.js ."
+    "smoke:apploss": "node tools/run-electron.js tools/smoke-application-loss.js .",
+    "smoke:ownercode": "node tools/run-electron.js tools/smoke-owner-code.js ."
   },
   "devDependencies": {
     "electron": "^31.7.7",

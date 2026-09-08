@@ -86,7 +86,7 @@ const PW_B = 'DriverPass#2';
 
 const COMPANY = {
   drivers: [
-    { id: 'HLL-1001', name: 'Convoy Leader', role: 'event_manager', accountStatus: 'active',
+    { id: 'GMN-1001', name: 'Convoy Leader', role: 'event_manager', accountStatus: 'active',
       km: 0, deliveries: 0, earned: 0 },
     { id: 'HLL-2002', name: 'Ordinary Driver', role: 'driver', accountStatus: 'active',
       km: 0, deliveries: 0, earned: 0 },
@@ -94,15 +94,15 @@ const COMPANY = {
       km: 0, deliveries: 0, earned: 0 },
   ],
   accounts: [
-    { driverId: 'HLL-1001', email: 'leader@example.com', salt: SALT_A, hash: sha(PW_A, SALT_A) },
+    { driverId: 'GMN-1001', email: 'leader@example.com', salt: SALT_A, hash: sha(PW_A, SALT_A) },
     { driverId: 'HLL-2002', email: 'driver@example.com', salt: SALT_B, hash: sha(PW_B, SALT_B) },
     { driverId: 'HLL-3003', email: 'outside@example.com', salt: SALT_B, hash: sha(PW_B, SALT_B) },
   ],
   events: [
-    { id: 'EV-7001', name: 'Auth Convoy', status: 'live', leaderId: 'HLL-1001',
+    { id: 'EV-7001', name: 'Auth Convoy', status: 'live', leaderId: 'GMN-1001',
       date: new Date().toISOString(), distance: 300, maxSlots: 10,
       path: ['Rotterdam', 'Hamburg'], registered: [
-        { driverId: 'HLL-1001', state: 'confirmed', leader: true },
+        { driverId: 'GMN-1001', state: 'confirmed', leader: true },
         { driverId: 'HLL-2002', state: 'confirmed' },
       ], activity: [] },
   ],
@@ -158,7 +158,7 @@ const COMPANY = {
 
   const spoof = await req('POST', '/api/convoy/message', {
     convoyId: 'EV-7001', text: 'I am the leader',
-    driverId: 'HLL-1001', driver: 'Convoy Leader', role: 'staff',
+    driverId: 'GMN-1001', driver: 'Convoy Leader', role: 'staff',
   }, TOKEN_DRIVER);
   check('a driver may speak', spoof.status === 200, 'HTTP ' + spoof.status);
 

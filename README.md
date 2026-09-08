@@ -496,13 +496,13 @@ GAME LAUNCHED  ->  driver identified  ->  Gaming Nation = ONLINE  ->  telemetry
 ```
 
 ```bash
-npm run connector -- --service http://gmn-host:7040 --driver HLL-1001
+npm run connector -- --service http://gmn-host:7040 --driver GMN-001
 ```
 
 Or put the settings in `gmn-connector.json` beside it and just run `npm run connector`:
 
 ```json
-{ "service": "http://gmn-host:7040", "driverId": "HLL-1001" }
+{ "service": "http://gmn-host:7040", "driverId": "GMN-001" }
 ```
 
 `--help` lists the rest: the API key, which game, where the telemetry server is, how often

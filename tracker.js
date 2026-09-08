@@ -3053,6 +3053,28 @@ function saveCalibrationPoint(mapKey) {
 const LS = 'gmnwjt.v3';
 migrateStorageKey('hllwjt.v3', LS);   /* the client store moved with the name */
 
+/* The owner's driver code: HLL-1001 became GMN-001.
+
+   The platform does this to its own stores, but the client is a separate
+   page and a driver can open it without ever opening the platform - so it
+   carries the same migration rather than relying on somebody having
+   visited login.html first.
+
+   Rewritten on the raw JSON, where a code is always a whole quoted string
+   value, so it can never catch part of a longer word. Silent when there is
+   nothing to do, which is every load after the first. */
+function migrateDriverCode(key, from, to) {
+  try {
+    const raw = localStorage.getItem(key);
+    const quoted = '"' + from + '"';
+    if (raw === null || raw.indexOf(quoted) === -1) return;
+    localStorage.setItem(key, raw.split(quoted).join('"' + to + '"'));
+    console.info('[GMN] driver code ' + from + ' is now ' + to + ' in ' + key);
+  } catch (e) { /* storage disabled: nothing stored, nothing pointing at it */ }
+}
+[LS, 'gmn.accounts.v1', 'gmn.trk.session.v1'].forEach(
+  (key) => migrateDriverCode(key, 'HLL-1001', 'GMN-001'));
+
 function seed() {
   /* A fresh client holds no identity and no history. The driver signs in with
      their Gaming Nation account first; everything below is filled from real runs. */
@@ -7356,7 +7378,7 @@ const Auth = {
      resists a glance at the source; it is not proof against an offline
      attack, so changing it from Settings is worth doing. */
   OWNER: {
-    driverId: 'HLL-1001',
+    driverId: 'GMN-001',
     name: 'Jeff Boss',
     email: 'jeffboss730@gmail.com',
     country: 'Not set',
