@@ -6,7 +6,7 @@
    and verifies the HTTP contract consumed by the app.
 
    Adapter contract:
-     GMN_TELEMETRY_MAP       Local\\HLLTelemetry
+     GMN_TELEMETRY_MAP       Local\\GMNTelemetry
      GMN_TELEMETRY_PORT      25555
      GMN_TELEMETRY_GAME      ets2
      GMN_TELEMETRY_PLUGIN    installed DLL path
@@ -28,9 +28,9 @@ const flag = (name, fallback) => {
 
 const game = flag('game', 'ets2') === 'ats' ? 'ats' : 'ets2';
 const port = Number(flag('port', (process.env.GMN_TELEMETRY_PORT || process.env.HLL_TELEMETRY_PORT) || 25555));
-const map = flag('map', (process.env.GMN_TELEMETRY_MAP || process.env.HLL_TELEMETRY_MAP) || 'Local\\HLLTelemetry');
+const map = flag('map', (process.env.GMN_TELEMETRY_MAP || process.env.HLL_TELEMETRY_MAP) || 'Local\\GMNTelemetry');
 const adapter = flag('adapter', (process.env.GMN_TELEMETRY_ADAPTER || process.env.HLL_TELEMETRY_ADAPTER) ||
-  path.join(__dirname, 'hll-telemetry-adapter.exe'));
+  path.join(__dirname, 'gmn-telemetry-adapter.exe'));
 const plugin = flag('plugin', (process.env.GMN_TELEMETRY_PLUGIN || process.env.HLL_TELEMETRY_PLUGIN) ||
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
     'Steam', 'steamapps', 'common', 'Euro Truck Simulator 2',

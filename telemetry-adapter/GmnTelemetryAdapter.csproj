@@ -4,7 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <SelfContained>false</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>hll-telemetry-adapter</AssemblyName>
+    <Nullable>enable</Nullable>
+    <AssemblyName>gmn-telemetry-adapter</AssemblyName>
     <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>

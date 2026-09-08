@@ -27,12 +27,12 @@ ETS2 / ATS world, so it can tell on its own when a driver is **on the road deliv
 ### Set it up (once)
 
 This project also supports the GMN Telemetry Bridge plugin. The plugin writes
-SCS Protocol 6 frames to `Local\\HLLTelemetry`; the project-owned launcher
+SCS Protocol 6 frames to `Local\\GMNTelemetry`; the project-owned launcher
 starts a compatible adapter and exposes the same HTTP API used by the client.
 The adapter executable is intentionally separate because it owns the binary
 Protocol 6 reader.
 
-Place the adapter executable at `hll-telemetry-adapter.exe` in the project
+Place the adapter executable at `gmn-telemetry-adapter.exe` in the project
 folder, then run:
 
 ```bash
@@ -40,7 +40,7 @@ npm run telemetry
 ```
 
 For an adapter installed elsewhere, set `GMN_TELEMETRY_ADAPTER` to its real
-path or pass `--adapter "C:\\real\\path\\hll-telemetry-adapter.exe"`.
+path or pass `--adapter "C:\\real\\path\\gmn-telemetry-adapter.exe"`.
 The launcher verifies `hll-scs-telemetry.dll`, passes it the map name, and
 waits for `http://localhost:25555/api/ets2/telemetry` before reporting ready.
 
