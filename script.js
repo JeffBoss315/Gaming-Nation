@@ -646,10 +646,21 @@ const Accounts = {
               ? { emailRedirectTo: publicRedirectBase() + '/login.html' }
               : {}),
 
+            /* No role here, on purpose.
+
+               This used to send one, and handle_new_user() wrote it
+               straight into drivers.role, which is the column is_staff()
+               answers from. The anon key is public, so anybody could sign
+               up as super_admin without going near this form — the
+               `isOwner ? 'admin' : 'driver'` line above ran on the
+               attacker's machine and decided nothing.
+
+               The database decides now, from the address on the Auth user.
+               Sending it would be at best ignored and at worst a lie about
+               where the decision lives. */
             data: {
               full_name: account.name,
               driver_code: driverId,
-              role: role,
               country: country || 'Not set'
             }
           }

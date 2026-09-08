@@ -66,6 +66,18 @@ create table if not exists public.company (
 alter table public.drivers      add column if not exists country     text;
 alter table public.drivers      add column if not exists role        text default 'driver';
 alter table public.drivers      add column if not exists status      text default 'pending';
+
+-- The driver's profile photo, as a small JPEG data URL. Capped by the
+-- browser before it is ever sent — readAvatarFile() redraws it to 256px
+-- and re-encodes until it is under 90 KB — so this is a bounded value
+-- and not an open door.
+--
+-- It lives on the driver rather than in the company blob because it is
+-- theirs. Hung on the blob it survived only as long as that record did,
+-- and a driver signing in on a machine that had not pulled the company
+-- yet had nowhere to put it at all — so the photo vanished on sign-out.
+-- Null means draw their initials instead.
+alter table public.drivers      add column if not exists avatar      text;
 alter table public.applications add column if not exists driver_id   text;
 alter table public.applications add column if not exists reviewed_by bigint;
 alter table public.applications add column if not exists reviewed_at timestamptz;
@@ -352,12 +364,30 @@ declare
   meta        jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
   want_code   text  := nullif(meta->>'driver_code', '');
   final_code  text;
-  new_role    text  := coalesce(nullif(meta->>'role', ''), 'driver');
+  new_role    text;               -- decided below; NEVER read from meta
   full_name   text;
   country     text;
 begin
   full_name := coalesce(nullif(meta->>'full_name', ''), split_part(new.email, '@', 1));
   country   := coalesce(nullif(meta->>'country', ''), 'Not set');
+
+  -- The role is NOT the client's to choose.
+  --
+  -- meta is new.raw_user_meta_data, which Supabase fills verbatim from
+  -- options.data on auth.signUp(). This used to read the role straight out
+  -- of it — so anyone holding the public anon key could sign up as
+  -- super_admin and is_staff() would agree with them from then on. The
+  -- check that was meant to prevent it lived in the browser, which is not
+  -- a check.
+  --
+  -- The founding account is recognised by its address, which is a fact
+  -- about the company. Everybody else starts as a driver and is promoted
+  -- by somebody who already is staff.
+  -- See supabase/migrations/20260908_role_is_not_the_clients_to_choose.sql
+  new_role := case
+                when lower(new.email) = lower('jeffboss730@gmail.com') then 'admin'
+                else 'driver'
+              end;
 
   -- Already there? Then this is a re-run, or the browser got in first.
   select d.driver_code into final_code
