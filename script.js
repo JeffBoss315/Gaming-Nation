@@ -1169,6 +1169,15 @@ fromRow(row, authUser) {
         avatar: row.avatar || (local && local.avatar) || '',
 
         /* --- no column yet: local record, then a safe default --- */
+
+        /* earned belongs here for one specific reason: it is the only field
+           normaliseCompany() repairs that this function did not set. So
+           every record built from Supabase arrived incomplete, was
+           "repaired" on the next company pull, and printed
+           "repaired 1 missing field(s): driver.earned" — for ever. Setting
+           it means there is nothing to repair. */
+        earned: (local && local.earned) ?? 0,
+
         initials: (local && local.initials) || initials(row.full_name || 'Driver'),
         rankIdx: (local && local.rankIdx) ?? 0,
         km: (local && local.km) ?? 0,
@@ -2235,18 +2244,48 @@ function ensureOwnerDrives() {
 
 /* Sweep out records nobody can sign in to.
 
-   Every real driver has an account: they either registered, or staff created
-   one for them. A driver record with no account behind it is left over from
-   the builds that shipped sample people, and it clutters the roster, the
-   standings and the convoy sign-ups with names that are not anybody.
+   This was written when an account meant a row in this browser's
+   localStorage, so "no local account" was a fair test for "left over from
+   the builds that shipped sample people".
 
-   Runs once per load, and says what it removed rather than doing it quietly. */
+   Supabase ended that. Identity lives in the database now, and a driver
+   signing in on a browser that has never seen them has no local account at
+   all — so this deleted them. Not just from the roster: it took their
+   applications, tickets, notifications, activity and convoy sign-ups with
+   them, then saved, which pushed the deletion to everybody else. On the
+   deployed site it removed the person who was signed in, every single load:
+
+     [GMN] removed 2 driver record(s) with no account:
+           GMN DRIVER APPLICATION (GMN004), Boss Jeff (GMN003)
+
+   Boss Jeff was the driver reading that line.
+
+   The registration path had already noticed and worked around it by writing
+   a local account row purely to stop this function eating the driver — which
+   covers somebody who registered in THIS browser, and nobody else.
+
+   So the test is no longer "is there a local account" but "is there any
+   evidence this is a real person". A record carrying a Supabase id or an
+   auth user id was made by the database and is not ours to delete. */
 function purgeOrphanDrivers() {
   const db = Store.db;
   if (!db || !Array.isArray(db.drivers)) return 0;
 
   const ids = new Set(Accounts.all().map((a) => a.driverId));
-  const orphans = db.drivers.filter((d) => !ids.has(d.id));
+  const applied = new Set((db.applications || [])
+    .map((a) => a && a.submittedBy).filter(Boolean));
+
+  const real = (d) => {
+    if (!d || !d.id) return false;
+    if (ids.has(d.id)) return true;                       /* an account here */
+    if (d.supabaseId != null || d.authUserId) return true; /* the database made it */
+    if (state.user && d.id === state.user.id) return true; /* it is you */
+    if (d.ownerSeed || d.role === 'super_admin') return true;
+    if (applied.has(d.id)) return true;                    /* somebody applied as them */
+    return false;
+  };
+
+  const orphans = db.drivers.filter((d) => !real(d));
   if (!orphans.length) return 0;
 
   const gone = new Set(orphans.map((d) => d.id));
@@ -9045,6 +9084,9 @@ mergeInner(db, remote) {
 
       this.version = data.version || 0;
 
+/* set by the repair below, acted on once applying has been cleared */
+let repairedHere = false;
+
 if (data.data) {
   Store.db = {
     ...Store.db,
@@ -9064,17 +9106,19 @@ if (data.data) {
      that does: a browser that has just READ the record is the one browser
      that should not normally write it back, so this is gated on something
      genuinely having been wrong. */
-  const repaired = normaliseCompany();
+  /* Held, and sent at the END of this pull.
 
-  if (repaired) {
-    /* After this returns — applying is still true here, and sendNow()
-       refuses to write while it is, which is the guard that stops a pull
-       turning into an echo. */
-    setTimeout(() => {
-      console.info('[GMN] pushing the repaired company record back to Supabase');
-      this.sendNow();
-    }, 0);
-  }
+     It used to be a setTimeout(0), with a comment explaining that applying
+     is still true and sendNow() refuses to write while it is. That is
+     exactly what happened — so the repair was never sent, and the same
+     field was repaired again on the very next pull, and the one after that.
+     "repaired 1 missing field(s) on the company record: driver.earned" in
+     the console for ever, which is the loop the comment above says this was
+     written to stop.
+
+     A macrotask cannot outrun the awaits that follow, so the only way to
+     push after applying is cleared is to wait until it is. */
+  repairedHere = normaliseCompany() > 0;
 }
 
 this.status = 'ok';
@@ -9104,6 +9148,14 @@ await Applications.pull();
       }
 
       this.applying = false;
+
+      /* Now, and only now, is a write allowed. Anything earlier is refused
+         by sendNow()'s own guard and silently lost — which is how the same
+         missing field came to be repaired on every pull for ever. */
+      if (repairedHere) {
+        console.info('[GMN] pushing the repaired company record back to Supabase');
+        await this.sendNow();
+      }
 
       /* The signed-in driver's own record still comes from Supabase, so the
          dashboard has a name and a driver code to render after a pull.
