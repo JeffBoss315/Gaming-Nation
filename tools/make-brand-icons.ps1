@@ -3,7 +3,7 @@
 
         npm run icons          (or: powershell -File tools/make-brand-icons.ps1)
 
-    Source of truth is hll.jpg in the project root. Writes:
+    Source of truth is gmn.jpg in the project root. Writes:
       icons/                            web + PWA + the source art electron-builder
                                         turns into the Windows .ico
       android/app/src/main/res/mipmap-* Android launcher icons
@@ -16,8 +16,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $root   = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $root 'hll.jpg'
-if (-not (Test-Path $source)) { throw "hll.jpg not found at $source" }
+$source = Join-Path $root 'gmn.jpg'
+if (-not (Test-Path $source)) { throw "gmn.jpg not found at $source" }
 
 $iconsDir = Join-Path $root 'icons'
 New-Item -ItemType Directory -Force -Path $iconsDir | Out-Null

@@ -25,7 +25,7 @@ const { spawn } = require('child_process');
 const PORT = Number((process.env.GMN_SMOKE_PORT || process.env.HLL_SMOKE_PORT) || 7092);
 const COMPANY_FILE = path.join(os.tmpdir(), 'gmn-auth-company.json');
 const SESSION_FILE = path.join(os.tmpdir(), 'gmn-auth-sessions.json');
-const CHAT_FILE = path.join(os.tmpdir(), 'hll-auth-chat.jsonl');
+const CHAT_FILE = path.join(os.tmpdir(), 'gmn-auth-chat.jsonl');
 const ROOT = path.join(__dirname, '..');
 
 [COMPANY_FILE, SESSION_FILE, CHAT_FILE].forEach((f) => {

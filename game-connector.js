@@ -5,10 +5,10 @@
    game, and reports it to Gaming Nation. No window, no records of its
    own — it starts with Windows and is never thought about again.
 
-     node game-connector.js --service http://hll-host:7040 \
+     node game-connector.js --service http://gmn-host:7040 \
                             --driver HLL-1001
 
-   Or put the settings in hll-connector.json beside it and just
+   Or put the settings in gmn-connector.json beside it and just
    run it.
 
    The driver never tells anybody they are playing. The game comes
@@ -76,7 +76,7 @@ function usage() {
     node game-connector.js --service <url> --driver <GMN id>
 
   Options
-    --service <url>          the Gaming Nation company service, e.g. http://hll:7040
+    --service <url>          the Gaming Nation company service, e.g. http://gmn:7040
     --driver <id>            the driver's Gaming Nation id, e.g. HLL-1001
     --name <name>            overrides the name on the roster
     --key <key>              the service's API key, if it requires one
@@ -84,13 +84,13 @@ function usage() {
     --telemetry-host <host>  where the telemetry server is (default 127.0.0.1)
     --telemetry-port <port>  its port (default 25555)
     --poll <ms>              how often to read the game (default 400)
-    --config <file>          settings file (default hll-connector.json)
-    --outbox <file>          where unsent work is kept (default hll-outbox.json)
+    --config <file>          settings file (default gmn-connector.json)
+    --outbox <file>          where unsent work is kept (default gmn-outbox.json)
     --quiet                  only report what changes
 
-  Or put any of these in hll-connector.json beside this file:
+  Or put any of these in gmn-connector.json beside this file:
 
-    { "service": "http://hll:7040", "driverId": "HLL-1001" }
+    { "service": "http://gmn:7040", "driverId": "HLL-1001" }
 
   Needs the SCS telemetry plugin in <game>/bin/win_x64/plugins/ and the
   telemetry server running. Start it before or after the game — it waits.
@@ -121,7 +121,7 @@ function request(method, pathname, body) {
       headers['Content-Type'] = 'application/json';
       headers['Content-Length'] = Buffer.byteLength(payload);
     }
-    if (CFG.key) headers['X-HLL-Key'] = CFG.key;
+    if (CFG.key) headers['X-GMN-Key'] = CFG.key;
 
     const lib = url.protocol === 'https:' ? https : http;
     const req = lib.request({

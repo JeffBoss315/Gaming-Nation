@@ -65,7 +65,7 @@ app.whenReady().then(async () => {
       const rec = { id: 'JOB-' + RUN, from: 'Rotterdam', to: 'Hamburg', cargo: 'Steel coils',
         km: 480, income: 4200, damage: 0, finished: new Date().toISOString(), status: 'pending' };
       Store.db.pending.push(rec);
-      Store.db.conn.hll = 'connected';
+      Store.db.conn.gmn = 'connected';
       submitDelivery(rec.id, true); await wait(300);
       const hq2 = Auth.hqDb();
       const me = hq2.drivers.find(d => d.id === Store.db.driver.gmnId);

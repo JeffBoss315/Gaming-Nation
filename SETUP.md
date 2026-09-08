@@ -339,8 +339,8 @@ be typed anywhere. A page served by `npm run serve` or any other static host
 does not get that marker and stays quiet rather than firing `/api` calls at
 a host that has none.
 
-Three JSON files beside it hold the state: `hll-company.json`,
-`hll-sessions.json` and `hll-chat.json`. Override the paths with
+Three JSON files beside it hold the state: `gmn-company.json`,
+`gmn-sessions.json` and `gmn-chat.json`. Override the paths with
 `GMN_COMPANY_FILE`, `GMN_SESSION_FILE` and `GMN_CHAT_FILE`;
 `http://localhost:8787/status` shows what it is doing.
 
@@ -429,7 +429,7 @@ with *"the process cannot access the file"*, close every running Gaming Nation
 Trucker and build to a directory outside the synced tree:
 
 ```bash
-npx electron-builder --win --publish never --config.directories.output=C:/hll-build
+npx electron-builder --win --publish never --config.directories.output=C:/gmn-build
 ```
 
 ### Test suite
@@ -475,7 +475,7 @@ with HTTPS, and all of them are indexed by Google perfectly well:
 | Cloudflare Pages | `gaming-nation.pages.dev` | none needed — point it at `www/` |
 | Netlify | `gaming-nation.netlify.app` | [netlify.toml](netlify.toml) |
 | Vercel | `gaming-nation.vercel.app` | [vercel.json](vercel.json) |
-| GitHub Pages | `<you>.github.io/hll` | [.github/workflows/pages.yml](.github/workflows/pages.yml) |
+| GitHub Pages | `<you>.github.io/Gaming-Nation` | [.github/workflows/pages.yml](.github/workflows/pages.yml) |
 
 A `.pages.dev` address ranks on its own merits. If you want a real domain
 later, all four support custom domains free — you pay only the registrar.

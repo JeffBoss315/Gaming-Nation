@@ -112,7 +112,7 @@ function icon(n, cls = '') {
    becoming decoration. The artwork is square; the box is square and crops
    rather than stretches. */
 function gmnEmblem(size = 'md', cls = '') {
-  return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
+  return `<span class="gmn-emblem ${esc(size)} ${esc(cls)}">
     <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
 }
@@ -3058,7 +3058,7 @@ function seed() {
      their Gaming Nation account first; everything below is filled from real runs. */
   const db = {
     driver: null,         /* set by Auth.signIn from the Gaming Nation driver record */
-    conn: { hll: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' },
+    conn: { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' },
     live: null,           /* last decoded position frame */
     trail: [],            /* breadcrumb in schematic map units */
     worldTrail: [],       /* breadcrumb in raw game coords, for the tile map */
@@ -3177,6 +3177,15 @@ const Store = {
     /* the schematic transform pointed at a layout that no longer exists */
     delete s.calibration;
 
+    /* conn.hll became conn.gmn with the rename. Carried over rather than
+       just renamed in the seed: a store written by an older build has only
+       the old field, so the new one would read undefined and the client
+       would show Offline until something happened to re-check. */
+    if (this.db.conn && this.db.conn.gmn === undefined && this.db.conn.gmn !== undefined) {
+      this.db.conn.gmn = this.db.conn.gmn;
+      delete this.db.conn.gmn;
+    }
+
     /* An identity from a build that shipped sample data has no sign-in behind
        it. Clearing it sends the driver to the sign-in screen, which is where
        they should have been all along. */
@@ -3184,7 +3193,7 @@ const Store = {
     if (d && !d.authed) {
       console.info('[GMN] clearing a leftover identity (' + (d.gmnId || '?') + ') — sign in again');
       this.db.driver = null;
-      this.db.conn = { hll: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
+      this.db.conn = { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
       this.db.live = null;
       this.db.activityState = null;
       this.db.trail = [];
@@ -3385,7 +3394,7 @@ async function captureDeliveryPhoto(jobId) {
     id: uid('up'), kind: 'screenshot', name: 'delivery_' + jobId + '.jpg',
     size: Math.max(1, Math.round(shot.bytes / 1024)), job: jobId,
     at: new Date().toISOString(), data: shot.dataUrl,
-    status: db.conn.hll === 'connected' ? 'queued' : 'waiting',
+    status: db.conn.gmn === 'connected' ? 'queued' : 'waiting',
   });
   Store.log('ok', 'Delivery photo captured for ' + jobId);
   Store.save();
@@ -3399,7 +3408,7 @@ function submitDelivery(id, silent) {
   if (i < 0) return;
   const rec = db.pending[i];
 
-  if (db.conn.hll !== 'connected') {
+  if (db.conn.gmn !== 'connected') {
     rec.status = 'waiting';
     Store.log('warn', 'No GMN connection — ' + rec.id + ' held in the queue');
     Store.save();
@@ -3503,7 +3512,7 @@ function syncUploads() {
   const db = Store.db;
   const queue = db.uploads.filter((u) => u.status !== 'done');
   if (!queue.length) { toast('Nothing to upload', 'info'); return; }
-  if (db.conn.hll !== 'connected') { toast('No connection to the GMN server', 'err'); return; }
+  if (db.conn.gmn !== 'connected') { toast('No connection to the GMN server', 'err'); return; }
   queue.forEach((u) => { u.status = 'done'; u.uploaded = new Date().toISOString(); });
   Store.log('ok', `Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'} to GMN storage`);
   Store.save();
@@ -3523,8 +3532,8 @@ async function toggleServer() {
   toast('Checking the company service…', 'info');
   await Sync.pull();
   const ok = Sync.status === 'ok';
-  const was = db.conn.hll === 'connected';
-  db.conn.hll = ok ? 'connected' : 'offline';
+  const was = db.conn.gmn === 'connected';
+  db.conn.gmn = ok ? 'connected' : 'offline';
   if (ok && !was) {
     db.uploads.forEach((u) => { if (u.status === 'waiting') u.status = 'queued'; });
     db.pending.forEach((p) => { if (p.status === 'waiting') p.status = 'pending'; });
@@ -3761,12 +3770,12 @@ function launchBarHTML() {
         <span class="lt-2">${esc(profile || 'Waiting…')}</span></span>
     </button>
 
-    <button class="launch-tile" data-act="open-hll" data-href="login.html#/dashboard">
+    <button class="launch-tile" data-act="open-gmn" data-href="login.html#/dashboard">
       <span class="lt-mark">${icon('grid')}</span>
       <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Dashboard</span></span>
     </button>
 
-    <button class="launch-tile" data-act="open-hll" data-href="login.html#/rankings">
+    <button class="launch-tile" data-act="open-gmn" data-href="login.html#/rankings">
       <span class="lt-mark">${icon('trophy')}</span>
       <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Ranking</span></span>
     </button>
@@ -4347,7 +4356,7 @@ function viewProfile() {
   const db = Store.db, d = db.driver, s = db.stats;
   return `
   ${viewHead('Driver record', 'Synced with your Gaming Nation profile',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
+    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
 
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
@@ -4793,7 +4802,7 @@ function viewChats() {
     inRoom
       ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
       : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
-    `${callBtn}<span class="pill ${Store.db.conn.hll === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.hll === 'connected' ? 'Live' : 'Offline'}</span>`)}
+    `${callBtn}<span class="pill ${Store.db.conn.gmn === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.gmn === 'connected' ? 'Live' : 'Offline'}</span>`)}
   ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
@@ -4986,11 +4995,11 @@ function viewMenu() {
         ${apps.length ? `<span class="pill brand">${apps.length}</span>` : '<span class="t3 xs">none waiting</span>'}
         ${icon('chevron', 'menu-chev')}
       </button>` : ''}
-      ${can('events.manage') ? `<button class="menu-row" data-act="open-hll" data-href="login.html#/events">
+      ${can('events.manage') ? `<button class="menu-row" data-act="open-gmn" data-href="login.html#/events">
         <span class="menu-ico staff">${icon('route')}</span>
         <span class="grow">Convoy management</span>${icon('chevron', 'menu-chev')}
       </button>` : ''}
-      ${can('admin.view') ? `<button class="menu-row" data-act="open-hll" data-href="login.html#/admin">
+      ${can('admin.view') ? `<button class="menu-row" data-act="open-gmn" data-href="login.html#/admin">
         <span class="menu-ico staff">${icon('grid')}</span>
         <span class="grow">Full admin console</span>${icon('chevron', 'menu-chev')}
       </button>` : ''}
@@ -5006,7 +5015,7 @@ function viewMenu() {
   <div class="menu-group">
     <div class="menu-label">Gaming Nation</div>
     <section class="card"><div class="card-body p-0">
-      <button class="menu-row" data-act="open-hll" data-href="login.html#/dashboard">
+      <button class="menu-row" data-act="open-gmn" data-href="login.html#/dashboard">
         <span class="menu-ico">${icon('link')}</span><span class="grow">Open the web platform</span>
         ${icon('chevron', 'menu-chev')}</button>
       <button class="menu-row danger" data-act="logout">
@@ -5042,7 +5051,7 @@ function viewConvoy() {
           ${e.server ? `<span>${icon('wifi')}${esc(e.server)}</span>` : ''}
         </div>
         ${signed ? `<div class="pill ok mt-12">${icon('check')}You are signed on</div>` : ''}
-        <button class="btn btn-block mt-12" data-act="open-hll"
+        <button class="btn btn-block mt-12" data-act="open-gmn"
           data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}Open on the platform</button>
       </div>
     </section>`;
@@ -5050,7 +5059,7 @@ function viewConvoy() {
 
   return `
   ${viewHead('Convoys', events.length ? events.length + ' coming up' : 'Nothing on the schedule',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
   ${events.length ? events.map(card).join('')
     : `<section class="card"><div class="card-body"><div class="empty">${icon('route')}
         <div>No convoys scheduled</div>
@@ -5101,7 +5110,7 @@ function viewLeaderboard() {
 
   return `
   ${viewHead('Standings', 'Fleet distance this season',
-    `<button class="btn btn-sm" data-act="open-hll" data-href="login.html#/rankings">${icon('link')}Full table</button>`)}
+    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/rankings">${icon('link')}Full table</button>`)}
   ${roster.length ? '' : `<div class="card mb-16"><div class="card-body row gap-12">
     ${icon('info')}<div class="t3 xs">Only your own record is on this device. Open the GMN
       dashboard to see the whole fleet.</div></div></div>`}
@@ -5328,10 +5337,10 @@ function viewAbout() {
     <div class="card-head"><span class="label">Gaming Nation on the web</span></div>
     <div class="card-body">
       <div class="row gap-8 wrap">
-        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/dashboard">${icon('grid')}Command centre</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/convoys">${icon('truck')}Convoys</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/rankings">${icon('trophy')}Rankings</button>
-        <button class="btn btn-sm" data-act="open-hll" data-href="login.html#/support">${icon('info')}Support</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/dashboard">${icon('grid')}Command centre</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/convoys">${icon('truck')}Convoys</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/rankings">${icon('trophy')}Rankings</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/support">${icon('info')}Support</button>
       </div>
       <div class="t3 xs mt-16" style="letter-spacing:.14em">DRIVE · DELIVER · DOMINATE</div>
     </div>
@@ -5404,7 +5413,7 @@ function railFootHTML() {
 function statusBarHTML() {
   const c = Store.db.conn;
   const db = Store.db;
-  const gmnOn = c.hll === 'connected';
+  const gmnOn = c.gmn === 'connected';
   const ets2On = c.ets2 === 'running';
   const linkOn = c.link === 'connected';
   const queued = db.pending.length + db.uploads.filter((u) => u.status !== 'done').length;
@@ -6781,7 +6790,7 @@ function appbarHTML() {
   const d = Store.db.driver;
   if (!d) return '';
   const cur = NAV.find((n) => n.key === state.view);
-  const on = Store.db.conn.hll === 'connected';
+  const on = Store.db.conn.gmn === 'connected';
   const staff = isStaff();
 
   return `
@@ -6938,7 +6947,7 @@ function driverMenu(anchor) {
   m.className = 'menu';
   m.innerHTML = `
     <button data-act="nav" data-view="profile">${icon('user')}Driver record</button>
-    <button data-act="open-hll" data-href="login.html#/dashboard">${icon('link')}Open web HQ</button>
+    <button data-act="open-gmn" data-href="login.html#/dashboard">${icon('link')}Open web HQ</button>
     <button data-act="nav" data-view="settings">${icon('settings')}Settings</button>
     <div class="sep"></div>
     <button class="danger" data-act="logout">${icon('logout')}Sign out</button>`;
@@ -7090,7 +7099,7 @@ function handle(act, t) {
       return;
 
 
-    case 'open-hll': {
+    case 'open-gmn': {
       const href = t.dataset.href;
       Store.log('info', 'Opening ' + href);
       /* inside the native shell there is no second window to open into,
@@ -7712,7 +7721,7 @@ const Auth = {
       role: (driver && driver.role) || 'driver',
       authed: true,          /* set here and nowhere else */
     };
-    db.conn.hll = 'connected';
+    db.conn.gmn = 'connected';
     if (driver) { db.stats.totalKm = driver.km || 0; db.stats.totalJobs = driver.deliveries || 0; }
     if (remember) {
       try { localStorage.setItem(LS_TRK_SESSION, JSON.stringify({ id: account.driverId })); } catch (e) {}
@@ -7741,7 +7750,7 @@ const Auth = {
     try { Calls.teardown(); RoomCall.leave(true); } catch (e) { /* nothing open */ }
     ServiceAuth.logout();
     Store.db.driver = null;
-    Store.db.conn.hll = 'offline';
+    Store.db.conn.gmn = 'offline';
     Telemetry.stop();
     GameWatch.stop();
     Fleet.stop();
@@ -7829,7 +7838,7 @@ function signInHTML() {
         <div><div class="b6">No Gaming Nation account on this device</div>
           <div class="t3 xs mt-4">Accounts are created on the GMN dashboard. Open it, create yours,
             then come back and sign in here.</div>
-          <button class="btn btn-sm mt-12" data-act="open-hll" data-href="login.html#/auth">
+          <button class="btn btn-sm mt-12" data-act="open-gmn" data-href="login.html#/auth">
             ${icon('link')}Open the GMN dashboard</button></div>
       </div>` : ''}
 

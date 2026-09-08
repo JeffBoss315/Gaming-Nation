@@ -41,7 +41,7 @@ npm run telemetry
 
 For an adapter installed elsewhere, set `GMN_TELEMETRY_ADAPTER` to its real
 path or pass `--adapter "C:\\real\\path\\gmn-telemetry-adapter.exe"`.
-The launcher verifies `hll-scs-telemetry.dll`, passes it the map name, and
+The launcher verifies `gmn-scs-telemetry.dll`, passes it the map name, and
 waits for `http://localhost:25555/api/ets2/telemetry` before reporting ready.
 
 1. Install a telemetry server — the community **ETS2/ATS Telemetry Server**. It ships a
@@ -385,7 +385,7 @@ require one. Signing in is the one write that cannot itself require the shared `
 
 #### Chat is kept
 
-Chat is a durable append-only log (`hll-convoy-chat.jsonl`), one JSON record per line,
+Chat is a durable append-only log (`gmn-convoy-chat.jsonl`), one JSON record per line,
 appended and flushed **before** the request is answered — a `200` on a message is a promise
 that it survives a restart. It is not a debounced rewrite of a whole file: a debounce loses
 everything inside its window if the process dies, which is exactly the bug this replaced.
@@ -496,13 +496,13 @@ GAME LAUNCHED  ->  driver identified  ->  Gaming Nation = ONLINE  ->  telemetry
 ```
 
 ```bash
-npm run connector -- --service http://hll-host:7040 --driver HLL-1001
+npm run connector -- --service http://gmn-host:7040 --driver HLL-1001
 ```
 
-Or put the settings in `hll-connector.json` beside it and just run `npm run connector`:
+Or put the settings in `gmn-connector.json` beside it and just run `npm run connector`:
 
 ```json
-{ "service": "http://hll-host:7040", "driverId": "HLL-1001" }
+{ "service": "http://gmn-host:7040", "driverId": "HLL-1001" }
 ```
 
 `--help` lists the rest: the API key, which game, where the telemetry server is, how often
@@ -595,7 +595,7 @@ reachable from anywhere else.
 GMN_API_KEY=some-long-random-string npm run fleet
 ```
 
-With a key set, every write must carry it (`X-HLL-Key`); reads stay open, because the pages
+With a key set, every write must carry it (`X-GMN-Key`); reads stay open, because the pages
 that use them have nowhere to keep a secret. Give the connector the same key with `--key`.
 With no key set the service behaves exactly as before, so a LAN setup keeps working with
 nothing to configure — the startup banner says which mode it is in.
@@ -711,7 +711,7 @@ installing from. That is expected for a debug build.
 
 `npm run android` needs a JDK between 17 and 24 (Gradle 8.14 rejects newer ones) and the
 Android SDK with `platforms;android-36` and `build-tools;36.0.0`. The script prints what it
-picked and tells you what is missing. It looks in `%LOCALAPPDATA%\hll-android-tools` and
+picked and tells you what is missing. It looks in `%LOCALAPPDATA%\gmn-android-tools` and
 `%LOCALAPPDATA%\Android\Sdk` first, then `JAVA_HOME` / `ANDROID_HOME`.
 
 > The Gradle **wrapper** (`gradlew`) downloads its distribution with a 10-second read
@@ -758,7 +758,7 @@ them, set `CSC_LINK`/`CSC_KEY_PASSWORD` and remove `win.signAndEditExecutable: f
 > **OneDrive note** — this project sits in a OneDrive folder. OneDrive locks files while it
 > syncs, which can make a rebuild fail with *"app.asar is being used by another process"*.
 > Building to a path outside OneDrive avoids it:
-> `npx electron-builder --win -c.directories.output=%LOCALAPPDATA%\hll-build`
+> `npx electron-builder --win -c.directories.output=%LOCALAPPDATA%\gmn-build`
 
 ## 9. Development
 

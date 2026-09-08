@@ -2427,7 +2427,7 @@ function notifyStaff(perm, payload, exceptId) {
    The artwork is square (1410x1414). Every size below is a square box with
    object-fit: cover, so it can never be stretched however it is placed. */
 function gmnEmblem(size = 'md', cls = '') {
-  return `<span class="hll-emblem ${esc(size)} ${esc(cls)}">
+  return `<span class="gmn-emblem ${esc(size)} ${esc(cls)}">
     <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
   </span>`;
 }
@@ -15024,7 +15024,7 @@ const Messages = {
              Nothing errored, which is why it lasted: the header was still
              valid, the upload still went, and every file simply arrived
              named after a row of underscores. */
-          'X-HLL-Filename': file.name.replace(/[^\x20-\x7e]/g, '_'),
+          'X-GMN-Filename': file.name.replace(/[^\x20-\x7e]/g, '_'),
           Authorization: 'Bearer ' + ServiceAuth.token,
         },
         body: file,

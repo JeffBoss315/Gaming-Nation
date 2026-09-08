@@ -370,7 +370,7 @@ app.whenReady().then(async () => {
       const id = Store.db.driver.gmnId;
       /* the run is queued; submitting is what credits the company */
       const rec = Store.db.pending[Store.db.pending.length - 1];
-      Store.db.conn.hll = 'connected';
+      Store.db.conn.gmn = 'connected';
       submitDelivery(rec.id, true);
       await wait(500);
       const hq = Auth.hqDb();

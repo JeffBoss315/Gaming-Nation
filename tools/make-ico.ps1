@@ -10,10 +10,10 @@
 # dark square. Below 64px this draws the mark instead: the same artwork,
 # cropped to the truck, which is still a truck at 16px.
 #
-# Both come from hll.jpg. icons/mark.png is generated from it by
+# Both come from gmn.jpg. icons/mark.png is generated from it by
 # make-brand-icons.ps1, which is why that runs first.
 param(
-  [string]$Source = "$PSScriptRoot\..\hll.jpg",
+  [string]$Source = "$PSScriptRoot\..\gmn.jpg",
   [string]$Small  = "$PSScriptRoot\..\icons\mark.png",
   [string]$Out    = "$PSScriptRoot\..\icons\icon.ico"
 )

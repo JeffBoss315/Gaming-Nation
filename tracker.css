@@ -1511,15 +1511,15 @@ body.can-install .install-cta{display:inline-flex}
    "Gaming Nation" rather than becoming decoration. Square artwork in
    a square box: it crops, it never stretches.
    ============================================================ */
-.hll-emblem{
+.gmn-emblem{
   display:inline-flex;flex:none;overflow:hidden;line-height:0;
   border-radius:var(--r-lg);background:var(--panel-2);
 }
-.hll-emblem img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.05) contrast(1.02)}
-.hll-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
-.hll-emblem.md{width:44px;height:44px}
-.hll-emblem.lg{width:56px;height:56px;border-radius:var(--r-xl)}
-.hll-emblem.framed{border:1px solid var(--accent-line);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.gmn-emblem img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.05) contrast(1.02)}
+.gmn-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
+.gmn-emblem.md{width:44px;height:44px}
+.gmn-emblem.lg{width:56px;height:56px;border-radius:var(--r-xl)}
+.gmn-emblem.framed{border:1px solid var(--accent-line);box-shadow:0 6px 18px rgba(0,0,0,.45)}
 
 .brand-strap{
   margin-top:6px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;

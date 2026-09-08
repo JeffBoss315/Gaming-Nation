@@ -239,7 +239,7 @@ const login = async (email) => {
 
   const up = await req('POST', '/api/files', png, anna, {
     'Content-Type': 'image/png',
-    'X-HLL-Filename': 'delivery-note.png',
+    'X-GMN-Filename': 'delivery-note.png',
   });
   check('an image uploads', up.status === 200 && !!up.body.file, 'HTTP ' + up.status);
   check('and is recognised as an image, not a download',
@@ -255,14 +255,14 @@ const login = async (email) => {
 
   const script = await req('POST', '/api/files', Buffer.from('<script>alert(1)</script>'), anna, {
     'Content-Type': 'text/html',
-    'X-HLL-Filename': 'evil.html',
+    'X-GMN-Filename': 'evil.html',
   });
   check('a file the browser would run is refused', script.status === 415,
     'HTTP ' + script.status);
 
   const traversal = await req('POST', '/api/files', png, anna, {
     'Content-Type': 'image/png',
-    'X-HLL-Filename': '../../../../escaped.png',
+    'X-GMN-Filename': '../../../../escaped.png',
   });
   check('a filename cannot escape the upload directory',
     traversal.status === 200

@@ -34,7 +34,7 @@ const adapter = flag('adapter', (process.env.GMN_TELEMETRY_ADAPTER || process.en
 const plugin = flag('plugin', (process.env.GMN_TELEMETRY_PLUGIN || process.env.HLL_TELEMETRY_PLUGIN) ||
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
     'Steam', 'steamapps', 'common', 'Euro Truck Simulator 2',
-    'bin', 'win_x64', 'plugins', 'hll-scs-telemetry.dll'));
+    'bin', 'win_x64', 'plugins', 'gmn-scs-telemetry.dll'));
 const metadata = flag('metadata', (process.env.GMN_TELEMETRY_METADATA || process.env.HLL_TELEMETRY_METADATA) ||
   path.join(path.dirname(plugin), 'gmn-telemetry.json'));
 const timeoutMs = Number(flag('timeout', 15000));

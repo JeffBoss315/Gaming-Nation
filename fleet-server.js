@@ -1132,7 +1132,11 @@ async function api(req, res, url) {
     /* The name is decoration: it is shown, never used as a path. The file on
        disk is named by its id, so nothing a client sends can escape the
        directory or overwrite anything. */
-    const name = String(req.headers['x-hll-filename'] || 'file' + ext)
+    /* The old name is still read. A driver running a client from before the
+       rename would otherwise have every attachment land called "file.png",
+       which is a silly thing to break over a header. */
+    const name = String(req.headers['x-gmn-filename']
+        || req.headers['x-hll-filename'] || 'file' + ext)
       .replace(/[\r\n]/g, '').slice(0, 120);
 
     try {

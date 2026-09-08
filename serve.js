@@ -51,7 +51,7 @@ const TYPES = {
    Live reload
    ============================================================ */
 
-const RELOAD_PATH = '/__hll_reload';
+const RELOAD_PATH = '/__gmn_reload';
 
 /* Open EventSource responses. Held so a save can be announced, dropped
    on close — a browser tab that goes away must not keep a socket here

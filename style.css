@@ -1649,25 +1649,25 @@ tr[data-act="verify-job"]{cursor:pointer}
    stays on the stroked icon set, which is what keeps the emblem
    meaning "Gaming Nation".
    ============================================================ */
-.hll-emblem{
+.gmn-emblem{
   display:inline-flex;flex:none;overflow:hidden;
   border-radius:var(--r-lg);background:var(--panel-2);
   line-height:0;
 }
-.hll-emblem img{
+.gmn-emblem img{
   width:100%;height:100%;object-fit:cover;display:block;
   /* the artwork is dense; a touch of contrast keeps it from muddying
      against the near-black surfaces it sits on */
   filter:saturate(1.05) contrast(1.02);
 }
-.hll-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
-.hll-emblem.md{width:46px;height:46px}
-.hll-emblem.lg{width:64px;height:64px;border-radius:var(--r-xl)}
-.hll-emblem.xl{width:96px;height:96px;border-radius:var(--r-xl)}
+.gmn-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
+.gmn-emblem.md{width:46px;height:46px}
+.gmn-emblem.lg{width:64px;height:64px;border-radius:var(--r-xl)}
+.gmn-emblem.xl{width:96px;height:96px;border-radius:var(--r-xl)}
 
 /* framed: the treatment used where the emblem is the brand rather than an
    accessory — a hairline and a lift, so it reads as a plate and not a photo */
-.hll-emblem.framed{
+.gmn-emblem.framed{
   border:1px solid var(--accent-line);
   box-shadow:0 6px 20px rgba(0,0,0,.42);
 }
@@ -1713,7 +1713,7 @@ tr[data-act="verify-job"]{cursor:pointer}
 }
 
 @media (max-width:760px){
-  .hll-emblem.lg{width:52px;height:52px}
+  .gmn-emblem.lg{width:52px;height:52px}
   .cmsg-del{opacity:1}
 }
 
