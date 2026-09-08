@@ -19,14 +19,19 @@ release/
 # gmn- name, none of which was listed, and the whole set — including 38
 # live bearer tokens — was committed to a public repo before anyone
 # noticed. A glob would have held through the rename. This one does.
-hll-*.json
-hll-*.json.tmp
-hll-*.jsonl
-hll-*.jsonl.tmp
-gmn-*.json
-gmn-*.json.tmp
-gmn-*.jsonl
-gmn-*.jsonl.tmp
+# The trailing * matters as much as the leading one. These were listed as
+# the bare names plus an explicit .tmp, which holds until somebody makes a
+# copy: gmn-company.json.before-gmn001.bak matched none of them and sat in
+# git status as untracked, one `git add -A` away from committing 77 real
+# driver records and their email addresses. A backup of a secrets-bearing
+# file is still a secrets-bearing file. Match anything derived from one.
+hll-*.json*
+hll-*.jsonl*
+gmn-*.json*
+gmn-*.jsonl*
+
+# and any backup at all, whatever it was taken from
+*.bak
 
 # screenshots from tools/shots.js — generated, not source
 .shots/
