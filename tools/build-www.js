@@ -82,6 +82,21 @@ const site = payload(SITE);
 site.write('login.html', read('login.html'));
 site.log.push("login.html        (drivers' website)");
 
+/* The root of the site.
+
+   There was no index.html, so https://gaming-nation.pages.dev/ answered
+   404 to anybody who typed the domain — the front door of the public
+   website, and the one URL people actually reach for. Deep links worked,
+   because the app routes on the hash and those are real files; the bare
+   domain did not.
+
+   Same document as login.html, so it boots and the hash takes over. It is
+   written here as well as inside the SEO block below so that a build with
+   no siteUrl configured still has a working front door — that block does
+   not run at all without one. */
+site.write('index.html', read('login.html'));
+site.log.push('index.html        (the front door — same page as login.html)');
+
 site.write('admin.html', read('admin.html'));
 site.log.push('admin.html        (management console)');
 
@@ -289,6 +304,10 @@ if (!SITE_URL) {
      canonical here points at the root, which is what a crawler following
      a stale link should be told. */
   site.write('404.html', html);
+  /* and the root gets the injected document too, not the bare copy written
+     further up — the front door is the page most worth having the canonical
+     and the cards on */
+  site.write('index.html', html);
   /* Cloudflare Pages reads _headers from the site root. Written by the
      builder so it ships with the payload rather than being remembered. */
   if (fs.existsSync(path.join(ROOT, 'www_headers_src'))) {
@@ -296,6 +315,7 @@ if (!SITE_URL) {
     site.log.push('_headers          (security headers)');
   }
   site.log.push('404.html          (so a stray path still opens the app)');
+  site.log.push('index.html        (+ canonical, cards, structured data)');
 
   /* GitHub Pages reads its custom domain from a CNAME file. Only for a real
      domain — a *.pages.dev or *.netlify.app host needs none. */
