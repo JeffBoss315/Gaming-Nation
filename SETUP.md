@@ -147,8 +147,15 @@ security, so it holds no key that could read anybody else's record.
 
 ### Set it up once
 
+**The order matters, and getting it wrong takes the site down rather than
+the gate.** Cloudflare validates every binding when it publishes a Function,
+so an `[[r2_buckets]]` block naming a bucket that does not exist fails the
+whole publish — the website does not go out either. So the bucket is made
+first and the binding is uncommented last.
+
 ```bash
-# 1. the bucket
+# 1. the bucket — R2 must be switched on in the dashboard once before this
+#    works; the API refuses with code 10042 until it is
 npx wrangler r2 bucket create gaming-nation-releases
 
 # 2. the builds (after npm run dist and npm run android)
@@ -156,7 +163,24 @@ npm run release:push          # add -- --dry to see what would go
 
 # 3. the signing secret — any long random string
 npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
+
+# 4. ONLY NOW: uncomment the [[r2_buckets]] block at the end of wrangler.toml
 ```
+
+The deploy workflow checks this for you. If the binding is live and the
+bucket is not there, it stops before publishing and says so, rather than
+letting the publish fail and take the site with it.
+
+### About that token
+
+The token goes in **one** place: GitHub → Settings → Secrets and variables →
+Actions → `CLOUDFLARE_API_TOKEN`. Not in a file, not in a commit, not pasted
+into a chat window. It needs **Cloudflare Pages: Edit**, plus **Workers R2
+Storage: Read** once the bucket is bound so the deploy can check it exists.
+
+A token that has been shown anywhere else is spent — delete it in **My
+Profile → API Tokens** and make another. The same goes for R2 access keys,
+which are separate credentials under **R2 → Manage R2 API Tokens**.
 
 Then in the Cloudflare Pages dashboard → **Settings → Environment variables**:
 

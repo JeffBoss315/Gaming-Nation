@@ -157,6 +157,80 @@ jobs:
 
           echo "Pages project gaming-nation is reachable."
 
+      # Pages validates every binding when it publishes a Function, so an
+      # r2_buckets block naming a bucket that does not exist does not merely
+      # disable the download gate — it fails the publish, and the SITE does
+      # not go out. wrangler.toml has carried that warning as a comment for a
+      # while; a comment cannot stop anybody, so this does.
+      #
+      # Only looks when the binding is actually live. While it stays
+      # commented out this step says so and moves on.
+      - name: If a bucket is bound, make sure it exists
+        if: steps.check.outputs.ready == 'yes'
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
+        run: |
+          set -u
+
+          # an uncommented bucket_name, i.e. one that will really be bound
+          bucket=$(grep -E '^[[:space:]]*bucket_name[[:space:]]*=' wrangler.toml \
+                   | head -1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+
+          if [ -z "$bucket" ]; then
+            echo "No R2 bucket is bound in wrangler.toml — nothing to check."
+            exit 0
+          fi
+
+          echo "wrangler.toml binds the R2 bucket: $bucket"
+
+          buckets=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/r2/buckets" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" || echo '{"success":false}')
+
+          if ! echo "$buckets" | grep -q '"success":true'; then
+            {
+              echo "### Could not check R2"
+              echo ""
+              echo "\`wrangler.toml\` binds the bucket \`$bucket\`, and this token"
+              echo "could not list R2 buckets to confirm it exists."
+              echo ""
+              echo "Publishing with a binding whose bucket is missing fails the whole"
+              echo "deploy — the site would not go out — so this stops here instead."
+              echo ""
+              echo "Either give the token **Workers R2 Storage: Read**, or comment the"
+              echo "\`[[r2_buckets]]\` block back out until the bucket is made."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "R2 could not be checked. See the run summary."
+            exit 1
+          fi
+
+          if ! echo "$buckets" | grep -q "\"name\":\"$bucket\""; then
+            {
+              echo "### The bound R2 bucket does not exist"
+              echo ""
+              echo "\`wrangler.toml\` binds \`$bucket\`, and this account has no bucket"
+              echo "by that name. Publishing would fail on the Function and take the"
+              echo "site with it, so the deploy stopped here."
+              echo ""
+              echo "Make it:"
+              echo ""
+              echo '```'
+              echo "npx wrangler r2 bucket create $bucket"
+              echo "npm run release:push"
+              echo '```'
+              echo ""
+              echo "Or comment the \`[[r2_buckets]]\` block out again and the download"
+              echo "gate stays off, which is how it has been running."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "The bucket $bucket does not exist. See the run summary."
+            exit 1
+          fi
+
+          echo "R2 bucket $bucket exists — safe to publish the Function."
+
       - name: Build website
         if: steps.check.outputs.ready == 'yes'
         run: node tools/build-www.js
