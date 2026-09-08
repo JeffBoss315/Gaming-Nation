@@ -1,3 +1,26 @@
+# Publish the website to Cloudflare Pages.
+#
+# WHY A RED X HERE MIGHT NOT MEAN THE SITE IS BROKEN
+#
+# There are two ways this site reaches Cloudflare, and only one of them is
+# this file:
+#
+#   1. Cloudflare's own Git integration. The project is connected to this
+#      repository in the dashboard, so Cloudflare checks out every push and
+#      builds it itself. Nothing here is involved and no secret is needed.
+#      This is what has actually been publishing the site.
+#
+#   2. This workflow, which needs CLOUDFLARE_API_TOKEN.
+#
+# So this job failing does not necessarily mean the site is stale — check
+# https://gaming-nation.pages.dev before believing the X. What it does mean
+# is that one of the two paths is broken, and a workflow that goes red on
+# every push teaches people to ignore red, which is worse than not having it.
+#
+# The steps below therefore distinguish the two things that used to look
+# identical: a token that is ABSENT (a choice — you are using the dashboard
+# build) from a token that is PRESENT AND REJECTED (a fault — fix it).
+
 name: Publish to Cloudflare
 
 on:
@@ -24,37 +47,135 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 25
+          node-version: 24
 
-      - name: Check Cloudflare token
+      # The token goes through env rather than being interpolated into the
+      # script. A secret pasted straight into a shell line is one stray
+      # quote away from being a command.
+      - name: Is there a token to deploy with
         id: check
         shell: bash
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+          if [ -n "$TOKEN" ]; then
             echo "ready=yes" >> "$GITHUB_OUTPUT"
-            echo "Cloudflare token found."
+            echo "CLOUDFLARE_API_TOKEN is set."
           else
             echo "ready=no" >> "$GITHUB_OUTPUT"
-            echo "ERROR: CLOUDFLARE_API_TOKEN is missing."
+            {
+              echo "### Cloudflare deploy skipped"
+              echo ""
+              echo "No \`CLOUDFLARE_API_TOKEN\` is set on this repository, so this"
+              echo "workflow has nothing to deploy with."
+              echo ""
+              echo "That is fine if Cloudflare builds this repo itself — check"
+              echo "**Workers & Pages → gaming-nation → Settings → Builds & deployments**."
+              echo "If it does, the site is already being published and this workflow"
+              echo "is redundant."
+              echo ""
+              echo "To deploy from here instead, add the secret under"
+              echo "**Settings → Secrets and variables → Actions**. It needs the"
+              echo "**Cloudflare Pages: Edit** permission and nothing more."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "No token set — skipping the deploy. See the run summary."
+          fi
+
+      # Asked before wrangler is anywhere near it, because wrangler's answer
+      # to a bad token is "Authentication failed (status: 400) [code: 9106]",
+      # which says nothing about which of the several possible things is
+      # actually wrong.
+      - name: Is the token any good
+        if: steps.check.outputs.ready == 'yes'
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
+        run: |
+          set -u
+
+          verify=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" || echo '{"success":false}')
+
+          if ! echo "$verify" | grep -q '"success":true'; then
+            {
+              echo "### The Cloudflare token was rejected"
+              echo ""
+              echo "\`CLOUDFLARE_API_TOKEN\` is set, but Cloudflare will not accept it."
+              echo "The usual reasons, in the order worth checking:"
+              echo ""
+              echo "1. It expired, or was rolled in the Cloudflare dashboard."
+              echo "2. It was pasted with a stray space or newline."
+              echo "3. It is an **API key** rather than an **API token** — they are"
+              echo "   different things and only a token works here."
+              echo ""
+              echo "Make a new one at **My Profile → API Tokens → Create Token**"
+              echo "with **Cloudflare Pages: Edit**, and replace the repository secret."
+              echo ""
+              echo "Cloudflare said:"
+              echo ""
+              echo '```'
+              echo "$verify" | head -c 800
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "The token was rejected by Cloudflare. See the run summary."
             exit 1
           fi
+
+          echo "Token accepted by Cloudflare."
+
+          # A token can be perfectly valid and still not reach THIS project.
+          project=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/pages/projects/gaming-nation" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" || echo '{"success":false}')
+
+          if ! echo "$project" | grep -q '"success":true'; then
+            {
+              echo "### The token works, but the project does not"
+              echo ""
+              echo "Cloudflare accepted the token and then refused"
+              echo "\`accounts/$ACCOUNT/pages/projects/gaming-nation\`."
+              echo ""
+              echo "Either the account id is wrong, or there is no Pages project"
+              echo "named exactly \`gaming-nation\` on it, or the token is scoped to"
+              echo "a different account."
+              echo ""
+              echo "Cloudflare said:"
+              echo ""
+              echo '```'
+              echo "$project" | head -c 800
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "The Pages project could not be reached. See the run summary."
+            exit 1
+          fi
+
+          echo "Pages project gaming-nation is reachable."
 
       - name: Build website
         if: steps.check.outputs.ready == 'yes'
         run: node tools/build-www.js
 
+      # A deploy that publishes an empty directory takes the site down and
+      # reports success. Check something is actually there first.
       - name: Verify build
         if: steps.check.outputs.ready == 'yes'
+        shell: bash
         run: |
           test -f www/login.html || {
-            echo "ERROR: www/login.html is missing"
+            echo "ERROR: www/login.html is missing — the build produced nothing to publish"
             exit 1
           }
+          echo "Built $(find www -type f | wc -l) files."
 
-          echo "Build successful."
-          echo "Files:"
-          find www -type f | wc -l
-
+      # Run from the repository root, not from www/, because that is where
+      # wrangler looks for functions/ — the download gate is a Pages Function
+      # and deploying the folder alone would leave it behind.
       - name: Deploy to Gaming Nation
         if: steps.check.outputs.ready == 'yes'
         uses: cloudflare/wrangler-action@v3
@@ -63,6 +184,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'c54290a31703c611a3387fd22b2c147a' }}
           command: pages deploy www --project-name=gaming-nation --branch=main
 
-      - name: Deployment complete
-        run: |
-          echo "Gaming Nation: https://gaming-nation.pages.dev"
+      - name: Where it went
+        if: steps.check.outputs.ready == 'yes'
+        run: echo "Published to https://gaming-nation.pages.dev"
