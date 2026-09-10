@@ -130,7 +130,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.3';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.4';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -1108,8 +1108,7 @@ const Fleet = {
          Only on the run events, though. This is tens of kilobytes on a
          message that is otherwise a few hundred bytes, and session and
          speeding notices never reach Discord at all. */
-      avatar: String(kind).indexOf('job.') === 0
-        ? cardAvatar(db.driver && db.driver.avatar) : '',
+      avatar: String(kind).indexOf('job.') === 0 ? cardAvatar(db.driver) : '',
     }, extra || {});
     fetch(this.endpoint() + '/api/fleet/event', {
       method: 'POST',
@@ -3142,7 +3141,6 @@ function seed() {
     uploads: [],
     activity: [],
     messages: [],
-    chats: [],
 
     /* Which notifications this driver has already looked at. An id and a
        flag, never a copy of the thing itself - a copy goes stale the moment
@@ -3253,7 +3251,7 @@ const Store = {
       if (!(k in this.db.settings)) { this.db.settings[k] = fresh.settings[k]; added++; }
     }
     /* and the same for the top-level shape the views assume */
-    ['logbook', 'pending', 'uploads', 'activity', 'messages', 'chats', 'trail', 'worldTrail']
+    ['logbook', 'pending', 'uploads', 'activity', 'messages', 'trail', 'worldTrail']
       .forEach((k) => { if (!Array.isArray(this.db[k])) { this.db[k] = []; added++; } });
     if (!this.db.conn || typeof this.db.conn !== 'object') { this.db.conn = fresh.conn; added++; }
     if (!this.db.stats || typeof this.db.stats !== 'object') { this.db.stats = fresh.stats; added++; }
@@ -3487,7 +3485,6 @@ const Theme = {
 const state = {
   view: 'dashboard',
   msgSel: 0,
-  chatSel: 0,
   convoySel: null,
   logFilter: 'all',
   logQuery: '',
@@ -3514,13 +3511,16 @@ const NAV = [
      the one that actually wants answering is the one with no badge. */
   { key: 'messages',    label: 'Messages',      icon: 'mail',
     count: () => Store.db.messages.filter((m) => !m.read).length
-      + Messages.threads.filter((t) => String(t.withId) !== FLEET_ROOM)
+      /* Every ROOM is counted on the Chats tab, not here - it was only the
+         fleet room before, so a convoy room's unread landed on Messages
+         and sent the driver to a screen that does not list it. */
+      + Messages.threads.filter((t) => !t.room)
         .reduce((n, t) => n + (t.unread || 0), 0) },
 
   { key: 'chats',       label: 'Crew chat',     icon: 'chat',
     count: () => {
-      const room = Messages.threads.find((t) => String(t.withId) === FLEET_ROOM);
-      return room ? (room.unread || 0) : 0;
+      return Messages.threads.filter((t) => t.room)
+        .reduce((n, t) => n + (t.unread || 0), 0);
     } },
   { key: 'convoy',      label: 'Convoys',       icon: 'route' },
   { key: 'menu',        label: 'Menu',          icon: 'menu' },
@@ -3883,13 +3883,37 @@ function avatarSrc(value) {
    portrait, and it is not worth slowing a delivery report down for. */
 const CARD_AVATAR_MAX = 1024 * 1024;
 
-function cardAvatar(value) {
-  const v = avatarSrc(value);
+function cardAvatar(driver) {
+  /* The same two places, in the same order, that avatarFace draws from.
+     Reading driver.avatar alone was wrong and quietly so: the record is
+     rebuilt on every sign-in and only carries a photo when the database
+     has a column for one, which is exactly why the app keeps its own copy
+     under the driver's code. A driver with a photo on screen still had a
+     faceless card. */
+  const raw = avatarSrc(driver && driver.avatar)
+    || keptAvatar(driver && driver.gmnId);
+
+  const v = usableAvatar(raw);
+  if (v) return v;
+
+  /* No photo set. Rather than a card with a blank where the face goes,
+     send the same initials disc the app itself draws - it is the mark the
+     crew already associates with this driver, and it costs a few hundred
+     bytes. A real photo replaces it the moment one is set. */
+  return initialsAvatar(driver);
+}
+
+/* An avatar the service can actually put on a card: bytes it can upload,
+   or an address Discord's own servers can reach. Anything else - a LAN
+   host, localhost, plain http, a bare filename - would be a broken image
+   on every delivery, so it comes back empty. */
+function usableAvatar(raw) {
+  const v = String(raw || '').trim();
   if (!v) return '';
 
   if (/^data:image\//i.test(v)) return v.length > CARD_AVATAR_MAX ? '' : v;
 
-  if (!/^https:\/\//i.test(v)) return '';       /* http and bare filenames: no */
+  if (!/^https:\/\//i.test(v)) return '';
   let host = '';
   try { host = new URL(v).hostname.toLowerCase(); } catch (e) { return ''; }
   const unreachable = host === 'localhost' || host === '::1'
@@ -3897,6 +3921,31 @@ function cardAvatar(value) {
     || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
     || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
   return unreachable ? '' : v;
+}
+
+/* The driver's initials on the brand disc, as a PNG - the app's own avatar,
+   drawn rather than described, because Discord will not render an SVG in an
+   embed icon. */
+function initialsAvatar(driver) {
+  const name = (driver && (driver.name || driver.gmnId)) || '?';
+  try {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 128;
+    const g = c.getContext('2d');
+    if (!g) return '';
+    g.fillStyle = '#8bd62b';
+    g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
+    /* the same dark ink the client puts on brand green - white on it is
+       about 1.9:1 */
+    g.fillStyle = '#0a1403';
+    g.font = '600 54px "Inter", "Segoe UI", system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(initialsOf(name), 64, 70);
+    return c.toDataURL('image/png');
+  } catch (e) {
+    return '';                 /* no canvas: a name with no face, as before */
+  }
 }
 
 /* Clearing onerror first is what stops a missing fallback looping. */
@@ -5393,10 +5442,10 @@ const Notify = {
       .forEach((t) => add({
         id: 'm:' + t.withId, kind: 'Message', icon: 'chat',
         at: t.last && t.last.at,
-        title: String(t.withId) === FLEET_ROOM ? 'Crew chat' : (t.name || t.withId),
+        title: t.room ? roomLabel(t.withId) : (t.name || t.withId),
         body: t.last ? String(t.last.text || 'Attachment').slice(0, 120) : '',
         unread: true,
-        view: String(t.withId) === FLEET_ROOM ? 'chats' : 'messages',
+        view: t.room ? 'chats' : 'messages',
       }));
 
     /* ---- a convoy you are signed on to ---- */
@@ -6122,7 +6171,7 @@ function viewMessages() {
     unread: notices.filter((m) => !m.read).length,
     online: true,
   }].concat(Messages.threads
-    .filter((t) => String(t.withId) !== FLEET_ROOM)
+    .filter((t) => !t.room)
     .map((t) => ({
       id: String(t.withId),
       title: t.name || t.withId,
@@ -6204,70 +6253,84 @@ function viewMessages() {
    typed on a phone at a services and one typed at a desk are in the same
    place, in order. */
 function viewChats() {
-  const chats = Store.db.chats;
-  const inRoom = Messages.open === FLEET_ROOM;
   const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
   const onCall = RoomCall.live || RoomCall.joining;
   const waiting = RoomCall.known.length;
 
-  const ch = inRoom ? null : (chats[state.chatSel] || chats[0]);
+  /* The convoys this driver has signed on to, each with a room of its own.
+     The old "Convoy channels" list came from Store.db.chats, which nothing
+     in the client ever wrote to - a section that could only ever be empty,
+     under a message promising channels that would never arrive. */
+  const convoys = Convoys.all().filter((e) => Convoys.signedOn(e));
+
+  const open = isRoomId(Messages.open) ? Messages.open : FLEET_ROOM;
+  const inFleet = open === FLEET_ROOM;
+
+  const unreadFor = (id) => {
+    const t = (Messages.threads || []).find((x) => String(x.withId) === String(id));
+    return (t && t.unread) || 0;
+  };
 
   /* Two buttons rather than one with a computed data-act: joining and
-     leaving are different actions, and writing them as one made the
-     second unreachable to anything reading this file — tools/scan.js
-     included, which is how it was noticed. */
+     leaving are different actions, and writing them as one made the second
+     unreachable to anything reading this file — tools/scan.js included,
+     which is how it was noticed. */
   const callBtn = onCall
     ? `<button class="btn btn-sm btn-danger" data-act="room-leave">
         ${icon('phoneOff')}${RoomCall.joining ? 'Joining…' : 'Leave call'}</button>`
     : `<button class="btn btn-sm btn-primary" data-act="room-join">
         ${icon('phone')}Crew call${waiting ? ' · ' + waiting : ''}</button>`;
 
-  const roomBody = Messages.loading
+  const body = Messages.loading
     ? `<div class="empty">${icon('refresh')}<div>Opening…</div></div>`
     : `<div class="thread" id="dmThread">
         ${Messages.history.length
           ? Messages.history.map((m) => dmLine(m, String(m.driverId) === me)).join('')
-          : `<div class="empty">${icon('chat')}<div>Nobody has said anything yet</div></div>`}
+          : `<div class="empty">${icon('chat')}
+              <div>Nobody has said anything yet</div>
+              ${inFleet ? '' : `<div class="t3 xs">This room belongs to the convoy.
+                Everyone signed on to it can read what is said here.</div>`}
+            </div>`}
       </div>
-      ${dmComposer('Message the crew')}`;
+      ${dmComposer('Message ' + roomLabel(open))}`;
+
+  const row = (id, title, sub, ic) => {
+    const n = unreadFor(id);
+    return `<div class="split-item ${open === id ? 'on' : ''} ${n ? 'unread' : ''}"
+        data-act="open-room" data-id="${esc(id)}">
+      <div class="split-title">${icon(ic)} ${esc(title)}
+        ${n ? `<span class="pill brand">${n}</span>` : ''}</div>
+      <div class="split-sub">${esc(sub)}</div>
+    </div>`;
+  };
 
   return `
   ${viewHead('Crew chat',
-    inRoom
+    inFleet
       ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
-      : (ch ? ch.members + ' drivers in #' + ch.name : 'Every driver, in one room'),
-    `${callBtn}<span class="pill ${Store.db.conn.gmn === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.gmn === 'connected' ? 'Live' : 'Offline'}</span>`)}
+      : roomLabel(open) + ' · everyone signed on',
+    `${inFleet ? callBtn : ''}<span class="pill ${Store.db.conn.gmn === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.gmn === 'connected' ? 'Live' : 'Offline'}</span>`)}
   ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
-        <div class="split-item ${inRoom ? 'on' : ''}" data-act="open-room">
-          <div class="split-title">${icon('users')} Crew room</div>
-          <div class="split-sub">Everyone in the fleet</div>
-        </div>
-        ${chats.length ? `<div class="split-label">Convoy channels</div>` : ''}
-        ${chats.map((c, i) => `<div class="split-item ${!inRoom && i === state.chatSel ? 'on' : ''}"
-          data-act="sel-chat" data-i="${i}">
-          <div class="split-title"># ${esc(c.name)}</div>
-          <div class="split-sub">${c.members} drivers</div>
-        </div>`).join('')}
+        ${row(FLEET_ROOM, 'Crew room', 'Everyone in the fleet', 'users')}
+
+        ${convoys.length ? `<div class="split-label">Your convoys</div>` : ''}
+        ${convoys.map((e) => row(convoyRoom(e.id), e.name || e.id,
+          (e.registered || []).length + ' signed on', 'route')).join('')}
+
+        ${/* A room somebody has spoken in that is not the fleet room and not
+              a convoy this driver is on - a convoy they left, or one the
+              schedule no longer carries. Listed rather than hidden: the
+              messages are real and somebody is owed an answer. */''}
+        ${(Messages.threads || [])
+          .filter((t) => t.room && String(t.withId) !== FLEET_ROOM
+            && !convoys.some((e) => convoyRoom(e.id) === String(t.withId)))
+          .map((t) => row(String(t.withId), t.name || roomLabel(t.withId),
+            'Not on this convoy', 'chat')).join('')}
       </div>
-      <div class="split-body">
-        ${inRoom ? roomBody : (ch ? `
-          <div class="thread" id="thread">
-            ${ch.messages.map((m) => `<div class="msg ${m.who === Store.db.driver.name ? 'mine' : ''}">
-              <div class="who">${esc(m.who)} · ${esc(fmt.hm(m.at))}</div>${esc(m.body)}</div>`).join('')}
-          </div>
-          <form class="composer" id="chatForm">
-            <input class="input" id="chatInput" placeholder="Message #${esc(ch.name)}" autocomplete="off">
-            <button class="btn btn-primary" type="submit">${icon('send')}Send</button>
-          </form>` : `
-          <div class="empty">${icon('chat')}
-            <div>No convoy channels yet</div>
-            <div class="t3 xs">They appear here while a convoy you are on is running.
-              The crew room above is always open.</div>
-          </div>`)}
-      </div>
+      <div class="split-body">${body}</div>
     </div>
   </div></section>`;
 }
@@ -6634,11 +6697,9 @@ function convoyDetailHTML(e) {
         data-id="${esc(e.id)}" ${full ? 'disabled' : ''}>
         ${icon(signed ? 'x' : 'check')}${signed ? 'Sign off' : full ? 'Full' : 'Sign on'}
       </button>
-      ${/* One room, company-wide. Said plainly rather than dressed up as a
-            convoy room that does not exist. */''}
-      <button class="btn" data-act="nav" data-view="chats"
-        title="The company has one chat room and this opens it — there is no separate convoy room">
-        ${icon('chat')}Crew chat
+      <button class="btn" data-act="convoy-chat" data-id="${esc(e.id)}"
+        title="This convoy's own room — everyone signed on can read it">
+        ${icon('chat')}Convoy chat
       </button>
       <button class="btn" data-act="open-gmn"
         data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}On the platform</button>
@@ -7623,6 +7684,33 @@ function joinService() {
 /* ---------------- the conversations ---------------- */
 const FLEET_ROOM = '#fleet';
 
+/* A convoy gets a room of its own. Before this the company had exactly one
+   room - every room id collapsed into it on the service - so a convoy's
+   chat went in front of the whole company, which is why the convoy screen's
+   chat button opened the crew room and said so on hover.
+
+   The id is derived from the convoy rather than stored: two clients working
+   it out independently have to land on the same string, and anything
+   remembered can be remembered differently. */
+const convoyRoom = (id) => '#convoy:' + String(id || '').replace(/[^A-Za-z0-9_-]/g, '');
+const isRoomId = (id) => /^#[A-Za-z0-9:_-]{1,64}$/.test(String(id || ''));
+
+/* What to call a room on screen. The convoy's real name when this client
+   knows it - it has the schedule and the service does not - then whatever
+   the service remembered, and the bare id only as a last resort. */
+function roomLabel(id) {
+  const s = String(id || '');
+  if (s === FLEET_ROOM) return 'Crew room';
+  const m = /^#convoy:(.+)$/.exec(s);
+  if (m) {
+    const e = (Auth.events() || []).find((x) => String(x.id) === m[1]);
+    if (e && e.name) return e.name;
+  }
+  const t = (Messages.threads || []).find((x) => String(x.withId) === s);
+  if (t && t.name) return t.name;
+  return m ? 'Convoy ' + m[1] : s.replace(/^#/, '');
+}
+
 const Messages = {
   threads: [],
   open: null,          /* the id being read: a driver code, or FLEET_ROOM */
@@ -7751,7 +7839,13 @@ const Messages = {
       const res = await fetch(Sync.url() + '/api/dm/send', {
         method: 'POST',
         headers: ServiceAuth.headers(),
-        body: JSON.stringify({ to: this.open, text: body }),
+        /* The room's name travels with the message. The service holds the
+           company record but not the convoy schedule, so it cannot look a
+           convoy's name up - without this a convoy room is listed as its
+           id to anybody whose client has not loaded the schedule. */
+        body: JSON.stringify(Object.assign({ to: this.open, text: body },
+          isRoomId(this.open) && this.open !== FLEET_ROOM
+            ? { roomName: roomLabel(this.open) } : {})),
       });
 
       this.sending = false;
@@ -7785,9 +7879,14 @@ const Messages = {
 
     /* Is it for the conversation on screen? For the room, everything is;
        for a person, either end of the pair counts. */
+    /* `room` used to be true or absent, back when there was one room. It
+       carries the room's id now, because "a room message arrived" is no
+       longer enough to know whether it belongs on the screen in front of
+       you - a convoy's message would otherwise appear in the crew room. */
+    const room = d.room === true ? FLEET_ROOM : (d.room || '');
     const inOpen = this.open && (
-      (this.open === FLEET_ROOM && d.room)
-      || (!d.room && (String(d.withId) === this.open
+      (room && String(room) === String(this.open))
+      || (!room && (String(d.withId) === this.open
         || String(m.driverId) === this.open
         || (mine && String(d.to) === this.open))));
 
@@ -7797,7 +7896,7 @@ const Messages = {
       this.scrollDown();
       if (!mine) this.markRead(this.open);
     } else if (!mine) {
-      const who = d.room ? 'Crew chat' : (m.driver || 'A driver');
+      const who = room ? roomLabel(room) : (m.driver || 'A driver');
       toast(who + ': ' + String(m.text || 'sent an attachment').slice(0, 60), 'info');
       /* Only for a conversation that is not already on screen: a note for a
          message the driver is watching arrive is noise. */
@@ -8702,18 +8801,6 @@ function bindViewForms() {
   const dt = $('#dmThread');
   if (dt) dt.scrollTop = dt.scrollHeight;
 
-  const cf = $('#chatForm');
-  if (cf) cf.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const input = $('#chatInput');
-    const body = input.value.trim();
-    if (!body) return;
-    Store.db.chats[state.chatSel].messages.push({
-      who: Store.db.driver.name, body, at: new Date().toISOString(),
-    });
-    Store.save();
-    render();
-  });
 }
 
 function driverMenu(anchor) {
@@ -8844,6 +8931,11 @@ function handle(act, t) {
       return;
     case 'convoy-open': state.convoySel = t.dataset.id; render(); return;
     case 'convoy-join': Convoys.toggle(t.dataset.id); return;
+    case 'convoy-chat':
+      Messages.openThread(convoyRoom(t.dataset.id));
+      state.view = 'chats';
+      render();
+      return;
     case 'support-open': Support.open(t.dataset.kind); return;
     case 'support-send': Support.send(t.dataset.kind); return;
     case 'test-siren': Siren.wail(1.6); return;
@@ -8941,13 +9033,6 @@ function handle(act, t) {
       Store.save(); toast('All messages marked read', 'ok'); render();
       return;
 
-    case 'sel-chat':
-      state.chatSel = +t.dataset.i;
-      /* leaving the crew room for a convoy channel */
-      if (Messages.open === FLEET_ROOM) Messages.open = null;
-      render();
-      return;
-
     case 'open-dm': {
       const id = t.dataset.id;
       if (id === MGMT_THREAD) { Messages.open = MGMT_THREAD; render(); return; }
@@ -8955,7 +9040,9 @@ function handle(act, t) {
       return;
     }
 
-    case 'open-room': Messages.openThread(FLEET_ROOM); return;
+    case 'open-room':
+      Messages.openThread(isRoomId(t.dataset.id) ? t.dataset.id : FLEET_ROOM);
+      return;
 
     /* From the live map. Opening the conversation means going to the
        screen it is on, or the thread loads behind the map and nothing

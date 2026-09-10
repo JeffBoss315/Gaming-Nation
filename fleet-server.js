@@ -782,16 +782,55 @@ function threadId(a, b) {
 const FLEET_ROOM = '#fleet';
 const FLEET_ROOM_NAME = 'Fleet room';
 
-const isRoom = (id) => String(id) === FLEET_ROOM;
+/* A room is any id beginning with '#'. It used to be exactly one - every
+   room id collapsed into the fleet room - so a convoy could not have a
+   chat of its own without putting fifteen people's convoy talk in front of
+   the whole company.
+
+   The charset is deliberately narrow. A room id becomes a key in the
+   message store and a path segment on the way in, and neither wants a
+   slash or a dot in it. */
+const isRoom = (id) => /^#[A-Za-z0-9:_-]{1,64}$/.test(String(id || ''));
+const CONVOY_ROOM = /^#convoy:([A-Za-z0-9_-]{1,40})$/;
+
+/* Rooms are named by whoever speaks in them: the service has the company
+   record but not the convoy schedule, so it cannot look a convoy's name up.
+   The client sends it, the name is remembered, and a room nobody has named
+   falls back to something readable rather than an id. */
+const ROOM_NAMES_FILE = (process.env.GMN_ROOM_NAMES_FILE || process.env.HLL_ROOM_NAMES_FILE)
+  || path.join(ROOT, 'gmn-room-names.json');
+let roomNames = readJSON(ROOM_NAMES_FILE, null) || {};
+
+function roomName(id) {
+  if (String(id) === FLEET_ROOM) return FLEET_ROOM_NAME;
+  if (roomNames[id]) return String(roomNames[id]).slice(0, 80);
+  const m = CONVOY_ROOM.exec(String(id));
+  return m ? 'Convoy ' + m[1] : String(id).replace(/^#/, '');
+}
 
 const ROOM_READS_FILE = (process.env.GMN_ROOM_READS_FILE || process.env.HLL_ROOM_READS_FILE)
   || path.join(ROOT, 'gmn-room-reads.json');
 
-let roomReads = readJSON(ROOM_READS_FILE, null) || {};   /* driverId -> ISO */
+/* driverId -> { roomId: ISO }.
 
-function roomUnread(driverId) {
-  const since = roomReads[String(driverId)];
-  return dmFor(FLEET_ROOM).filter((m) =>
+   It was driverId -> ISO, back when there was one room. A store written by
+   the old shape still loads: a bare string is that driver's fleet-room
+   mark, which is exactly what it meant. Without this every driver would
+   come back to an unread count covering the whole history of the room. */
+let roomReads = (() => {
+  const raw = readJSON(ROOM_READS_FILE, null) || {};
+  const out = {};
+  Object.keys(raw).forEach((k) => {
+    out[k] = (typeof raw[k] === 'string') ? { [FLEET_ROOM]: raw[k] } : (raw[k] || {});
+  });
+  return out;
+})();
+
+function roomUnread(driverId, room) {
+  const id = room || FLEET_ROOM;
+  const marks = roomReads[String(driverId)] || {};
+  const since = marks[id];
+  return dmFor(id).filter((m) =>
     String(m.driverId) !== String(driverId)
     && (!since || m.at > since)).length;
 }
@@ -846,13 +885,36 @@ function threadsFor(me) {
 
   out.sort((a, b) => new Date(b.last.at) - new Date(a.last.at));
 
-  /* The room goes first and stays first, whether or not anybody has spoken
-     in it — it is a place, not a conversation somebody started, and a
-     driver looking for it should not have to remember when it was last
-     used. */
-  const roomList = dmFor(FLEET_ROOM);
+  /* Rooms above conversations, newest-spoken first, and the fleet room
+     above all of them - it is a place, not a conversation somebody started,
+     and a driver looking for it should not have to remember when it was
+     last used.
 
-  out.unshift({
+     Every room that has been spoken in is listed. The service holds the
+     company record but not the convoy schedule, so it cannot tell who is
+     signed on to what; a convoy room only exists once somebody speaks in
+     it, and in a company where everyone can see every convoy, everyone
+     seeing every convoy room is the honest default. */
+  const rooms = Object.keys(dms)
+    .filter((id) => isRoom(id) && id !== FLEET_ROOM && (dms[id] || []).length)
+    .map((id) => {
+      const list = dms[id];
+      return {
+        threadId: id,
+        withId: id,
+        withName: roomName(id),
+        withRole: 'room',
+        room: true,
+        online: true,
+        members: onlineDrivers().length,
+        last: list[list.length - 1],
+        unread: roomUnread(mine, id),
+      };
+    })
+    .sort((a, b) => new Date(b.last.at) - new Date(a.last.at));
+
+  const roomList = dmFor(FLEET_ROOM);
+  rooms.unshift({
     threadId: FLEET_ROOM,
     withId: FLEET_ROOM,
     withName: FLEET_ROOM_NAME,
@@ -861,10 +923,10 @@ function threadsFor(me) {
     online: true,
     members: onlineDrivers().length,
     last: roomList.length ? roomList[roomList.length - 1] : null,
-    unread: roomUnread(mine),
+    unread: roomUnread(mine, FLEET_ROOM),
   });
 
-  return out;
+  return rooms.concat(out);
 }
 
 /* ---------------- attachments ---------------- */
@@ -1266,9 +1328,10 @@ async function api(req, res, url) {
        is not looked up as one. */
     if (isRoom(withId)) {
       const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
-      const page = dmPage(FLEET_ROOM, limit, url.searchParams.get('before'));
+      const page = dmPage(withId, limit, url.searchParams.get('before'));
       return json(res, 200, Object.assign({
-        withId: FLEET_ROOM,
+        withId,
+        withName: roomName(withId),
         room: true,
         online: true,
         members: onlineDrivers().length,
@@ -1318,8 +1381,8 @@ async function api(req, res, url) {
       driverId: me.id,
       driver: me.name,
       role: levelOf(me.role) >= CONTROL_LEVEL ? 'staff' : 'driver',
-      to: toRoom ? FLEET_ROOM : other.id,
-      room: toRoom || undefined,
+      to: toRoom ? to : other.id,
+      room: toRoom ? to : undefined,
       text,
       attachment,
       at: new Date().toISOString(),
@@ -1328,7 +1391,14 @@ async function api(req, res, url) {
       readAt: toRoom ? undefined : null,
     };
 
-    const id = toRoom ? FLEET_ROOM : threadId(me.id, other.id);
+    const id = toRoom ? to : threadId(me.id, other.id);
+
+    /* A room is named by whoever speaks in it - the service has the company
+       record but not the convoy schedule, so it cannot look the name up. */
+    if (toRoom && b && b.roomName && id !== FLEET_ROOM) {
+      const nm = String(b.roomName).slice(0, 80);
+      if (roomNames[id] !== nm) { roomNames[id] = nm; save(ROOM_NAMES_FILE, roomNames); }
+    }
     dmFor(id).push(message);
 
     /* A thread nobody will ever scroll back through does not need to grow
@@ -1341,7 +1411,7 @@ async function api(req, res, url) {
        the desktop appears in the browser they left open. */
     if (toRoom) {
       /* Everyone, including the sender's other windows. */
-      broadcast('dm', { kind: 'dm.message', threadId: id, room: true, message });
+      broadcast('dm', { kind: 'dm.message', threadId: id, room: id, message });
     } else {
       sendTo(other.id, 'dm', { kind: 'dm.message', threadId: id, message });
       sendTo(me.id, 'dm', { kind: 'dm.message', threadId: id, message });
@@ -1361,9 +1431,10 @@ async function api(req, res, url) {
        read receipts per message is noise, and there is no one sender
        waiting to see a tick. The mark is kept for the reader alone. */
     if (isRoom(withId)) {
-      roomReads[String(me.id)] = new Date().toISOString();
+      const marks = roomReads[String(me.id)] || (roomReads[String(me.id)] = {});
+      marks[withId] = new Date().toISOString();
       save(ROOM_READS_FILE, roomReads);
-      return json(res, 200, { read: 0, room: true });
+      return json(res, 200, { read: 0, room: withId });
     }
 
     if (!driverRecord(withId)) return json(res, 404, { error: 'no such driver' });
@@ -1544,6 +1615,16 @@ async function callSignal(req, res) {
      mesh is exactly that — an offer, an answer and some candidates, per
      pair. So only join and leave are handled here, and the rest falls
      through to the ordinary one-to-one path with a real driver id on it. */
+  /* The group call is the FLEET room's, not any room's. There is one
+     roomCall map, so routing a convoy room's join into it would put those
+     drivers in the company-wide call under a convoy's name - which is
+     worse than not offering convoy voice at all. Said plainly below. */
+  if (isRoom(to) && String(to) !== FLEET_ROOM) {
+    return json(res, 400, {
+      error: 'only the fleet room has a group call — a convoy has chat, not voice',
+    });
+  }
+
   if (isRoom(to)) {
     pruneRoomCall();
 

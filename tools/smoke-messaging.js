@@ -364,17 +364,21 @@ const login = async (email) => {
     roomSay.status === 200 && !!roomSay.body.message,
     'HTTP ' + roomSay.status);
 
-  check('and it is stamped as a room message',
+  /* `room` carries the room's ID, not a bare true. It was true back when
+     there was one room; with a room per convoy, "this is a room message" no
+     longer tells a client whether it belongs on the screen in front of
+     them, and a convoy's chat would surface in the crew room. */
+  check('and it is stamped with the room it belongs to',
     !!roomSay.body.message && roomSay.body.message.to === '#fleet'
-      && roomSay.body.message.room === true,
-    roomSay.body.message ? String(roomSay.body.message.to) : '?');
+      && roomSay.body.message.room === '#fleet',
+    roomSay.body.message ? String(roomSay.body.message.room) : '?');
 
   await wait(320);
 
   const nosyRoom = sRoom.got.filter((e) => e.kind === 'dm');
   check('it reaches a driver who is in neither private thread',
     nosyRoom.length === before + 1
-      && nosyRoom[nosyRoom.length - 1].data.room === true,
+      && nosyRoom[nosyRoom.length - 1].data.room === '#fleet',
     (nosyRoom.length - before) + ' frame(s)');
 
   const roomRead = await req('GET', '/api/dm/%23fleet', null, nosy);
@@ -400,6 +404,68 @@ const login = async (email) => {
     .find((t) => t.room);
   check('your own room message is not unread to you',
     !!mineRow && mineRow.unread === 0, mineRow ? String(mineRow.unread) : '?');
+
+  /* ---------- 5b. a room per convoy ----------
+
+     There used to be exactly one room: isRoom() matched a single id and
+     every other room id collapsed into it, so a convoy's chat went in
+     front of the whole company. A convoy has its own room now, and the
+     three things that could quietly go wrong are that it is not separate,
+     that its unread count is shared with the fleet room's, and that its
+     name is lost - the service has the company record but not the convoy
+     schedule, so the name has to travel with the message. */
+  const CONVOY = '#convoy:EV-4711';
+
+  const convoySay = await req('POST', '/api/dm/send',
+    { to: CONVOY, text: 'Meeting at the north gate', roomName: 'Friday Night Haul' }, anna);
+  check('a convoy room takes a message',
+    convoySay.status === 200 && convoySay.body.message
+      && convoySay.body.message.room === CONVOY,
+    convoySay.body.message ? String(convoySay.body.message.room) : 'HTTP ' + convoySay.status);
+
+  const fleetAfter = await req('GET', '/api/dm/%23fleet', null, nosy);
+  check('and it does not land in the crew room',
+    fleetAfter.status === 200 && fleetAfter.body.messages.length === 1,
+    fleetAfter.body.messages.length + ' message(s) in #fleet');
+
+  const convoyRead = await req('GET', '/api/dm/%23convoy%3AEV-4711', null, nosy);
+  check('the convoy room reads back on its own',
+    convoyRead.status === 200 && convoyRead.body.messages.length === 1
+      && convoyRead.body.messages[0].text === 'Meeting at the north gate',
+    'HTTP ' + convoyRead.status + ', ' + ((convoyRead.body.messages || []).length) + ' message(s)');
+
+  check('carrying the name the sender gave it',
+    convoyRead.body.withName === 'Friday Night Haul',
+    convoyRead.body.withName || 'NO NAME');
+
+  const bothRooms = ((await req('GET', '/api/dm/threads', null, nosy)).body.threads || [])
+    .filter((t) => t.room);
+  check('both rooms are listed, the crew room first',
+    bothRooms.length === 2 && bothRooms[0].withId === '#fleet'
+      && bothRooms[1].withId === CONVOY,
+    bothRooms.map((t) => t.withId).join(', '));
+
+  /* nosy read #fleet a moment ago and has not read this one. If the marks
+     were shared this would read 0 and a driver would never be told their
+     convoy was talking. */
+  const convoyRow = bothRooms.find((t) => t.withId === CONVOY);
+  check('an unread convoy message is counted separately',
+    !!convoyRow && convoyRow.unread === 1, convoyRow ? String(convoyRow.unread) : '?');
+
+  await req('POST', '/api/dm/read', { withId: CONVOY }, nosy);
+  const afterConvoy = ((await req('GET', '/api/dm/threads', null, nosy)).body.threads || [])
+    .filter((t) => t.room);
+  check('and reading it clears only that room',
+    afterConvoy.every((t) => t.unread === 0),
+    afterConvoy.map((t) => t.withId + '=' + t.unread).join(' '));
+
+  /* One group call, and it belongs to the fleet room. Routing a convoy's
+     join into it would put those drivers in the company-wide call under a
+     convoy's name, which is worse than not offering convoy voice. */
+  const convoyCall = await req('POST', '/api/call/signal',
+    { to: CONVOY, kind: 'join' }, anna);
+  check('a convoy has chat, not a group call', convoyCall.status === 400,
+    'HTTP ' + convoyCall.status + ' — ' + ((convoyCall.body || {}).error || ''));
 
   /* ---------- 5c. the group call ---------- */
 

@@ -215,6 +215,33 @@ app.whenReady().then(async () => {
       check('  live, it shows ' + what, live.indexOf(txt) > -1, txt);
     }
 
+    /* ---- the face that goes on a Discord card ----
+       It lives in two places and reading only one is a silent failure: the
+       driver record is rebuilt on every sign-in and only carries a photo
+       when the database has a column for one, which is why the app keeps
+       its own copy under the driver's code. Reading record-only gave a
+       driver with a photo on screen a faceless card. */
+    const AVA = 'data:image/png;base64,iVBORw0KGgo=';
+    const noPhoto = await run(`cardAvatar({ name: 'Jeff Boss', gmnId: 'GMN-001' })`);
+    check('with no photo it draws the initials, not nothing',
+      /^data:image\/png;base64,/.test(noPhoto) && noPhoto.length > 200,
+      noPhoto ? 'a ' + Math.round(noPhoto.length / 1024) + ' KB PNG' : 'NOTHING');
+
+    const kept = await run(`(() => {
+      localStorage.setItem('gmn.trk.avatar.GMN-KEPT', ${JSON.stringify(AVA)});
+      return cardAvatar({ name: 'Kept Driver', gmnId: 'GMN-KEPT' });
+    })()`);
+    check('a photo the app kept for itself is found', kept === AVA,
+      kept === AVA ? 'read from the app’s own copy' : 'MISSED IT');
+
+    const onRecord = await run(`cardAvatar({ name: 'R', gmnId: 'GMN-R', avatar: ${JSON.stringify(AVA)} })`);
+    check('and one on the record is preferred', onRecord === AVA, 'record wins');
+
+    const lan = await run(`cardAvatar({ name: 'L', gmnId: 'GMN-L',
+      avatar: 'https://192.168.1.9:7040/files/a.png' })`);
+    check('an address Discord cannot reach falls back to initials',
+      lan.indexOf('data:image/png') === 0, 'drawn, not a broken link');
+
     check('the renderer logged no errors', errors.length === 0,
       errors.length ? errors.slice(0, 2).join(' | ') : 'none');
   } catch (e) {

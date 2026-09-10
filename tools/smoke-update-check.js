@@ -55,6 +55,25 @@ app.whenReady().then(async () => {
      registers, reached the same way the client reaches it. */
   require(path.join(ROOT, 'update-check')).register(ipcMain);
 
+  /* The shell registers a dozen other channels and this harness is not the
+     shell. Signing in starts the client's services, which call several of
+     them; unhandled, each one is an unhandled rejection in the renderer and
+     the "no errors" check below stops meaning anything. Answered with the
+     shape each caller expects, so nothing here is testing a stub - the
+     handler under test is the real one above. */
+  const stubs = {
+    'service:status': () => ({ running: false }),
+    'service:start': () => ({ error: 'not in this harness' }),
+    'service:stop': () => ({ ok: true }),
+    'game:running': () => ({ ok: false }),
+    'game:autoDetect': () => null,
+    'game:profiles': () => [],
+    'game:icon': () => null,
+    'telemetry:adapter': () => ({ running: false, reason: 'not in this harness' }),
+    'fs:exists': () => false,
+  };
+  Object.keys(stubs).forEach((ch) => ipcMain.handle(ch, stubs[ch]));
+
   const win = new BrowserWindow({
     width: 1100, height: 800, show: false,
     webPreferences: { preload: path.join(ROOT, 'preload.js') },
