@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.0';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.1';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -321,6 +321,27 @@ const Telemetry = {
   diagnostics: null,      /* the adapter's own account of itself — see diagnose() */
   adapter: null,          /* what the desktop shell says about the adapter process */
   diagnosedAt: 0,
+
+  /* IS THIS TRUCK ON THE ROAD RIGHT NOW?
+
+     A pin on the map is a claim that somebody is there at this moment,
+     and the map was drawing one whenever db.live merely existed. One
+     frame - a driver who started the game, was seen once, and closed it -
+     left a pin sitting on the map at 0 km/h with their name on it for the
+     rest of the session, and the crew had no way to tell it from somebody
+     genuinely parked in a lay-by.
+
+     Two conditions, because either alone lies. The link being "live" says
+     the poll is running, not that anything answered it; a frame's age says
+     the last answer was recent, but a frame kept from before the link
+     dropped is recent-ish for a while after it did. */
+  FRESH_MS: 15000,
+  onRoad() {
+    const live = Store.db.live;
+    if (this.mode !== 'live' || !live) return false;
+    const at = new Date(live.at || 0).getTime();
+    return Number.isFinite(at) && (Date.now() - at) < this.FRESH_MS;
+  },
 
   endpoint() {
     const s = Store.db.settings;
@@ -1623,11 +1644,15 @@ const TileMap = {
 
     /* truck.
 
-       `live.world` is checked, not just the game. A frame with neither
+       Only while it is actually reporting - see Telemetry.onRoad(). A pin
+       is a claim about now, and this drew one from any frame the store
+       happened to be holding.
+
+       `live.world` is checked too, not just the game. A frame with neither
        field set matches `live.game === gameKey` when both are undefined -
        undefined equals undefined - and the very next line reads
        live.world.x and throws, taking the whole map draw with it. */
-    if (live && live.world && live.game && live.game === gameKey) {
+    if (Telemetry.onRoad() && live && live.world && live.game && live.game === gameKey) {
       const ll = this.latLngFor(gameKey, live.world.x, live.world.z);
       if (ll) {
         if (!this.marker) {
@@ -2959,7 +2984,7 @@ function liveMapInner() {
 
   /* the truck */
   let marker = '';
-  if (live && live.game === mapKey && live.map &&
+  if (Telemetry.onRoad() && live && live.game === mapKey && live.map &&
       Number.isFinite(live.map.x) && Number.isFinite(live.map.z)) {
     const deg = -(live.heading || 0) * 360;
     marker = `<g transform="translate(${live.map.x.toFixed(1)},${live.map.z.toFixed(1)})" id="truckMarker">

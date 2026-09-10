@@ -367,6 +367,40 @@ app.whenReady().then(async () => {
     })()`);
     check('and coming back inside stops claiming it', inside === 'installed', inside);
 
+    /* ---- a pin is a claim that somebody is there NOW ----
+       The map drew the driver's own truck whenever db.live merely existed.
+       One frame - a driver who opened the game, was seen once and closed
+       it - left a pin at 0 km/h with their name on it for the rest of the
+       session, and nobody could tell it from someone parked in a lay-by. */
+    const pin = await run(`(() => {
+      const out = {};
+      const frame = { at: new Date().toISOString(), game: 'ets2',
+        world: { x: 0, z: 0 }, map: { x: 10, z: 10 }, heading: 0, speed: 42 };
+
+      Telemetry.mode = 'live'; Store.db.live = frame;
+      out.live = Telemetry.onRoad();
+
+      /* the link dropped, the frame is still in the store */
+      Telemetry.mode = 'sim';
+      out.linkGone = Telemetry.onRoad();
+
+      /* the link says live, but nothing has answered for a minute */
+      Telemetry.mode = 'live';
+      Store.db.live = Object.assign({}, frame,
+        { at: new Date(Date.now() - 60000).toISOString() });
+      out.stale = Telemetry.onRoad();
+
+      Store.db.live = null;
+      out.nothing = Telemetry.onRoad();
+      return out;
+    })()`);
+    check('reporting right now is on the road', pin.live === true, 'a fresh frame');
+    check('the link dropping takes the truck off it', pin.linkGone === false,
+      pin.linkGone ? 'STILL ON THE MAP' : 'off the map');
+    check('so does a frame nobody has refreshed', pin.stale === false,
+      pin.stale ? 'a minute-old frame STILL COUNTS' : 'a minute old is not now');
+    check('and no frame at all is not a position', pin.nothing === false, 'off the map');
+
     check('the renderer logged no errors', errors.length === 0,
       errors.length ? errors.slice(0, 2).join(' | ') : 'none');
   } catch (e) {
