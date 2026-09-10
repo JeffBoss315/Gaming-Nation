@@ -469,6 +469,11 @@ const Telemetry = {
       if (this.mode === 'live' && this.consecutiveFailures >= 3) {
         this.mode = 'off';
         db.conn.telemetry = 'searching';
+        /* Same reasoning as GameWatch.ended(): no frames means no idea what
+           the truck is doing, and the honest answer to that is nothing, not
+           whatever it was doing when the last frame landed. This is the path
+           where the game is still running and only the plugin went quiet. */
+        db.activityState = null;
         Store.log('warn', 'Lost the telemetry server (' + this.lastError + ')');
         /* on the desktop the process watch has the final say on whether the
            game is really gone; in a browser this is the only signal there is */
@@ -2159,6 +2164,17 @@ const GameWatch = {
     Telemetry.mode = 'off';
     Telemetry.lastFrame = null;
 
+    /* What the driver was doing is not what they are doing.
+
+       deriveActivity() only runs when a frame arrives, so the last state a
+       frame produced sits in the store for ever once frames stop. Close the
+       game while rolling and the client went on saying "Driving, no job" -
+       or worse, "On the road delivering" - with the game shut and nobody at
+       the wheel. It travels, too: fleetRows() reads this straight out and
+       pushes it to the company, so the rest of the crew saw a parked driver
+       out on the road. */
+    db.activityState = null;
+
     /* a run that was live when the game closed is banked, not lost */
     if (db.job && db.job.live) {
       Store.log('warn', 'Game closed mid-run — the delivery is held in the queue');
@@ -2776,19 +2792,17 @@ function viewLiveMap() {
           this one is lined up by hand. Press Calibrate and click where you are.</div></div>
     </div></div>` : ''}
 
-  ${!useTiles && !calibrated ? `<div class="card"><div class="card-body row gap-12">
-      <span style="color:var(--${calPts ? 'accent' : 'warn'});width:16px;height:16px">${icon('target')}</span>
-      <div class="grow">
-        <div class="b6">${calPts
-          ? 'Lining the map up — one more reference to go'
-          : 'Working out where the game world sits'}</div>
-        <div class="t3 xs mt-4">${calPts
-          ? 'One reference taken at ' + esc(calPts === 1 && Calib.points(mapKey)[0] ? cityLabel(Calib.points(mapKey)[0].city) : 'a city')
-            + '. The next job that starts or ends somewhere else finishes the job by itself.'
-          : 'Drive a job and the client takes its bearings from the cities the game names. '
-            + 'Two of those and your position is exact on every map. You can also do it by hand.'}</div></div>
-      <button class="btn btn-sm" data-act="calibrate">${icon('target')}Do it by hand</button>
-    </div></div>` : ''}
+  ${/* The "working out where the game world sits" banner used to sit here.
+
+        It described a state that fixes itself: the client takes its bearings
+        from the cities the game names, so two jobs finish the job with nobody
+        doing anything. A large permanent panel explaining a wait that needs
+        no action is noise on the screen a driver opens to see where they are
+        - and it sat there for every one of those two jobs.
+
+        The one thing on it worth keeping was the way to do it by hand, and
+        that has moved to Settings, under Game, beside the rest of the map
+        and telemetry options. */''}
 
   <section class="card">
     <div class="card-head">
@@ -3722,13 +3736,11 @@ function viewDashboard() {
 
   ${liveDriversHTML()}
 
-  <section class="card">
-    <div class="card-head">
-      <span class="label">Event log</span>
-      <button class="btn btn-sm btn-ghost" data-act="clear-log">${icon('trash')}Clear</button>
-    </div>
-    <div class="card-body"><div class="console" id="console">${consoleInner()}</div></div>
-  </section>`;
+  ${/* The event log used to be the last card on this screen. It is a
+        diagnostic - every line of it is written for somebody working out why
+        something did not happen - and the run monitor is not where a driver
+        goes for that. It is still recorded, in full, and it has moved to
+        Settings where a diagnostic belongs. */''}`;
 }
 
 
@@ -5286,6 +5298,21 @@ function viewSettings() {
       <div class="t3 xs mt-8">Live position needs the SCS telemetry plugin in
         <span class="mono">&lt;game&gt;/bin/win_x64/plugins/</span> plus the telemetry server app.
         Endpoint in use: <span class="mono">${esc(Telemetry.endpoint())}</span></div>
+
+      ${/* Lining the map up by hand. It is almost never needed - two jobs do
+            it on their own from the cities the game names - so it lives here
+            rather than on the map, where it used to be a banner that could
+            not be dismissed. */''}
+      <div class="setting-row mt-12">
+        <div>
+          <div class="t2">Map position</div>
+          <div class="t3 xs mt-4">${Calib.ready(s.game === 'ats' ? 'ats' : 'ets2')
+            ? 'Lined up. Your position is exact on every map.'
+            : 'Lines itself up from the cities the game names — two jobs is enough. '
+              + 'You can also do it by hand.'}</div>
+        </div>
+        <button class="btn btn-sm" data-act="calibrate">${icon('target')}Do it by hand</button>
+      </div>
     </div>
   </section>
 
@@ -5325,6 +5352,23 @@ function viewSettings() {
         <button class="btn btn-primary" data-act="save-settings">${icon('check')}Save settings</button>
         <button class="btn btn-danger" data-act="reset-app">${icon('refresh')}Reset client data</button>
       </div>
+    </div>
+  </section>
+
+  ${/* Moved off the run monitor, where it was the last card on the screen a
+        driver opens to watch their delivery. Every line in it is written for
+        somebody working out why something did not happen, which is what this
+        screen is for and that one is not. Still recorded in full either
+        way. */''}
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Event log</span>
+      <button class="btn btn-sm btn-ghost" data-act="clear-log">${icon('trash')}Clear</button>
+    </div>
+    <div class="card-body">
+      <div class="t3 xs mb-8">What the client has been doing. Worth a look when
+        something did not happen that should have.</div>
+      <div class="console">${consoleInner()}</div>
     </div>
   </section>`;
 }

@@ -110,6 +110,11 @@ function startService(opts) {
         GMN_ROOM_READS_FILE: path.join(dir, 'room-reads.json'),
         GMN_FILES_FILE: path.join(dir, 'files.json'),
         GMN_FILES_DIR: path.join(dir, 'files'),
+        /* The crew's Discord webhook. It goes in the service directory with
+           the rest of the state, not beside the script: in an installed copy
+           the script lives inside resources, which is under Program Files and
+           read-only, so a credential could never be put there anyway. */
+        GMN_DISCORD_FILE: path.join(dir, 'discord.json'),
         /* so another driver can open the site from this machine and have
            it joined up with no address to type */
         GMN_SITE_DIR: path.dirname(script),

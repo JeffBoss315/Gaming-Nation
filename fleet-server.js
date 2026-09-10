@@ -29,6 +29,7 @@
    it when a service address is set in settings.
    ============================================================ */
 const http = require('http');
+const https = require('https');   /* the Discord webhook is https */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -62,6 +63,98 @@ const FILES_DIR = (process.env.GMN_FILES_DIR || process.env.HLL_FILES_DIR) || pa
    cannot fill the disk by holding the button down. */
 const MAX_UPLOAD = Number((process.env.GMN_MAX_UPLOAD || process.env.HLL_MAX_UPLOAD) || 25 * 1024 * 1024);
 const SITE_DIR = (process.env.GMN_SITE_DIR || process.env.HLL_SITE_DIR) || ROOT;
+
+/* Where the crew's Discord webhook lives.
+
+   A webhook URL is a credential, not a setting: whoever holds it can post
+   into that channel as the app, for as long as it exists. So it is read
+   from the environment or from gmn-discord.json beside the service - a name
+   the gmn-*.json* rule in .gitignore already covers - and it is never
+   written into the source, never logged, and never sent to a client.
+
+   Empty is a supported state and the normal one: with nothing configured
+   the service behaves exactly as it did before, and the startup banner says
+   which mode it is in. */
+const DISCORD_FILE = process.env.GMN_DISCORD_FILE
+  || path.join(ROOT, 'gmn-discord.json');
+const DISCORD_WEBHOOK = String(
+  process.env.GMN_DISCORD_WEBHOOK
+  || (readJSON(DISCORD_FILE, {}) || {}).webhook
+  || '').trim();
+
+/* Which events are worth a person's attention in a chat channel.
+
+   Not all of them. session.start and session.end fire every time anybody
+   opens or closes the game, and a channel that pings on that is a channel
+   people mute - at which point the deliveries nobody wanted to miss are
+   muted too. */
+const DISCORD_KINDS = {
+  'job.start': { colour: 0x3fbfe0, title: 'Run started' },
+  'job.delivered': { colour: 0x3ecf8e, title: 'Delivered' },
+  'job.cancelled': { colour: 0xe05252, title: 'Run cancelled' },
+};
+
+/* Fire and forget, deliberately.
+
+   The driver's client is waiting on this request, and whether a chat
+   message posted is no business of theirs - a Discord outage must not turn
+   into a failed delivery report. Errors are logged without the URL, because
+   a log is somewhere a credential should never end up. */
+function postToDiscord(event) {
+  const shape = DISCORD_KINDS[event && event.kind];
+  if (!DISCORD_WEBHOOK || !shape) return;
+
+  const fields = [];
+  const add = (name, value) => {
+    if (value !== undefined && value !== null && String(value).length) {
+      fields.push({ name, value: String(value).slice(0, 200), inline: true });
+    }
+  };
+  add('Driver', event.driver || event.driverId);
+  if (event.cargo) add('Cargo', event.cargo);
+  if (event.from || event.to) add('Route', [event.from, event.to].filter(Boolean).join(' → '));
+  if (event.km) add('Distance', Math.round(event.km) + ' km');
+  if (event.kind === 'job.delivered' && event.income) add('Payout', '€' + event.income);
+
+  const payload = JSON.stringify({
+    username: 'Gaming Nation',
+    embeds: [{
+      title: shape.title,
+      description: String(event.text || '').slice(0, 500),
+      color: shape.colour,
+      fields: fields.slice(0, 6),
+      timestamp: new Date(event.at || Date.now()).toISOString(),
+    }],
+  });
+
+  let target;
+  try { target = new URL(DISCORD_WEBHOOK); }
+  catch (e) { console.warn('  the Discord webhook is not a valid URL - not posting'); return; }
+
+  const send = target.protocol === 'http:' ? http : https;
+  const req = send.request({
+    hostname: target.hostname,
+    /* Explicitly, not by protocol default. Leaving it out sent every post to
+       port 80 - which is invisible against the real Discord, because that is
+       https on 443 and the default happens to be right. It only shows up
+       against a webhook on any other port, which is exactly what a test
+       stub is. */
+    port: target.port || (target.protocol === 'http:' ? 80 : 443),
+    path: target.pathname + target.search,
+    method: 'POST',
+    headers: { 'content-type': 'application/json',
+               'content-length': Buffer.byteLength(payload) },
+  }, (r) => {
+    /* 204 is the success Discord answers a webhook with */
+    if (r.statusCode !== 204 && r.statusCode !== 200) {
+      console.warn('  Discord refused the ' + event.kind + ' notice: HTTP ' + r.statusCode);
+    }
+    r.resume();
+  });
+  req.setTimeout(5000, () => req.destroy());
+  req.on('error', (e) => console.warn('  could not reach Discord: ' + e.message));
+  req.end(payload);
+}
 
 /* ---------------- the Supabase project this company signs in to ----------
 
@@ -632,6 +725,8 @@ async function api(req, res, url) {
     events.push(e);
     if (events.length > 500) events = events.slice(-500);
     broadcast('event', e);
+    /* after the crew's own clients, and without the driver waiting on it */
+    postToDiscord(e);
     return json(res, 200, { ok: true, seq });
   }
 
@@ -1502,6 +1597,11 @@ server.listen(PORT, HOST, () => {
   }
   console.log('');
   console.log('  Company file :  ' + COMPANY_FILE);
+  /* Whether, not what. Printing the URL would put a live credential in
+     every terminal scrollback and every screenshot of one. */
+  console.log('  Discord      :  ' + (DISCORD_WEBHOOK
+    ? 'runs and deliveries are posted to the crew channel'
+    : 'not configured — set GMN_DISCORD_WEBHOOK or gmn-discord.json'));
   if (HOST === '127.0.0.1') {
     console.log('  (this machine only — pass --lan to let phones reach it)');
   }
