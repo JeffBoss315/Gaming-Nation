@@ -422,4 +422,46 @@ if (!problems) console.log('  website and app payloads are separate');
 })();
 
 console.log(problems ? `\n${problems} problem(s)\n` : '\nclean\n');
+/* ---------------------------------------------------------------
+   Is the installed app actually newer than the source?
+
+   Twice now a fix has been reported as "still broken" when the real
+   answer was that the copy under Program Files predated it. The first
+   time the installer was 42 commits behind and carried no telemetry
+   adapter at all. The second time the bundled company service had no
+   Discord code in it, so every card seen in that channel had come from
+   a dev process run by hand and the app itself had never posted once.
+
+   Reading the source and being satisfied is what let both through.
+   This asks the installed copy instead. It only warns, because plenty
+   of work happens here without installing anything - but it says the
+   thing that was not being said.
+   --------------------------------------------------------------- */
+(function installedIsStale() {
+  const app = process.env.ProgramFiles
+    && path.join(process.env.ProgramFiles, 'Gaming Nation Trucker',
+                 'resources', 'app.asar.unpacked', 'fleet-server.js');
+  if (!app || !fs.existsSync(app)) return;
+
+  const built = fs.statSync(app).mtimeMs;
+  const newer = ['fleet-server.js', 'tracker.js', 'script.js',
+                 'electron-main.js', 'telemetry-plugin.js']
+    .filter((f) => {
+      const src = path.join(ROOT, f);
+      return fs.existsSync(src) && fs.statSync(src).mtimeMs > built;
+    });
+
+  console.log('');
+  console.log('installed copy');
+  if (!newer.length) {
+    console.log('  the installed app is not behind the source');
+    return;
+  }
+  console.log('  ! the app under Program Files was built before '
+    + newer.length + ' source file(s) changed:');
+  newer.forEach((f) => console.log('      ' + f));
+  console.log('    Anything tested against it is testing the OLD code.');
+  console.log('    Rebuild and install release/ over it.');
+})();
+
 process.exit(problems ? 1 : 0);

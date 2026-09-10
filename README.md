@@ -743,8 +743,8 @@ Produces two files:
 
 | File | What it is |
 |---|---|
-| `Gaming Nation Trucker 1.0.1 x64.exe` | installer — Start menu, shortcut, uninstall entry |
-| `Gaming Nation Trucker 1.0.1 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
+| `Gaming Nation Trucker 1.0.2 x64.exe` | installer — Start menu, shortcut, uninstall entry |
+| `Gaming Nation Trucker 1.0.2 portable.exe` | single file, no install; unpacks on launch (~10 s first start) |
 
 Both are unsigned, so SmartScreen warns on first run — *More info → Run anyway*. To sign
 them, set `CSC_LINK`/`CSC_KEY_PASSWORD` and remove `win.signAndEditExecutable: false` from
