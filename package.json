@@ -60,7 +60,8 @@
     "smoke:plugin": "node tools/smoke-plugin-install.js .",
     "smoke:apploss": "node tools/run-electron.js tools/smoke-application-loss.js .",
     "smoke:ownercode": "node tools/run-electron.js tools/smoke-owner-code.js .",
-    "smoke:discord": "node tools/smoke-discord.js ."
+    "smoke:discord": "node tools/smoke-discord.js .",
+    "smoke:country": "node tools/smoke-city-country.js ."
   },
   "devDependencies": {
     "electron": "^31.7.7",

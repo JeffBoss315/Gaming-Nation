@@ -1077,6 +1077,16 @@ const Fleet = {
          A delivery card wants it, and nothing else knows it. */
       top: job ? Math.round(job.top || 0) : 0,
       avgSpeed: job ? Math.round(job.avgSpeed || 0) : 0,
+
+      /* Worked out here rather than by the service: the country comes from
+         the city table in map-data.js, which this page has loaded and the
+         service has no business requiring - it is a browser file that wants
+         Leaflet in scope. Null when the table cannot say, and the card then
+         shows no flag rather than a wrong one. */
+      fromCountry: job ? countryOfCity(
+        (db.live && db.live.game) || db.settings.game, job.from) : null,
+      toCountry: job ? countryOfCity(
+        (db.live && db.live.game) || db.settings.game, job.to) : null,
       game: (db.live && db.live.game) || db.settings.game || 'ets2',
     }, extra || {});
     fetch(this.endpoint() + '/api/fleet/event', {

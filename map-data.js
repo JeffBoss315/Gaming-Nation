@@ -778,3 +778,168 @@ function geoToGameLatLng(gameKey, lat, lon) {
   return gameLatLng([f.bx + lon * f.kx, f.by + mercY(lat) * f.ky]);
 }
 
+
+/* ============================================================
+   WHICH COUNTRY A CITY IS IN
+   ------------------------------------------------------------
+   The city table holds a real lat/lon and nothing else. A
+   delivery card wants a flag either end of the route, so the
+   country has to be worked out from the coordinates.
+
+   A single rectangle per country does not survive Europe. The
+   French bounding box swallows Belgium and Luxembourg whole;
+   Aachen sits inside the German, Dutch AND Belgian ones at once;
+   Lille sits inside Belgium's. Tie-breaking between overlapping
+   boxes was tried both obvious ways and both put a wrong flag on
+   a real city - nearest-centroid gave Aachen to the Netherlands,
+   deepest-containment gave Liège and Luxembourg to France.
+
+   So: several tight boxes per country where one will not do, and
+   the list is ORDERED. A city belongs to the first country whose
+   boxes contain it, and the small awkward ones are asked first.
+   That is what lets the Dutch Limburg panhandle claim Maastricht
+   while Aachen, eight kilometres away, falls through to Germany.
+
+   The rule for adding to this: a box must not contain a city of
+   any country listed after it. Get that wrong and the flag is
+   wrong, silently, on a card the whole crew reads - which is the
+   reason countryOfCity refuses to guess rather than returning a
+   best effort.
+   ============================================================ */
+const COUNTRY_AREAS = [
+  /* --- the crowded corner, carved deliberately and asked first --- */
+  ['LU', [[49.44,  5.72, 50.20,  6.54]]],
+  ['BE', [[50.65,  2.85, 51.52,  5.55],     /* Flanders: Ostend to Hasselt  */
+          [49.49,  4.10, 50.81,  5.92]]],   /* Wallonia: Namur, Liege       */
+  ['NL', [[51.20,  3.35, 53.56,  7.24],
+          [50.74,  5.54, 51.21,  6.04]]],   /* Limburg: Maastricht, Heerlen */
+  ['CH', [[45.81,  5.95, 47.81, 10.50]]],
+
+  /* Austria is long and thin; its bounding box reaches well into Bavaria,
+     so it is three bands that stop short of Munich and of Bratislava. */
+  ['AT', [[46.37,  9.53, 47.60, 13.00],
+          [46.60, 13.00, 47.80, 16.00],
+          [47.40, 13.00, 48.80, 16.95]]],
+
+  /* Slovenia's box otherwise takes Trieste off Italy and Zagreb off
+     Croatia - both sit just outside a real border that runs diagonally. */
+  ['SI', [[45.42, 13.92, 46.20, 15.75],
+          [46.20, 13.92, 46.88, 16.61]]],
+
+  ['SK', [[47.73, 16.98, 49.62, 22.57]]],
+  ['CZ', [[48.55, 12.09, 50.95, 18.87]]],   /* stops short of Dresden      */
+  ['HU', [[45.74, 16.11, 46.30, 21.00],     /* clear of Timisoara          */
+          [46.30, 16.11, 48.59, 22.90]]],
+
+  /* --- the Balkans, small and tightly packed --- */
+  ['ME', [[41.85, 18.43, 43.56, 20.36]]],
+  /* Bosnia is inland: at Dalmatian latitudes it starts well east of the
+     coast, or its box takes Split off Croatia. */
+  ['MK', [[40.85, 20.45, 42.37, 23.04]]],
+  ['AL', [[39.64, 19.26, 42.66, 21.06]]],
+  ['BA', [[42.55, 17.00, 43.60, 19.62],
+          [43.60, 15.72, 45.28, 19.62]]],
+  /* Vojvodina is narrower than the rest of Serbia, and a square box reaches
+     across the Romanian border to Timisoara. */
+  ['RS', [[42.23, 18.81, 45.20, 23.01],
+          [45.20, 18.81, 46.19, 20.80]]],
+  /* Croatia reaches lon 13.5 down in Istria and nowhere near it further
+     north, so a single box takes Trieste off Italy. */
+  /* Croatia in three bands. Dalmatia stays east of the Adriatic so Ancona
+     is not claimed off Italy; Istria needs the western reach that would
+     otherwise do it. */
+  ['HR', [[42.38, 15.00, 44.70, 19.45],
+          [44.70, 13.49, 45.50, 19.45],
+          [45.50, 13.90, 46.55, 19.45]]],
+  ['MD', [[45.44, 26.61, 48.49, 30.14]]],
+
+  /* --- the Baltics --- */
+  ['EE', [[57.51, 21.76, 59.70, 28.21]]],
+  ['LV', [[55.66, 20.92, 58.09, 28.25]]],
+  ['LT', [[53.89, 20.93, 56.46, 26.84]]],
+
+  /* --- Iberia --- */
+  ['PT', [[36.95, -9.55, 42.16, -6.18]]],
+  ['ES', [[35.90, -9.32, 43.81,  3.34]]],
+
+  /* France, kept west of the Rhine and out of the Benelux corner. The
+     fourth box is the Moselle, which the first three cut off. */
+  ['FR', [[42.30, -5.16, 51.12,  5.60],
+          [43.00,  5.60, 49.00,  7.70],
+          [47.40,  7.00, 49.10,  8.25],     /* Alsace: Strasbourg, Colmar   */
+          [48.90,  5.55, 49.65,  6.75]]],   /* Metz, Thionville             */
+
+  /* Germany, stopped short of the Oder in the north so Szczecin stays
+     Polish. */
+  ['DE', [[47.26,  5.85, 52.00, 15.05],
+          [52.00,  5.85, 55.10, 14.40]]],
+
+  ['IT', [[36.64,  6.61, 47.10, 18.55]]],
+  /* Denmark narrows going north: past Aarhus it is only Jutland, and a
+     square box otherwise takes Gothenburg and Malmo off Sweden. */
+  ['DK', [[54.55,  8.06, 57.20, 12.75],
+          [57.20,  8.06, 57.76, 11.20],
+          [54.95, 14.65, 55.35, 15.20]]],   /* Bornholm                    */
+
+  /* Sweden and Finland before Norway: the Norwegian bounding box covers
+     most of Scandinavia, so it has to be the one that catches what is
+     left rather than the one asked first. Both are banded to keep Narvik
+     Norwegian and Lulea Swedish. */
+  ['SE', [[55.32, 10.95, 60.00, 19.50],
+          [60.00, 11.50, 65.00, 21.50],
+          [65.00, 18.00, 69.07, 24.18]]],
+  ['FI', [[59.74, 21.00, 63.50, 31.59],
+          [63.50, 23.20, 70.10, 31.59]]],
+  ['NO', [[57.95,  4.48, 71.20, 31.20]]],
+
+  ['PL', [[48.99, 14.10, 54.90, 24.16]]],
+  ['RO', [[43.61, 20.24, 48.28, 29.71]]],
+  ['BG', [[41.22, 22.34, 44.23, 28.62]]],
+  ['GR', [[34.79, 19.34, 41.76, 28.25]]],
+  ['TR', [[35.80, 25.62, 42.11, 44.83]]],
+  ['UA', [[44.36, 22.12, 52.38, 40.23]]],
+  ['BY', [[51.24, 23.16, 56.18, 32.78]]],
+  ['RU', [[43.00, 27.30, 70.00, 60.00]]],
+
+  /* Ireland before Great Britain, and Britain banded so its west coast
+     never reaches across the Irish Sea. */
+  /* the Republic only: Belfast and Londonderry belong to the boxes below */
+  ['IE', [[51.40,-10.60, 54.00, -5.92],
+          [54.00,-10.60, 55.45, -6.30]]],
+  ['GB', [[49.85, -5.75, 51.40,  1.78],
+          [51.40, -5.30, 56.00,  1.78],
+          [56.00, -7.60, 60.90,  1.78],
+          [54.00, -8.20, 55.35, -5.42]]],   /* Northern Ireland             */
+
+  /* --- the American map --- */
+  ['MX', [[14.40,-118.40, 32.75, -86.70]]],
+  ['CA', [[48.95,-141.00, 70.00, -52.60]]],
+  ['US', [[24.40,-125.00, 49.40, -66.90]]],
+];
+
+function countryAt(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  for (const [code, boxes] of COUNTRY_AREAS) {
+    for (const [s, w, n, e] of boxes) {
+      if (lat >= s && lat <= n && lon >= w && lon <= e) return code;
+    }
+  }
+  return null;
+}
+
+/* The country a city the game named is in, or null when this build cannot
+   say. Null means no flag rather than a guessed one: a wrong flag on a card
+   the whole crew reads is worse than a missing one, and nobody can tell a
+   confident wrong answer from a right one by looking. */
+function countryOfCity(game, name) {
+  const geo = geoFor(game);
+  if (!geo || !name) return null;
+  /* through cityKey first: telemetry reports the name the game shows, and
+     the table is keyed on the English one - 'Praha' finds nothing as itself */
+  const at = geo[name] || geo[cityKey(name)];
+  return at ? countryAt(at[0], at[1]) : null;
+}
+
+/* Turning a code into a flag belongs with whoever draws one. Only the
+   Discord card does, and that is rendered by the service - which cannot
+   require this file, because it wants Leaflet in scope. */

@@ -52,7 +52,8 @@ const stub = http.createServer((req, res) => {
 const post = (kind, extra) => new Promise((resolve) => {
   const payload = JSON.stringify(Object.assign({ kind, driver: 'Ana Vos',
     driverId: 'GMN-1001', text: kind + ' happened', from: 'Hannover', to: 'Bremen',
-    cargo: 'Cut Flowers', km: 214, income: 4200, top: 124, game: 'ets2' }, extra || {}));
+    cargo: 'Cut Flowers', km: 214, income: 4200, top: 124, game: 'ets2',
+    fromCountry: 'DE', toCountry: 'FR' }, extra || {}));
   const r = http.request({ host: '127.0.0.1', port: FLEET_PORT, method: 'POST',
     path: '/api/fleet/event',
     headers: { 'content-type': 'application/json',
@@ -119,9 +120,34 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         val('Distance'));
       check('income grouped so the size reads at a glance',
         val('Income') === '€4,200', val('Income'));
+      /* Flags come from the country code the client sends, because the
+         service has no city table. A missing code must leave the name
+         bare rather than showing something wrong. */
+      check('the route carries both flags',
+        !!embed && /\u{1F1E9}\u{1F1EA}/u.test(embed.title || '')
+                && /\u{1F1EB}\u{1F1F7}/u.test(embed.title || ''),
+        embed ? embed.title : 'UNPARSEABLE');
+
+      check('and the load carries a mark of its own',
+        !!embed && /\u{1F490}/u.test(embed.description || ''),
+        (embed && embed.description) || 'no description');
+
       check('and it says which game it came from',
         !!embed && /Euro Truck Simulator 2/.test((embed.footer || {}).text || ''),
         (embed && embed.footer && embed.footer.text) || 'no footer');
+    }
+
+    /* An unknown country must show no flag, not a wrong one - that is the
+       whole reason the client sends a code it is sure of or nothing. */
+    posted.length = 0;
+    await post('job.delivered', { fromCountry: null, toCountry: null, cargo: 'Steel Coils' });
+    await wait(600);
+    if (posted.length) {
+      const e2 = JSON.parse(posted[0].body).embeds[0];
+      check('no country means no flag, not a guess',
+        !/[\u{1F1E6}-\u{1F1FF}]/u.test(e2.title || ''), e2.title);
+      check('and an unlisted load still gets a mark',
+        /\u{1F3D7}/u.test(e2.description || ''), e2.description);
     }
 
     posted.length = 0;

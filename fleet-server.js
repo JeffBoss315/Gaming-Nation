@@ -122,12 +122,60 @@ function postToDiscord(event) {
      on a real city, and a wrong flag on a card the whole crew reads is
      worse than no flag at all. */
   const num = (v) => Number(v) || 0;
+
+  /* An ISO code as its flag: two regional indicator symbols. The client
+     works the country out - it has the city table - and sends the code, or
+     null when the table cannot say. Null means no flag rather than a
+     guessed one. */
+  const flag = (code) => (code && code.length === 2)
+    ? String.fromCodePoint(0x1f1e6 + code.toUpperCase().charCodeAt(0) - 65,
+                           0x1f1e6 + code.toUpperCase().charCodeAt(1) - 65) + ' '
+    : '';
+
+  /* A mark for the load. Matched longest keyword first, because "wood
+     chips" is not timber and "car parts" are not a car. Anything unmatched
+     gets the box, which is honest - it is freight. */
+  const CARGO_MARKS = [
+    ['refrigerated', '\u2744\uFE0F'], ['frozen', '\u2744\uFE0F'],
+    ['livestock', '\u{1F404}'], ['cattle', '\u{1F404}'],
+    ['explosive', '\u{1F4A5}'], ['ammunition', '\u{1F4A5}'],
+    ['chemical', '\u2623\uFE0F'], ['acid', '\u2623\uFE0F'],
+    ['radioactive', '\u2622\uFE0F'], ['nuclear', '\u2622\uFE0F'],
+    ['fuel', '\u26FD'], ['petrol', '\u26FD'], ['diesel', '\u26FD'],
+    ['gas', '\u26FD'], ['oil', '\u26FD'],
+    ['timber', '\u{1FAB5}'], ['lumber', '\u{1FAB5}'], ['wood', '\u{1FAB5}'],
+    ['steel', '\u{1F3D7}\uFE0F'], ['iron', '\u{1F3D7}\uFE0F'],
+    ['metal', '\u{1F3D7}\uFE0F'],
+    ['cement', '\u{1F9F1}'], ['concrete', '\u{1F9F1}'], ['brick', '\u{1F9F1}'],
+    ['tractor', '\u{1F69C}'], ['excavator', '\u{1F69C}'],
+    ['vehicle', '\u{1F697}'], ['car', '\u{1F697}'],
+    ['machinery', '\u2699\uFE0F'], ['machine', '\u2699\uFE0F'],
+    ['engine', '\u2699\uFE0F'],
+    ['electronic', '\u{1F4BB}'], ['computer', '\u{1F4BB}'],
+    ['furniture', '\u{1FA91}'], ['glass', '\u{1FA9F}'], ['paper', '\u{1F4C4}'],
+    ['grain', '\u{1F33E}'], ['wheat', '\u{1F33E}'],
+    ['flower', '\u{1F490}'], ['plant', '\u{1FAB4}'],
+    ['beer', '\u{1F37A}'], ['beverage', '\u{1F964}'], ['drink', '\u{1F964}'],
+    ['milk', '\u{1F95B}'], ['food', '\u{1F96B}'],
+    ['medical', '\u{1F48A}'], ['medicine', '\u{1F48A}'],
+    ['waste', '\u267B\uFE0F'], ['scrap', '\u267B\uFE0F'],
+    ['container', '\u{1F6A2}'], ['cable', '\u{1F50C}'],
+    ['tyre', '\u{1F6DE}'], ['tire', '\u{1F6DE}'],
+  ].sort((a, b) => b[0].length - a[0].length);
+
+  const cargoMark = (name) => {
+    const t = String(name || '').toLowerCase();
+    for (const [word, mark] of CARGO_MARKS) if (t.indexOf(word) > -1) return mark;
+    return '\u{1F4E6}';
+  };
   const km = num(event.km);
   const sep = '  ›  ';
 
+  const from = flag(event.fromCountry) + (event.from || '');
+  const to = flag(event.toCountry) + (event.to || '');
   const title = (km && event.from && event.to)
-    ? event.from + sep + km.toFixed(0) + ' km' + sep + event.to
-    : ([event.from, event.to].filter(Boolean).join(sep) || shape.title);
+    ? from + sep + km.toFixed(0) + ' km' + sep + to
+    : ([from, to].filter((x) => x.trim()).join(sep) || shape.title);
 
   const fields = [];
   const add = (name, value) => fields.push({ name, value, inline: true });
@@ -149,7 +197,9 @@ function postToDiscord(event) {
         : undefined,
       title: String(title).slice(0, 240),
       url: SITE_URL ? SITE_URL + '/login.html#/logbook' : undefined,
-      description: String(event.cargo || event.text || '').slice(0, 300),
+      description: event.cargo
+        ? cargoMark(event.cargo) + '  **' + String(event.cargo).slice(0, 120) + '**'
+        : String(event.text || '').slice(0, 300),
       color: shape.colour,
       fields: fields.slice(0, 3),
       footer: { text: shape.title + (event.game === 'ats'
