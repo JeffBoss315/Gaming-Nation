@@ -689,7 +689,7 @@ opens with no connection.
 npm run android
 ```
 
-Writes `dist-apk/Gaming-Nation-Trucker-<version>.apk`. The whole client is bundled inside the
+Writes `dist-apk/Gaming-Nation-Tracker-<version>.apk`. The whole client is bundled inside the
 package, so it runs with no server and no connection. Rebuild any time you change the web
 files — the script refreshes `www/`, regenerates the launcher icons, syncs the native
 project and assembles the APK (~30 s once warm).
@@ -701,7 +701,7 @@ The app is a [Capacitor](https://capacitorjs.com) shell around `www/`, configure
 
 - **OneDrive / Drive** — this project already syncs, so open `dist-apk/` in the phone's
   OneDrive app, download the APK and tap it.
-- **USB** — `adb install -r dist-apk/Gaming-Nation-Trucker-3.0.1.apk`
+- **USB** — `adb install -r dist-apk/Gaming-Nation-Tracker-3.0.1.apk`
 - **Anything else** — email it to yourself, or a USB cable and File Explorer.
 
 Android will warn about installing outside the Play Store; allow it for the app you are

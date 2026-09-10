@@ -6,7 +6,7 @@
    There are two naming schemes in this project and they are not the same:
 
      electron-builder writes   Gaming Nation Trucker 1.0.0 x64.exe     (spaces)
-     the site asks for         Gaming-Nation-Trucker-1.0.0-windows-setup.exe
+     the site asks for         Gaming-Nation-Tracker-1.0.0-windows-setup.exe
 
    Nothing joined them up, so release/ was filled in by hand after every
    build — which is why it still held 4.7.0 files long after 1.0.0 shipped,

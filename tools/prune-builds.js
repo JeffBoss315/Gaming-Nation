@@ -39,7 +39,7 @@ if (!/^\d+\.\d+\.\d+/.test(CURRENT)) {
 const DIRS = ['release', 'dist-apk'];
 
 /* x.y.z anywhere in the name, which covers every shape this project
-   produces: Gaming-Nation-Trucker-1.0.0-windows-setup.exe, and the
+   produces: Gaming-Nation-Tracker-1.0.0-windows-setup.exe, and the
    "Gaming Nation Trucker 1.0.0 portable.exe" electron-builder writes. */
 const VERSION = /(\d+\.\d+\.\d+)/;
 
