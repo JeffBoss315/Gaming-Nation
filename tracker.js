@@ -2832,7 +2832,6 @@ function viewLiveMap() {
   <section class="card">
     <div class="card-head">
       <span class="label">Fleet on the road</span>
-      <button class="btn btn-sm" data-act="fleet-setup">${icon('link')}${Fleet.enabled() ? 'Service' : 'Connect a service'}</button>
     </div>
     <div class="card-body" id="fleetPanel">${fleetPanelInner()}</div>
   </section>
@@ -3896,8 +3895,6 @@ function liveDriversHTML() {
       <div class="row gap-8">
         <span class="label" id="fleetCount"></span>
         ${liveDot()}
-        <button class="btn btn-sm" data-act="fleet-setup">${icon('link')}${
-          Fleet.enabled() ? 'Service' : 'Connect a service'}</button>
       </div>
     </div>
     <div class="card-body" id="fleetBody">${liveDriversInner()}</div>
@@ -8266,6 +8263,15 @@ function startServices() {
     render();
   });
 
+  /* This is why there is no "Connect a service" button on the fleet cards
+     any more. It looks now, starts the built-in service if nothing answers,
+     and keeps looking every minute until something does - so the button
+     offered a driver a job the client had already taken on, and sat there
+     on two screens saying so.
+
+     The status bar chip still opens the same dialog, for the address to
+     give the rest of the crew and the way to stop hosting. That is a thing
+     somebody goes looking for; this was a thing put in front of them. */
   findService();
   clearInterval(startServices.findTimer);
   startServices.findTimer = setInterval(findService, 60000);
