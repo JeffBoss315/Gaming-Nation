@@ -52,7 +52,7 @@ const stub = http.createServer((req, res) => {
 const post = (kind, extra) => new Promise((resolve) => {
   const payload = JSON.stringify(Object.assign({ kind, driver: 'Ana Vos',
     driverId: 'GMN-1001', text: kind + ' happened', from: 'Hannover', to: 'Bremen',
-    cargo: 'Cut Flowers', km: 214, income: 4200 }, extra || {}));
+    cargo: 'Cut Flowers', km: 214, income: 4200, top: 124, game: 'ets2' }, extra || {}));
   const r = http.request({ host: '127.0.0.1', port: FLEET_PORT, method: 'POST',
     path: '/api/fleet/event',
     headers: { 'content-type': 'application/json',
@@ -96,12 +96,32 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     if (posted.length) {
       let embed = null;
       try { embed = JSON.parse(posted[0].body).embeds[0]; } catch (e) { /* checked below */ }
-      check('it arrives as a readable embed', !!embed && embed.title === 'Delivered',
+
+      /* The route reads as the headline, the way a delivery is read: where
+         it went, how far, where it ended. */
+      check('the route and distance are the headline',
+        !!embed && /Hannover.*214 km.*Bremen/.test(embed.title || ''),
         embed ? embed.title : 'UNPARSEABLE');
+
+      check('the driver is named above it',
+        !!embed && embed.author && embed.author.name === 'Ana Vos',
+        (embed && embed.author && embed.author.name) || 'NOBODY');
+
+      /* exactly the three numbers worth comparing between runs */
       const names = ((embed && embed.fields) || []).map((f) => f.name);
-      check('carrying who, what and how far',
-        ['Driver', 'Cargo', 'Route', 'Distance'].every((n) => names.includes(n)),
+      check('and the three numbers sit under it',
+        names.length === 3 && ['Distance', 'Top speed', 'Income'].every((n) => names.includes(n)),
         names.join(', ') || 'no fields');
+
+      const val = (n) => (((embed && embed.fields) || [])
+        .find((f) => f.name === n) || {}).value;
+      check('distance to one decimal, like the reference', val('Distance') === '214.0 km',
+        val('Distance'));
+      check('income grouped so the size reads at a glance',
+        val('Income') === '€4,200', val('Income'));
+      check('and it says which game it came from',
+        !!embed && /Euro Truck Simulator 2/.test((embed.footer || {}).text || ''),
+        (embed && embed.footer && embed.footer.text) || 'no footer');
     }
 
     posted.length = 0;

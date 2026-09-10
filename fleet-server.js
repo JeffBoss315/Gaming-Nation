@@ -75,6 +75,13 @@ const SITE_DIR = (process.env.GMN_SITE_DIR || process.env.HLL_SITE_DIR) || ROOT;
    Empty is a supported state and the normal one: with nothing configured
    the service behaves exactly as it did before, and the startup banner says
    which mode it is in. */
+/* Where the platform lives, for the link on a card. Empty is fine - the
+   card simply has no link then, which is better than one pointing at a host
+   nobody owns. */
+const SITE_URL = String(process.env.GMN_PUBLIC_URL
+  || (readJSON(path.join(ROOT, 'site.config.json'), {}) || {}).siteUrl
+  || '').trim().replace(/[/]+$/, '');
+
 const DISCORD_FILE = process.env.GMN_DISCORD_FILE
   || path.join(ROOT, 'gmn-discord.json');
 const DISCORD_WEBHOOK = String(
@@ -104,25 +111,50 @@ function postToDiscord(event) {
   const shape = DISCORD_KINDS[event && event.kind];
   if (!DISCORD_WEBHOOK || !shape) return;
 
+  /* The card, laid out the way a delivery is actually read: where it went
+     and how far, then the three numbers worth comparing between runs.
+
+     No country flags. They were built and then taken out again: the city
+     table holds a lat/lon and nothing else, and resolving that to a country
+     with rectangles cannot be done across Europe - France's box covers the
+     whole of Belgium and Luxembourg, and Aachen sits inside the German,
+     Dutch and Belgian ones at once. Every tie-break tried put a wrong flag
+     on a real city, and a wrong flag on a card the whole crew reads is
+     worse than no flag at all. */
+  const num = (v) => Number(v) || 0;
+  const km = num(event.km);
+  const sep = '  ›  ';
+
+  const title = (km && event.from && event.to)
+    ? event.from + sep + km.toFixed(0) + ' km' + sep + event.to
+    : ([event.from, event.to].filter(Boolean).join(sep) || shape.title);
+
   const fields = [];
-  const add = (name, value) => {
-    if (value !== undefined && value !== null && String(value).length) {
-      fields.push({ name, value: String(value).slice(0, 200), inline: true });
-    }
-  };
-  add('Driver', event.driver || event.driverId);
-  if (event.cargo) add('Cargo', event.cargo);
-  if (event.from || event.to) add('Route', [event.from, event.to].filter(Boolean).join(' → '));
-  if (event.km) add('Distance', Math.round(event.km) + ' km');
-  if (event.kind === 'job.delivered' && event.income) add('Payout', '€' + event.income);
+  const add = (name, value) => fields.push({ name, value, inline: true });
+  if (km) add('Distance', km.toFixed(1) + ' km');
+  if (num(event.top)) add('Top speed', Math.round(num(event.top)) + ' km/h');
+  if (num(event.income)) {
+    /* grouped, because 25266 and 252660 are the same shape at a glance */
+    add('Income', '€' + Math.round(num(event.income)).toLocaleString('en-GB'));
+  }
+  if (!fields.length && event.cargo) add('Cargo', String(event.cargo).slice(0, 80));
 
   const payload = JSON.stringify({
     username: 'Gaming Nation',
     embeds: [{
-      title: shape.title,
-      description: String(event.text || '').slice(0, 500),
+      /* the driver above the route rather than in a field: it is who the
+         card is about, not one of the numbers on it */
+      author: (event.driver || event.driverId)
+        ? { name: String(event.driver || event.driverId).slice(0, 120) }
+        : undefined,
+      title: String(title).slice(0, 240),
+      url: SITE_URL ? SITE_URL + '/login.html#/logbook' : undefined,
+      description: String(event.cargo || event.text || '').slice(0, 300),
       color: shape.colour,
-      fields: fields.slice(0, 6),
+      fields: fields.slice(0, 3),
+      footer: { text: shape.title + (event.game === 'ats'
+        ? ' · American Truck Simulator'
+        : ' · Euro Truck Simulator 2') },
       timestamp: new Date(event.at || Date.now()).toISOString(),
     }],
   });

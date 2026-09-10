@@ -1073,6 +1073,10 @@ const Fleet = {
       /* the console words its own notices, so it needs the facts and not
          only our sentence */
       jobId: job ? job.id : '',
+      /* Tracked on every frame since the run began and never sent anywhere.
+         A delivery card wants it, and nothing else knows it. */
+      top: job ? Math.round(job.top || 0) : 0,
+      avgSpeed: job ? Math.round(job.avgSpeed || 0) : 0,
       game: (db.live && db.live.game) || db.settings.game || 'ets2',
     }, extra || {});
     fetch(this.endpoint() + '/api/fleet/event', {

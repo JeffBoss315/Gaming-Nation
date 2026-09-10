@@ -353,6 +353,7 @@ Object.assign(CITY_LABEL, {
   Kumanovo: 'Куманово', Podgorica: 'Подгорица', Niksic: 'Никшић',
   Pristina: 'Prishtinë', Prizren: 'Prizren', Durres: 'Durrës', Vlore: 'Vlorë',
   Shkoder: 'Shkodër', Tirana: 'Tiranë', Sarajevo: 'Сарајево', 'Banja Luka': 'Бања Лука',
+  Belgrade: 'Београд',
   /* Greece & Turkey */
   Athens: 'Αθήνα', Thessaloniki: 'Θεσσαλονίκη', Patra: 'Πάτρα', Kavala: 'Καβάλα',
   Ioannina: 'Ιωάννινα', Lamia: 'Λαμία', Kalamata: 'Καλαμάτα', Heraklion: 'Ηράκλειο',
@@ -776,3 +777,4 @@ function geoToGameLatLng(gameKey, lat, lon) {
   const f = SCHEMATIC_FIT[gameKey === 'ats' ? 'ats' : 'ets2'];
   return gameLatLng([f.bx + lon * f.kx, f.by + mercY(lat) * f.ky]);
 }
+

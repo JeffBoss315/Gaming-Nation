@@ -1448,6 +1448,37 @@ async provision(user) {
 
         lastError = error;
 
+        /* 23505 is "something unique already exists", and WHICH thing
+           decides what to do about it.
+
+           This used to assume it was always the driver_code and retry with
+           a fresh one. When the conflict is really auth_user_id - this
+           person already HAS a driver row - a new code cannot help, so it
+           span six times and gave up with "no driver record was made" at
+           somebody whose record existed all along.
+
+           And when the constraint is missing from the database entirely,
+           nothing raised 23505 at all: the insert succeeded, every sign-in
+           made another row, and the roster filled up with the same person
+           under a new code each time. That is the fault being reported as
+           "two or more names appear every time a driver logs in". */
+        const clash = String(error.message || '') + ' ' + String(error.details || '');
+        if (error.code === '23505' && /auth_user_id/i.test(clash)) {
+            const { data: mine } = await window.gmnSupabase
+                .from('drivers').select('*').eq('auth_user_id', user.id).maybeSingle();
+            if (mine) {
+                console.info('[GMN] this account already had a driver record — using it');
+                return { driver: mine, error: null };
+            }
+            /* The row exists - the database just said so - and this device
+               still cannot read it. That is a policy problem, and saying so
+               is more use than another five attempts. */
+            return { driver: null, error: Object.assign(new Error(
+                'Your driver record already exists, but this device is not '
+                + 'allowed to read it. The drivers select policy from '
+                + 'supabase/setup.sql is what grants that.'), { code: '23505' }) };
+        }
+
         if (error.code === '23505') {           /* the code was taken */
             code = 'GMN' + String(Math.floor(1000 + Math.random() * 9000));
             continue;
