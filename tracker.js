@@ -3763,45 +3763,6 @@ function viewDashboard() {
 /* The profile tile on the run monitor. Telemetry does not report which game
    profile is loaded, so this is the driver telling us — it labels their runs
    and is what the launch bar shows. */
-function openProfilePicker() {
-  const s = Store.db.settings;
-  modal({
-    title: 'Game profile',
-    size: 'narrow',
-    body: `<p class="t2">Which Euro Truck Simulator 2 / American Truck Simulator profile
-        do you drive under? It is only a label — it goes on your runs so a shared
-        machine does not mix two drivers' work up.</p>
-      ${GameProfiles.list.length ? `
-        <div class="t3 xs mt-12">Found on this machine, most recently played first:</div>
-        <div class="row gap-8 wrap mt-8">
-          ${GameProfiles.list.slice(0, 8).map((pr) => `
-            <button class="btn btn-sm ${pr.name === s.profileName ? 'btn-primary' : ''}"
-              data-act="profile-pick" data-name="${esc(pr.name)}">${esc(pr.name)}</button>`).join('')}
-        </div>` : `
-        <div class="t3 xs mt-12">${Launcher.api()
-          ? 'No game profiles found on this machine yet — they appear once the game has saved one.'
-          : 'Profiles are read from the game folder, which only the desktop app can see.'}</div>`}
-      <div class="field mt-12"><label for="profName">Or type it</label>
-        <input class="input" id="profName" value="${esc(s.profileName || '')}"
-          placeholder="Leave blank to use your driver name"></div>`,
-    foot: `<button class="btn" data-close>Cancel</button>
-      <button class="btn btn-primary" data-act="profile-save">${icon('check')}Save</button>`,
-  });
-}
-
-function saveProfileName() {
-  const db = Store.db;
-  const el = $('#profName');
-  db.settings.profileName = el ? el.value.trim() : '';
-  db.conn.profile = db.settings.profileName || (db.driver ? db.driver.name : null);
-  Store.log('info', db.settings.profileName
-    ? 'Game profile set to ' + db.settings.profileName
-    : 'Game profile cleared — using your driver name');
-  Store.save();
-  closeModals();
-  render();
-}
-
 /* The icons the launch tiles wear.
 
    Read once out of each game's own executable and kept in the store, so a
@@ -3904,7 +3865,6 @@ const GameIcons = {
 function launchBarHTML() {
   const db = Store.db;
   const s = db.settings;
-  const profile = db.conn.profile;
   const ets2Ready = !!s.ets2Exe;
   const atsReady = !!s.atsExe;
   const tmpReady = !!s.tmpExe;
@@ -3937,11 +3897,9 @@ function launchBarHTML() {
       ${tmpReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
 
-    <button class="launch-tile" data-act="pick-profile">
-      <span class="lt-mark">${icon('user')}</span>
-      <span class="lt-text"><span class="lt-1">${profile ? 'PROFILE' : 'PROFILE'}</span>
-        <span class="lt-2">${esc(profile || 'Waiting…')}</span></span>
-    </button>
+    ${/* The PROFILE tile stood here. It existed to ask the driver which game
+          profile they were on, and the client works that out for itself now.
+          Settings still has the field, under Game. */''}
 
     <button class="launch-tile" data-act="open-gmn" data-href="login.html#/dashboard">
       <span class="lt-mark">${icon('grid')}</span>
@@ -5394,7 +5352,16 @@ function viewSettings() {
       ${toggle('autoStartTracking', 'Start tracking after launching the game',
                'Arm the telemetry link as soon as the game is started from here.')}
       <div class="field"><label for="setProfile">Game profile</label>
-        <input class="input" id="setProfile" value="${esc(s.profileName)}" placeholder="Leave blank to use the active profile"></div>
+        <input class="input" id="setProfile" value="${esc(s.profileName)}" placeholder="Detected from the game — leave blank to keep it automatic"></div>
+      ${/* What the client found, so this field is not a blank box somebody
+            has to guess into. It picks the most recently saved on its own;
+            this is only here for the driver who wants to say otherwise. */''}
+      <div class="t3 xs" style="margin-top:-8px">${GameProfiles.list.length
+        ? 'Found on this machine: ' + GameProfiles.list.slice(0, 6)
+            .map((pr) => esc(pr.name) + (pr === GameProfiles.list[0] ? ' (playing)' : '')).join(', ')
+        : Launcher.api()
+          ? 'No game profiles found yet — they appear once the game has saved one.'
+          : 'Profiles are read from the game folder, which only the desktop app can see.'}</div>
       <div class="row gap-8 wrap">
         <div class="field grow"><label for="setHost">Telemetry host</label>
           <input class="input" id="setHost" value="${esc(s.telemetryHost || '127.0.0.1')}"
@@ -7240,19 +7207,6 @@ function handle(act, t) {
         toast('Could not write to storage', 'err');
       }
       return;
-    case 'pick-profile': openProfilePicker(); return;
-    case 'profile-pick': {
-      const picked = t.dataset.name || '';
-      Store.db.settings.profileName = picked;
-      Store.db.conn.profile = picked;
-      Store.save();
-      closeModals();
-      toast('Profile set to ' + picked, 'ok');
-      render();
-      return;
-    }
-
-    case 'profile-save': saveProfileName(); return;
 
     case 'admin-drivers': openAdminDrivers(); return;
     case 'admin-applications': openAdminApplications(); return;
