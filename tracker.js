@@ -4805,6 +4805,62 @@ function dmComposer(placeholder) {
   </form>`;
 }
 
+/* Everyone a driver could talk to.
+
+   The Messages screen listed only conversations that already existed, and
+   the one way to start a new one was the button on a live map pin - which
+   needs the other driver to be out on the road reporting a position at
+   that moment. So two drivers who had never spoken could not speak unless
+   they happened to be driving at the same time, and a driver who was
+   parked was unreachable.
+
+   This is the crew, from the company roster: everybody except you, and
+   except anybody suspended. Sorted so whoever is out driving is easiest
+   to find, because that is usually who somebody wants. */
+function crewDirectory() {
+  const hq = Auth.hqDb();
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+  const onRoad = new Set((Fleet.drivers || []).map((d) => String(d.id)));
+
+  return (hq.drivers || [])
+    .filter((d) => d && d.id && String(d.id) !== me
+      && d.accountStatus !== 'suspended')
+    .map((d) => Object.assign({}, d, { driving: onRoad.has(String(d.id)) }))
+    .sort((a, b) => (b.driving - a.driving)
+      || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+}
+
+function openCrewDirectory() {
+  const crew = crewDirectory();
+  modal({
+    title: 'Start a conversation',
+    body: crew.length ? `
+      <p class="t2">Anyone on the crew, whether they are driving or not.</p>
+      <div class="col gap-8 mt-12">
+        ${crew.map((d) => `
+          <div class="setting-row">
+            <div class="row gap-8" style="min-width:0">
+              ${avatarFace(d, 'sm')}
+              <div style="min-width:0">
+                <div class="b6 trunc">${esc(d.name || d.id)}</div>
+                <div class="t3 xs mono">${esc(d.id)}${d.driving ? ' · on the road' : ''}</div>
+              </div>
+            </div>
+            <div class="row gap-8">
+              <button class="btn btn-sm" data-act="map-message" data-id="${esc(d.id)}"
+                title="Message ${esc(d.name || d.id)}">${icon('chat')}</button>
+              <button class="btn btn-sm" data-act="map-call" data-id="${esc(d.id)}"
+                data-name="${esc(d.name || d.id)}"
+                title="Call ${esc(d.name || d.id)}">${icon('phone')}</button>
+            </div>
+          </div>`).join('')}
+      </div>`
+      : `<p class="t2">There is nobody else on the crew yet. Drivers appear here
+         once they have signed up and been approved.</p>`,
+    foot: `<button class="btn" data-close>Close</button>`,
+  });
+}
+
 function viewMessages() {
   const notices = Store.db.messages;
   const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
@@ -4859,7 +4915,8 @@ function viewMessages() {
 
   return `
   ${viewHead('Messages', 'Talk to another driver, or read what management sent',
-    `<button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
+    `<button class="btn btn-sm btn-primary" data-act="crew-directory">${icon('chat')}New message</button>
+     <button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
   ${dmOffline()}
   <section class="card"><div class="card-body">
     <div class="split">
@@ -7330,7 +7387,10 @@ function handle(act, t) {
     /* From the live map. Opening the conversation means going to the
        screen it is on, or the thread loads behind the map and nothing
        appears to happen. */
+    case 'crew-directory': openCrewDirectory(); return;
+
     case 'map-message':
+      closeModals();          /* it may have been opened from the directory */
       state.view = 'messages';
       Messages.openThread(t.dataset.id);
       return;
