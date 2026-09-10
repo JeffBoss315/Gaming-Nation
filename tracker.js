@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.10';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.0';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -4263,7 +4263,18 @@ function viewDashboard() {
 
   ${launchBarHTML()}
 
-  ${driverStripHTML()}
+  ${/* A seven-cell strip stood here - status, truck, load, location,
+        earned today, driven today, XP. Every one of those is still on
+        screen somewhere it belongs: status and the nearest city along the
+        bottom bar, the truck and the load on the run card below, and
+        today's figures and the XP on Statistics. This was a second copy
+        of all of it across the top of the one screen a driver watches
+        while driving.
+
+        It also carried a bug of its own the whole time: live.near is
+        {city, distance}, and printing it whole put "[object Object]"
+        where the city should have been. Everything else in the client
+        reads live.near.city. */''}
 
   ${assignmentsCardHTML()}
 
@@ -4457,95 +4468,6 @@ const GamePaths = {
     if (found) { Store.save(); render(); GameIcons.refresh(); }
   },
 };
-
-/* ============================================================
-   THE DRIVER STRIP
-   ------------------------------------------------------------
-   Seven things a driver wants without reading a screen: whether
-   the crew can see them, what they are driving, what they are
-   carrying, where they are, what today has paid, how far it has
-   gone, and what the career adds up to.
-
-   Every cell says "-" when it does not know, and carries a
-   title saying WHY. A dash with no explanation is what sends
-   people to the forums; "the game is not sending telemetry" is
-   what sends them to fix it. Nothing here is ever filled in
-   with a plausible guess.
-   ============================================================ */
-function driverStripHTML() {
-  const db = Store.db;
-  const live = Telemetry.mode === 'live' ? db.live : null;
-  const job = db.job;
-  const rec = Career.record();
-  const rank = Career.rank(rec);
-  const day = Career.today();
-  const linked = db.conn.gmn === 'connected';
-
-  /* How this driver appears to everybody else, which is the only version of
-     "online" worth showing. A client that cannot reach the company is
-     invisible to the crew however open its window is, and saying "Online"
-     then would be a lie the driver has no way to see through. */
-  const playing = !!(rec.row && rec.row.playing);
-  const state = !linked
-    ? { cls: 'off',  text: 'Not linked', why: 'This client cannot reach the company service, so the crew cannot see you.' }
-    : playing
-    ? { cls: 'live', text: 'Driving',    why: 'The crew sees you as driving right now.' }
-    : rec.status === 'online'
-    ? { cls: 'on',   text: 'Online',     why: 'The crew sees you as online.' }
-    : { cls: 'off',  text: 'Offline',    why: 'The crew sees you as offline.' };
-
-  const truck = (live && live.truck) || (db.driver && db.driver.truck) || '';
-  const truckWhy = truck ? 'What the game reports you are sitting in.'
-    : live ? 'The game has not named the truck yet.'
-    : 'The game is not sending telemetry, so the truck is unknown.';
-
-  const where = (live && live.near) || '';
-  const whereWhy = where ? 'The nearest city the game map knows.'
-    : live ? 'No city near enough to name.'
-    : 'The game is not sending telemetry, so the position is unknown.';
-
-  const cell = (o) => {
-    const tag = o.view ? 'button' : 'div';
-    const attrs = o.view ? ` data-act="nav" data-view="${esc(o.view)}"` : '';
-    return `<${tag} class="dcell${o.view ? ' go' : ''}" title="${esc(o.why || '')}"${attrs}>
-      <span class="dcell-ico">${icon(o.icon)}</span>
-      <span class="dcell-body">
-        <span class="dcell-k">${esc(o.k)}</span>
-        <span class="dcell-v">${o.v}</span>
-      </span>
-    </${tag}>`;
-  };
-  const sub = (t) => `<span class="dsub">${esc(t)}</span>`;
-
-  return `<div class="dstrip">
-    ${cell({ icon: 'wifi', k: 'Status', why: state.why,
-      v: `<span class="dstate ${state.cls}"><span class="beat"></span>${esc(state.text)}</span>` })}
-
-    ${cell({ icon: 'truck', k: 'Truck', why: truckWhy,
-      v: truck ? esc(truck) : '&mdash;' })}
-
-    ${cell({ icon: 'box', k: 'Delivery',
-      why: job ? 'The load you are running now.' : 'No load is booked in game.',
-      v: job ? esc(job.cargo) + ' ' + sub('to ' + job.to) : '&mdash;' })}
-
-    ${cell({ icon: 'pin', k: 'Location', why: whereWhy,
-      v: where ? esc(where) : '&mdash;' })}
-
-    ${cell({ icon: 'bolt', k: 'Earned today',
-      why: day.runs ? day.runs + ' run' + (day.runs === 1 ? '' : 's') + ' finished since midnight.'
-        : 'No runs finished since midnight.',
-      v: fmt.eur(day.income) })}
-
-    ${cell({ icon: 'route', k: 'Driven today',
-      why: day.minutes >= 1 ? fmt.dur(Math.round(day.minutes)) + ' at the wheel today.'
-        : 'No driving recorded today.',
-      v: fmt.km(day.km) })}
-
-    ${cell({ icon: 'star', k: 'XP', view: 'stats',
-      why: 'Rank and XP come from your Gaming Nation record. Opens Statistics.',
-      v: fmt.n(Career.xp(rec)) + ' ' + sub(rank.name) })}
-  </div>`;
-}
 
 function launchBarHTML() {
   const db = Store.db;
@@ -5188,6 +5110,14 @@ function viewProfile() {
         <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
       </div>
     </div>
+    ${(() => {
+      const strip = badgeStripHTML(rec);
+      return strip ? `<div class="mt-16">
+        <div class="eyebrow">Earned · ${badges} of ${ACHIEVEMENTS.length}</div>
+        <div class="mt-8">${strip}</div>
+      </div>` : '';
+    })()}
+
     <div class="stat-row mt-20">
       <div class="stat"><div class="v">${fmt.n(s.totalKm)}</div><div class="k">Total km</div></div>
       <div class="stat"><div class="v">${fmt.n(s.totalJobs)}</div><div class="k">Runs</div></div>
@@ -5545,6 +5475,29 @@ function viewStats() {
    The same badges the platform awards, so one earned is one shown in both
    places. Locked ones are shown too, with how far along they are: a wall
    of things you cannot see is not a wall worth climbing. */
+/* One badge, drawn the same way everywhere it appears - the achievements
+   wall and the driver record. It was drawn inline in one view and nowhere
+   else, so a badge a driver had won existed on exactly one screen. */
+function badgeMark(a) {
+  return `<span class="ach-ico" title="${esc(a.name + ' — ' + a.desc)}">${icon(a.icon)}</span>`;
+}
+
+/* The ones this driver has actually won, as a row of medallions. Capped:
+   sixteen of them is a wall, and this is a summary - the count carries
+   the rest and the Achievements screen has every one. */
+function badgeStripHTML(rec, limit) {
+  const got = Career.badges(rec).filter((b) => b.done);
+  if (!got.length) return '';
+  const max = limit || 8;
+  const shown = got.slice(0, max);
+  return `<div class="badgestrip">
+    ${shown.map((b) => `<span class="ach tier-${esc(b.a.tier)} got badgeslot">
+      ${badgeMark(b.a)}</span>`).join('')}
+    ${got.length > shown.length
+      ? `<span class="badgestrip-more">+${got.length - shown.length} more</span>` : ''}
+  </div>`;
+}
+
 function viewAchievements() {
   const rec = Career.record();
   const all = Career.badges(rec);
@@ -5556,7 +5509,7 @@ function viewAchievements() {
      #0d111a and an unreadable one on white - and a value written into the
      element cannot be themed. */
   const card = (b) => `<div class="ach tier-${esc(b.a.tier)} ${b.done ? 'got' : ''}">
-      <span class="ach-ico">${icon(b.a.icon)}</span>
+      ${badgeMark(b.a)}
       <div class="grow" style="min-width:0">
         <div class="ach-name">${esc(b.a.name)}</div>
         <div class="ach-desc">${esc(b.a.desc)}</div>

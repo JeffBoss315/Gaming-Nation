@@ -192,35 +192,6 @@ app.whenReady().then(async () => {
     check('and one not awarded stays locked', b['a-community'].done === false,
       'Community Contributor');
 
-    /* ---- the strip is honest when it knows nothing ---- */
-    /* conn.gmn is set explicitly, not assumed. The scratch profile is a
-       directory that survives between runs, so the LAST run's "connected"
-       was still in the store and this read Online on the second run and
-       after - a test that passed once and then quietly stopped testing
-       anything. */
-    const strip = await run(`(() => {
-      Store.db.job = null; Store.db.live = null; Telemetry.mode = 'sim';
-      Store.db.conn.gmn = 'offline';
-      return driverStripHTML();
-    })()`);
-    check('with no telemetry the strip says so, not a guess',
-      /not sending telemetry/.test(strip) && (strip.match(/&mdash;/g) || []).length >= 2,
-      (strip.match(/&mdash;/g) || []).length + ' cell(s) show a dash with a reason');
-    check('and it never claims the crew can see an unlinked client',
-      /Not linked/.test(strip), 'status reads "Not linked"');
-
-    const live = await run(`(() => {
-      Store.db.conn.gmn = 'connected';
-      Telemetry.mode = 'live';
-      Store.db.live = { truck: 'Scania S 730 V8', near: 'Rotterdam' };
-      Store.db.job = { cargo: 'Steel coils', to: 'Hamburg' };
-      return driverStripHTML();
-    })()`);
-    for (const [what, txt] of [['the truck', 'Scania S 730 V8'], ['the city', 'Rotterdam'],
-                               ['the load', 'Steel coils'], ['status', 'Online']]) {
-      check('  live, it shows ' + what, live.indexOf(txt) > -1, txt);
-    }
-
     /* ---- the face that goes on a Discord card ----
        It lives in two places and reading only one is a silent failure: the
        driver record is rebuilt on every sign-in and only carries a photo

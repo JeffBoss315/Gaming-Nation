@@ -631,55 +631,10 @@ body.can-install .install-cta{display:inline-flex}
   object-fit:cover;border-radius:50%;
 }
 
-/* ---------- the driver strip ----------
-   Seven cells under the launch tiles. It wraps rather than scrolls: a
-   figure a driver has to drag sideways to read is a figure they will not
-   read, and this exists to be read at a glance. */
-.dstrip{
-  /* 124px, not 150: at 150 the seventh cell drops onto a row of its own
-     beside five cells of white space. Seven fit across a desktop window,
-     and the long values carry an ellipsis and a title. */
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:1px;
-  background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);
-  overflow:hidden;margin-bottom:14px;
-
-  /* .main is a flex column that scrolls, so its children shrink when the
-     page is longer than the window. A card cannot shrink past its own
-     text - but overflow:hidden removes exactly that floor, and this strip
-     collapsed to its two border pixels with all seven cells still laid out
-     at full height inside it, clipped. Cells present, nothing on screen.
-     Anything here with overflow:hidden needs this. */
-  flex:0 0 auto;
-}
-.dcell{
-  display:flex;align-items:center;gap:9px;min-width:0;
-  padding:10px 12px;background:var(--panel);text-align:left;color:var(--text);
-}
-.dcell.go{cursor:pointer;transition:background var(--t)}
-.dcell.go:hover{background:var(--panel-2)}
-.dcell-ico{width:24px;height:24px;flex:none;display:grid;place-items:center;
-  border-radius:var(--r-sm);background:var(--panel-2);color:var(--text-3)}
-.dcell-ico svg{width:14px;height:14px}
-.dcell-body{display:flex;flex-direction:column;min-width:0;line-height:1.2}
-.dcell-k{font-size:9.5px;font-weight:700;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--text-3)}
-.dcell-v{font-size:12.5px;font-weight:600;margin-top:3px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsub{color:var(--text-3);font-weight:500}
-.dstate{display:inline-flex;align-items:center;gap:6px}
-.dstate.live{color:var(--accent)}
-.dstate.on{color:var(--ok)}
-.dstate.off{color:var(--text-3)}
-.dstate.off .beat{background:var(--text-3);animation:none}
-@media (max-width:720px){
-  .dstrip{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .dcell{padding:9px 10px}
-}
-
 /* This copy is behind the one the website is offering. Said in the two
    places the build number already appears, in the colour the client uses
-   for "this wants attention" and not the one it uses for "this is broken":
-   an old client still works, it is just old. */
+   for "this wants attention" and not the one it uses for "this is
+   broken": an old client still works, it is just old. */
 .rail-old{
   display:inline-block;margin-left:6px;padding:1px 5px;border-radius:99px;
   background:color-mix(in srgb,var(--warn) 20%,transparent);
@@ -724,10 +679,51 @@ body.can-install .install-cta{display:inline-flex}
 }
 .ach.got{border-color:color-mix(in srgb,var(--ac) 42%,transparent);
   background:color-mix(in srgb,var(--ac) 8%,var(--panel-2))}
-.ach-ico{width:32px;height:32px;flex:none;display:grid;place-items:center;
-  border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
-.ach.got .ach-ico{background:color-mix(in srgb,var(--ac) 18%,transparent);color:var(--ac)}
-.ach-ico svg{width:17px;height:17px}
+/* A BADGE THAT LOOKS LIKE A BADGE.
+
+   This was a flat tinted square, which reads as a list icon rather than
+   as something won. Earned, it is now a struck medallion in the tier's
+   metal, with a ring and a highlight off the top-left the way a real one
+   catches light. Locked, it is the same shape in the page's own greys, so
+   the wall reads as one set with some of it still to come rather than as
+   two different kinds of thing. */
+.ach-ico{
+  position:relative;width:38px;height:38px;flex:none;
+  display:grid;place-items:center;border-radius:50%;
+  background:var(--panel-3);color:var(--text-3);
+  border:1px solid var(--line-2);
+}
+.ach-ico svg{width:18px;height:18px;position:relative}
+.ach.got .ach-ico{
+  color:#0d1117;
+  border-color:color-mix(in srgb,var(--ac) 70%,transparent);
+  background:
+    radial-gradient(120% 120% at 30% 22%,
+      color-mix(in srgb,var(--ac) 95%,#fff) 0%,
+      var(--ac) 45%,
+      color-mix(in srgb,var(--ac) 72%,#000) 100%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb,var(--ac) 16%,transparent),
+    inset 0 1px 0 color-mix(in srgb,#fff 45%,transparent);
+}
+/* the milled edge, drawn rather than imagined */
+.ach.got .ach-ico::after{
+  content:'';position:absolute;inset:3px;border-radius:50%;
+  border:1px dashed color-mix(in srgb,#000 22%,transparent);
+  pointer-events:none;
+}
+
+/* Earned badges wherever a driver's record is shown, not only on the
+   Achievements screen - a badge nobody sees anywhere else is a badge that
+   may as well not have been won. */
+/* Each medallion carries the tier class, so it needs to be its own
+   element - but it must not also inherit the CARD's padding and border,
+   which is what .ach is. Stripped back to the mark alone. */
+.badgeslot{display:inline-flex;padding:0;border:0;background:none}
+.badgestrip{display:flex;flex-wrap:wrap;gap:8px}
+.badgestrip .ach-ico{width:34px;height:34px}
+.badgestrip .ach-ico svg{width:16px;height:16px}
+.badgestrip-more{align-self:center;font-size:11px;color:var(--text-3)}
 .ach-name{font-size:12.5px;font-weight:600}
 .ach-desc{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.4}
 .ach-bar{height:4px;border-radius:99px;background:var(--panel-3);overflow:hidden;margin-top:8px}

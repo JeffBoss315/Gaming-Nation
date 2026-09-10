@@ -1,7 +1,7 @@
 {
   "name": "gaming-nation-trucker",
   "productName": "Gaming Nation Trucker",
-  "version": "1.0.10",
+  "version": "1.1.0",
   "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
   "author": "Gaming Nation",
   "main": "electron-main.js",
@@ -60,6 +60,7 @@
     "smoke:career": "node tools/run-electron.js tools/smoke-career.js .",
     "smoke:notify": "node tools/run-electron.js tools/smoke-notify-support.js .",
     "smoke:convoysheet": "node tools/run-electron.js tools/smoke-convoy-client.js .",
+    "check:discord": "node tools/check-discord-avatar.js",
     "smoke:update": "node tools/run-electron.js tools/smoke-update-check.js .",
     "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
     "smoke:plugin": "node tools/smoke-plugin-install.js .",
