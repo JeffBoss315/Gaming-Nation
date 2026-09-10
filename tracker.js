@@ -2839,33 +2839,18 @@ function viewLiveMap() {
     <div class="card-body" id="fleetPanel">${fleetPanelInner()}</div>
   </section>
 
-  <section class="card">
-    <div class="card-head"><span class="label">Telemetry source</span></div>
-    <div class="card-body">
-      <div class="setting-row"><span class="t2">Mode</span>
-        <span class="pill ${Telemetry.mode === 'live' ? 'ok' : 'warn'}">${Telemetry.mode === 'live' ? 'Live from game' : 'Simulator'}</span></div>
-      <div class="setting-row"><span class="t2">Endpoint</span><span class="mono sm">${esc(Telemetry.endpoint())}</span></div>
-      <div class="setting-row"><span class="t2">Read every</span>
-        <span class="mono sm">${esc(String(Store.db.settings.pollRate || 400))} ms</span></div>
-      ${Telemetry.mode !== 'live' ? `<div class="setting-row"><span class="t2">Last error</span>
-        <span class="sm t3">${esc(Telemetry.lastError || 'not tried yet')}</span></div>` : ''}
+  ${/* The "Telemetry source" card stood here: mode, endpoint, poll rate,
+        service address, and two paragraphs telling the driver to put the
+        SCS plugin in the game's plugins folder and run a telemetry server.
 
-      <!-- the other half of "real time": the game feeds this client, and this
-           client feeds the rest of the company down one open stream -->
-      <div class="setting-row"><span class="t2">Company link</span>${liveDot()}</div>
-      ${Fleet.enabled() ? `<div class="setting-row"><span class="t2">Service</span>
-        <span class="mono sm">${esc(Fleet.endpoint())}</span></div>` : ''}
-      ${Realtime.status !== 'live' && Fleet.enabled() ? `<div class="setting-row">
-        <span class="t2">Live link</span>
-        <span class="sm t3">${esc(Realtime.lastError || 'not open')} — polling instead</span></div>` : ''}
+        The app does both of those itself now - it installs the plugin and
+        it starts and supervises the adapter - so the instructions were not
+        merely noise, they were wrong, and a driver following them would
+        have been doing work that had already been done for them.
 
-      <div class="t3 xs mt-12">Live data needs the SCS telemetry plugin in
-        <span class="mono">&lt;game&gt;/bin/win_x64/plugins/</span> and the telemetry server running.
-        On a phone, set the host to this PC's LAN address in Settings.</div>
-      <div class="t3 xs mt-8">With a company service connected, your run is pushed to
-        every other client the moment it changes, and theirs arrive here the same way —
-        no waiting for the next poll.</div>
-    </div>
+        What is left of it is where it belongs: the status bar says whether
+        telemetry is live and why not, and the run monitor names the actual
+        reason when nothing is arriving. */''}
   </section>`;
 }
 
