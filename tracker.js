@@ -491,6 +491,9 @@ const Telemetry = {
       db.conn.link = 'connected';
       Store.log('ok', 'Live telemetry connected — ' + mapFor(frame.game).label);
       GameWatch.began(frame.game, 'telemetry');
+        /* a profile can be switched between sessions, and the game has just
+           told us it is running - so this is the moment to look again */
+        GameProfiles.detect();
       Store.save();
       render();
     }
@@ -3768,7 +3771,17 @@ function openProfilePicker() {
     body: `<p class="t2">Which Euro Truck Simulator 2 / American Truck Simulator profile
         do you drive under? It is only a label — it goes on your runs so a shared
         machine does not mix two drivers' work up.</p>
-      <div class="field mt-12"><label for="profName">Profile name</label>
+      ${GameProfiles.list.length ? `
+        <div class="t3 xs mt-12">Found on this machine, most recently played first:</div>
+        <div class="row gap-8 wrap mt-8">
+          ${GameProfiles.list.slice(0, 8).map((pr) => `
+            <button class="btn btn-sm ${pr.name === s.profileName ? 'btn-primary' : ''}"
+              data-act="profile-pick" data-name="${esc(pr.name)}">${esc(pr.name)}</button>`).join('')}
+        </div>` : `
+        <div class="t3 xs mt-12">${Launcher.api()
+          ? 'No game profiles found on this machine yet — they appear once the game has saved one.'
+          : 'Profiles are read from the game folder, which only the desktop app can see.'}</div>`}
+      <div class="field mt-12"><label for="profName">Or type it</label>
         <input class="input" id="profName" value="${esc(s.profileName || '')}"
           placeholder="Leave blank to use your driver name"></div>`,
     foot: `<button class="btn" data-close>Cancel</button>
@@ -3799,6 +3812,58 @@ function saveProfileName() {
    Nothing here ships anybody's artwork: the marks belong to SCS and to
    TruckersMP, and this only ever shows what is already on the driver's
    own disk. */
+/* Which game profile the driver is actually on.
+
+   Telemetry never reports it, so this used to be a box the driver typed
+   their profile name into - and a typo then rode along on every run they
+   filed, with nothing anywhere to catch it. Somebody who renamed a profile
+   in game had no way to know the label had stopped matching either.
+
+   The games write it down: each profile is a folder whose name is the
+   profile name in hex, and its timestamp moves every time that profile is
+   saved. So the most recently saved profile is the one being played, and
+   the client can simply look.
+
+   A name the driver set by hand is left alone. They may have a reason, and
+   overwriting somebody's deliberate choice on every boot is worse than
+   being slightly out of date. */
+const GameProfiles = {
+  list: [],
+  looking: false,
+
+  async detect() {
+    const D = window.gmnDesktop;
+    if (!D || !D.gameProfiles || this.looking) return;
+    this.looking = true;
+    try {
+      const kind = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+      this.list = (await D.gameProfiles(kind)) || [];
+
+      const s = Store.db.settings;
+      const newest = this.list[0] && this.list[0].name;
+      if (!newest) return;
+
+      /* only when nothing has been chosen, or when the chosen one is no
+         longer a profile that exists */
+      const chosen = String(s.profileName || '').trim();
+      const stillThere = chosen && this.list.some((p) => p.name === chosen);
+      if (chosen && stillThere) return;
+
+      s.profileName = newest;
+      Store.db.conn.profile = newest;
+      Store.log('ok', chosen
+        ? 'Game profile "' + chosen + '" is gone — now on ' + newest
+        : 'Game profile detected — ' + newest);
+      Store.save();
+      render();
+    } catch (e) {
+      /* no profiles readable is the same as none: the driver can still type one */
+    } finally {
+      this.looking = false;
+    }
+  },
+};
+
 const GameIcons = {
   pending: false,
 
@@ -3841,6 +3906,7 @@ function launchBarHTML() {
   const s = db.settings;
   const profile = db.conn.profile;
   const ets2Ready = !!s.ets2Exe;
+  const atsReady = !!s.atsExe;
   const tmpReady = !!s.tmpExe;
 
   return `<div class="launchbar">
@@ -3851,6 +3917,15 @@ function launchBarHTML() {
         : icon('truck')}</span>
       <span class="lt-text"><span class="lt-1">EURO TRUCK</span><span class="lt-2">Simulator 2</span></span>
       ${ets2Ready ? '' : '<span class="lt-warn" title="No path set">!</span>'}
+    </button>
+
+    <button class="launch-tile game game-only" data-act="launch-game" data-kind="ats"
+      title="${atsReady ? esc(s.atsExe) : 'Set the path in Settings'}">
+      <span class="lt-mark">${GameIcons.of('ats')
+        ? '<img src="' + esc(GameIcons.of('ats')) + '" alt="">'
+        : icon('truck')}</span>
+      <span class="lt-text"><span class="lt-1">AMERICAN TRUCK</span><span class="lt-2">Simulator</span></span>
+      ${atsReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
 
     <button class="launch-tile tmp game-only" data-act="launch-game" data-kind="tmp"
@@ -7166,6 +7241,17 @@ function handle(act, t) {
       }
       return;
     case 'pick-profile': openProfilePicker(); return;
+    case 'profile-pick': {
+      const picked = t.dataset.name || '';
+      Store.db.settings.profileName = picked;
+      Store.db.conn.profile = picked;
+      Store.save();
+      closeModals();
+      toast('Profile set to ' + picked, 'ok');
+      render();
+      return;
+    }
+
     case 'profile-save': saveProfileName(); return;
 
     case 'admin-drivers': openAdminDrivers(); return;
@@ -8183,6 +8269,7 @@ function startServices() {
   /* Read once, kept in the store, and only re-read when a path changes -
      so this costs nothing on the loads where nothing has moved. */
   GameIcons.refresh();
+  GameProfiles.detect();
 
   /* A machine that was hosting keeps hosting. Started before the probe
      below, or the first look finds nothing and the driver waits out the

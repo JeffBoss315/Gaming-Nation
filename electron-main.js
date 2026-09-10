@@ -178,6 +178,59 @@ ipcMain.handle('game:autoDetect', (_e, kind) => {
 
    Fails quietly to null: a tile with no icon falls back to the glyph,
    which is exactly what it looked like before. */
+/* Which game profiles this driver actually has.
+
+   Telemetry never says which profile is loaded, so the client used to ask
+   the driver to type the name and then trusted whatever they typed. A
+   typo went on every run they filed, and somebody who renamed a profile
+   in game had no idea the label had stopped matching.
+
+   The games write it down. Each profile is a folder under Documents whose
+   NAME is the profile name in hex - 414652494341 is AFRICA - and the
+   folder's timestamp moves every time that profile is saved. So the list
+   is real, and the most recently saved one is the profile being played.
+
+   Both folders are read: Steam Cloud keeps them in steam_profiles and a
+   non-Steam copy uses profiles, and a driver can have both. */
+const PROFILE_DIRS = { ets2: 'Euro Truck Simulator 2', ats: 'American Truck Simulator' };
+
+function decodeProfileName(folder) {
+  if (!/^[0-9A-Fa-f]+$/.test(folder) || folder.length % 2) return null;
+  let out = '';
+  for (let i = 0; i < folder.length; i += 2) {
+    const code = parseInt(folder.slice(i, i + 2), 16);
+    /* a real name is printable; anything else means this is not a name */
+    if (code < 32 || code > 126) return null;
+    out += String.fromCharCode(code);
+  }
+  return out.trim() || null;
+}
+
+ipcMain.handle('game:profiles', async (_e, kind) => {
+  const game = PROFILE_DIRS[kind === 'ats' ? 'ats' : 'ets2'];
+  const docs = app.getPath('documents');
+  const found = [];
+
+  for (const box of ['steam_profiles', 'profiles']) {
+    const dir = path.join(docs, game, box);
+    let names = [];
+    try { names = fs.readdirSync(dir); } catch (err) { continue; }
+    for (const folder of names) {
+      const name = decodeProfileName(folder);
+      if (!name) continue;
+      try {
+        const st = fs.statSync(path.join(dir, folder));
+        if (!st.isDirectory()) continue;
+        found.push({ name, at: st.mtimeMs, steam: box === 'steam_profiles' });
+      } catch (err) { /* a folder that vanished mid-read is not a profile */ }
+    }
+  }
+
+  /* most recently saved first: that is the one being played */
+  found.sort((a, b) => b.at - a.at);
+  return found;
+});
+
 ipcMain.handle('game:icon', async (_e, exe) => {
   if (!exe || !fs.existsSync(exe)) return null;
   try {

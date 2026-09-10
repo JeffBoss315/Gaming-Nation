@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   launch:     (exe)  => ipcRenderer.invoke('game:launch', exe),
   /* the game's own icon, read out of its executable on this machine */
   gameIcon:   (exe)  => ipcRenderer.invoke('game:icon', exe),
+  /* the game profiles on this machine, newest-saved first */
+  gameProfiles: (kind) => ipcRenderer.invoke('game:profiles', kind),
   exists:     (p)    => ipcRenderer.invoke('fs:exists', p),
   /* which of the games are running right now */
   gameRunning: ()    => ipcRenderer.invoke('game:running'),
