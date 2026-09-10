@@ -82,6 +82,15 @@ const SITE_URL = String(process.env.GMN_PUBLIC_URL
   || (readJSON(path.join(ROOT, 'site.config.json'), {}) || {}).siteUrl
   || '').trim().replace(/[/]+$/, '');
 
+/* Where honest driving stops and racing starts, on the delivery card.
+   
+   Deliberately one figure for the whole crew rather than each driver's own
+   siren setting: a badge only means something if it means the same thing on
+   everybody's card, and sirenSpeedLimit is a personal alert somebody can
+   set to 200. At or below this a run is marked REAL; a single km/h over and
+   it is a RACE. */
+const RACE_OVER = Number(process.env.GMN_RACE_SPEED) || 100;
+
 const DISCORD_FILE = process.env.GMN_DISCORD_FILE
   || path.join(ROOT, 'gmn-discord.json');
 const DISCORD_WEBHOOK = String(
@@ -180,7 +189,16 @@ function postToDiscord(event) {
   const fields = [];
   const add = (name, value) => fields.push({ name, value, inline: true });
   if (km) add('Distance', km.toFixed(1) + ' km');
-  if (num(event.top)) add('Top speed', Math.round(num(event.top)) + ' km/h');
+  if (num(event.top)) {
+    const top = Math.round(num(event.top));
+    /* The badge is the point of the field, not decoration on it: a top speed
+       on its own means nothing to somebody scrolling a channel, and "was
+       this driven or was it raced" is the question they are actually
+       asking. */
+    add('Top speed', top + ' km/h  ' + (top > RACE_OVER
+      ? '\u{1F3C1} **RACE**'
+      : '\u2705 REAL'));
+  }
   if (num(event.income)) {
     /* grouped, because 25266 and 252660 are the same shape at a glance */
     add('Income', '€' + Math.round(num(event.income)).toLocaleString('en-GB'));

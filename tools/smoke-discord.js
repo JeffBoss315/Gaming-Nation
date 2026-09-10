@@ -150,6 +150,26 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         /\u{1F3D7}/u.test(e2.description || ''), e2.description);
     }
 
+    /* The badge, on both sides of the line and exactly on it. 100 is REAL
+       and 101 is a RACE - an off-by-one here mislabels somebody's honest
+       run in front of the whole crew. */
+    for (const [speed, want, other] of [[99, 'REAL', 'RACE'],
+                                        [100, 'REAL', 'RACE'],
+                                        [101, 'RACE', 'REAL'],
+                                        [140, 'RACE', 'REAL']]) {
+      posted.length = 0;
+      await post('job.delivered', { top: speed });
+      await wait(500);
+      let f = null;
+      try {
+        f = (JSON.parse(posted[0].body).embeds[0].fields || [])
+          .find((x) => x.name === 'Top speed');
+      } catch (e) { /* reported below */ }
+      const v = (f && f.value) || '';
+      check('  ' + String(speed).padStart(3) + ' km/h reads ' + want,
+        v.indexOf(want) > -1 && v.indexOf(other) === -1, v || 'NO FIELD');
+    }
+
     posted.length = 0;
     await post('job.start'); await wait(500);
     check('so does a run starting', posted.length === 1, posted.length + ' post(s)');
