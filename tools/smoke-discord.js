@@ -53,7 +53,8 @@ const post = (kind, extra) => new Promise((resolve) => {
   const payload = JSON.stringify(Object.assign({ kind, driver: 'Ana Vos',
     driverId: 'GMN-1001', text: kind + ' happened', from: 'Hannover', to: 'Bremen',
     cargo: 'Cut Flowers', km: 214, income: 4200, top: 124, game: 'ets2',
-    fromCountry: 'DE', toCountry: 'FR' }, extra || {}));
+    fromCountry: 'DE', toCountry: 'FR',
+    avatar: 'https://cdn.gaming-nation.test/a/ana.png' }, extra || {}));
   const r = http.request({ host: '127.0.0.1', port: FLEET_PORT, method: 'POST',
     path: '/api/fleet/event',
     headers: { 'content-type': 'application/json',
@@ -104,9 +105,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         !!embed && /Hannover.*214 km.*Bremen/.test(embed.title || ''),
         embed ? embed.title : 'UNPARSEABLE');
 
-      check('the driver is named above it',
-        !!embed && embed.author && embed.author.name === 'Ana Vos',
+      check('the driver is named above it, with their code',
+        !!embed && embed.author && embed.author.name === 'Ana Vos · GMN-1001',
         (embed && embed.author && embed.author.name) || 'NOBODY');
+      check('and their face, when it is one Discord can fetch',
+        !!embed && embed.author
+          && embed.author.icon_url === 'https://cdn.gaming-nation.test/a/ana.png',
+        (embed && embed.author && embed.author.icon_url) || 'NO ICON');
 
       /* exactly the three numbers worth comparing between runs */
       const names = ((embed && embed.fields) || []).map((f) => f.name);
@@ -148,6 +153,27 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         !/[\u{1F1E6}-\u{1F1FF}]/u.test(e2.title || ''), e2.title);
       check('and an unlisted load still gets a mark',
         /\u{1F3D7}/u.test(e2.description || ''), e2.description);
+    }
+
+    /* An embed icon is fetched by Discord's own servers, so an address only
+       this machine can reach is a broken image on every card the crew
+       reads. Better to show the name alone. The client filters these and
+       the service checks again, because the event arrives over a network. */
+    for (const [what, url] of [
+      ['a data: URI', 'data:image/png;base64,iVBORw0KGgo='],
+      ['a LAN address', 'https://192.168.1.14:7040/files/a.png'],
+      ['localhost', 'https://localhost:7040/files/a.png'],
+      ['plain http', 'http://cdn.gaming-nation.test/a/ana.png'],
+    ]) {
+      posted.length = 0;
+      await post('job.delivered', { avatar: url });
+      await wait(500);
+      let a2 = null;
+      try { a2 = JSON.parse(posted[0].body).embeds[0].author; } catch (e) { /* below */ }
+      check('  ' + what + ' is left off, not sent broken',
+        !!a2 && !a2.icon_url, a2 && a2.icon_url ? 'SENT ' + a2.icon_url : 'name only');
+      check('  and the name still carries the code',
+        !!a2 && a2.name === 'Ana Vos · GMN-1001', (a2 && a2.name) || '-');
     }
 
     /* The badge, on both sides of the line and exactly on it. 100 is REAL

@@ -172,6 +172,28 @@ function postToDiscord(event) {
     ['tyre', '\u{1F6DE}'], ['tire', '\u{1F6DE}'],
   ].sort((a, b) => b[0].length - a[0].length);
 
+  /* "Jeff Boss · GMN-001", or whichever half we were given. */
+  const authorName = (e) => {
+    const name = String(e.driver || '').trim();
+    const code = String(e.driverId || '').trim();
+    if (name && code && name !== code) return name + ' · ' + code;
+    return name || code;
+  };
+
+  /* The client already filters this, and the service checks again rather
+     than trusting it: the event arrives over the network and an embed icon
+     is a URL this service hands to Discord to fetch. */
+  const publicIcon = (value) => {
+    const v = String(value || '').trim();
+    if (!/^https:\/\//i.test(v)) return '';
+    let host = '';
+    try { host = new URL(v).hostname.toLowerCase(); } catch (e) { return ''; }
+    if (host === 'localhost' || host === '::1' || /\.local$/.test(host)) return '';
+    if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return '';
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return '';
+    return v.slice(0, 500);
+  };
+
   const cargoMark = (name) => {
     const t = String(name || '').toLowerCase();
     for (const [word, mark] of CARGO_MARKS) if (t.indexOf(word) > -1) return mark;
@@ -208,10 +230,21 @@ function postToDiscord(event) {
   const payload = JSON.stringify({
     username: 'Gaming Nation',
     embeds: [{
-      /* the driver above the route rather than in a field: it is who the
-         card is about, not one of the numbers on it */
+      /* The driver above the route rather than in a field: it is who the
+         card is about, not one of the numbers on it. Name AND code,
+         because a channel with two Jeffs in it needs the code and a
+         channel with one still reads better with it - and the code is
+         what anybody looking the run up will search for.
+
+         The face is only there when the client sent an https address it
+         had reason to believe was public: Discord fetches an embed icon
+         from its own servers, so a data: URI or a LAN address would be a
+         broken image on every card. No icon beats a broken one. */
       author: (event.driver || event.driverId)
-        ? { name: String(event.driver || event.driverId).slice(0, 120) }
+        ? {
+            name: authorName(event).slice(0, 120),
+            icon_url: publicIcon(event.avatar) || undefined,
+          }
         : undefined,
       title: String(title).slice(0, 240),
       url: SITE_URL ? SITE_URL + '/login.html#/logbook' : undefined,

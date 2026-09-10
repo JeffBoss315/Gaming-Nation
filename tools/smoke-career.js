@@ -63,9 +63,14 @@ app.whenReady().then(async () => {
   try {
     /* ---------------- a driver with a history ----------------
        Two runs today (one still queued), one yesterday, one last week.
-       An open session started 90 minutes ago and a closed one from
-       yesterday. */
-    await run(`(() => {
+       Sixty minutes at the wheel this morning, a hundred and twenty
+       yesterday, and one session still running.
+
+       The fixture hands back the clock it used. Anything else is a test
+       that passes all day and fails at ten past midnight, when a session
+       "ten minutes ago" started yesterday - which is the very case the
+       code under test exists to handle. */
+    const clock = await run(`(() => {
       const now = Date.now();
       const H = 3600000;
       const noon = new Date(); noon.setHours(12, 0, 0, 0);
@@ -89,14 +94,24 @@ app.whenReady().then(async () => {
         drivers: [{ id: 'GMN-TEST', name: 'Test Driver', km: 60000, deliveries: 120,
                     earned: 812000, convoys: 6, attendance: 92, country: 'Kenya',
                     status: 'online', playing: false, achievements: ['a-lead'] }],
+        /* Anchored to midnight, not to "an hour and a half ago": a session
+           pinned to the clock straddles midnight when the test happens to
+           run late, and then the figure this checks - the part that
+           happened TODAY - is correctly smaller and the test wrongly
+           fails. It failed exactly that way at 00:05. */
         sessions: [
-          { driverId: 'GMN-TEST', started: new Date(now - 1.5 * H).toISOString(), ended: null },
-          { driverId: 'GMN-TEST', started: new Date(now - 26 * H).toISOString(),
-            ended: new Date(now - 24 * H).toISOString() },
+          { driverId: 'GMN-TEST',
+            started: new Date(noon.getTime() - 11 * H).toISOString(),   /* 01:00 */
+            ended:   new Date(noon.getTime() - 10 * H).toISOString() }, /* 02:00 */
+          { driverId: 'GMN-TEST',
+            started: new Date(yest.getTime() - 10 * H).toISOString(),   /* yesterday */
+            ended:   new Date(yest.getTime() - 8 * H).toISOString() },
+          { driverId: 'GMN-TEST', started: new Date(now - 10 * 60000).toISOString(),
+            ended: null },                                             /* open, 10 min */
           { driverId: 'SOMEONE-ELSE', started: new Date(now - 5 * H).toISOString(), ended: null },
         ],
       }));
-      return true;
+      return { midnight: Career.midnight(), openStart: now - 10 * 60000 };
     })()`);
 
     const today = await run('JSON.parse(JSON.stringify(Career.today()))');
@@ -106,16 +121,20 @@ app.whenReady().then(async () => {
     check('and a run held in the queue still counts', today.runs === 2,
       today.runs + ' run(s) today');
 
-    /* ---- driving hours ---- */
+    /* ---- driving hours ----
+       60 today at 01:00, 120 yesterday, and 10 still running. */
+    const open = (Date.now() - clock.openStart) / 60000;
+    const openToday = (Date.now() - Math.max(clock.openStart, clock.midnight)) / 60000;
+    const near = (got, want) => Math.abs(got - want) < 0.5;
+
     const mins = await run('Career.minutes()');
-    check('an open session counts up to now', Math.round(mins) === 210,
-      Math.round(mins) + ' min (90 open + 120 closed)');
+    check('an open session counts up to now', near(mins, 60 + 120 + open),
+      Math.round(mins) + ' min — 60 + 120 + the ' + open.toFixed(1) + ' still running');
     const todayMins = await run('Career.today().minutes');
-    check('and today counts only the part that happened today',
-      Math.round(todayMins) < Math.round(mins) && Math.round(todayMins) >= 89,
-      Math.round(todayMins) + ' min today');
+    check('and today counts only what happened today', near(todayMins, 60 + openToday),
+      Math.round(todayMins) + ' min today — yesterday’s 120 left out');
     check('another driver’s sessions are not counted',
-      (await run('Career.sessions().length')) === 2,
+      (await run('Career.sessions().length')) === 3,
       (await run('Career.sessions().length')) + ' session(s) mine');
 
     /* ---- rank: every condition, not distance alone ----
@@ -134,6 +153,20 @@ app.whenReady().then(async () => {
       return Career.rank().name;
     })()`);
     check('but an awarded rank always wins', awarded === 'Professional Driver', awarded);
+
+    /* ---- how far to the next rank ----
+       The bar has to agree with the sentence under it. Measured on distance
+       alone this driver reads 100% - 60,000 km against Driver's 25,000 -
+       under the words "4 more convoys". So it is measured on the condition
+       FURTHEST from being met, which is the convoys. */
+    await run(`(() => { const hq = Auth.hqDb(); delete hq.drivers[0].rankIdx;
+      Auth.saveHqDb(hq); return 1; })()`);
+    const nx = await run('JSON.parse(JSON.stringify(Career.toNext()))');
+    check('the next rank is named with what it still wants',
+      nx.rank.name === 'Driver' && nx.need.join('; ').indexOf('4 more convoys') > -1,
+      nx.rank.name + ' — ' + nx.need.join('; '));
+    check('and the bar agrees with that sentence', nx.pct < 100,
+      nx.pct + '% — 6 of the 10 convoys Driver wants');
 
     /* ---- XP ---- */
     const xp = await run('Career.xp()');

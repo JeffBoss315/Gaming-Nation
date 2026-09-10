@@ -1100,6 +1100,14 @@ const Fleet = {
       toCountry: job ? countryOfCity(
         (db.live && db.live.game) || db.settings.game, job.to) : null,
       game: (db.live && db.live.game) || db.settings.game || 'ets2',
+
+      /* The driver's face, for the Discord card. Only ever a public http(s)
+         URL: Discord fetches an embed icon from its own servers, so a
+         data: URI renders as nothing and a LAN address is not reachable
+         from the internet at all. Sending either would put a broken image
+         on every card, and a data: avatar is also fifty kilobytes on an
+         event that is otherwise a few hundred bytes. */
+      avatar: publicAvatar(db.driver && db.driver.avatar),
     }, extra || {});
     fetch(this.endpoint() + '/api/fleet/event', {
       method: 'POST',
@@ -3163,6 +3171,10 @@ function seed() {
 
       chatSound: true,          /* a note when a message arrives */
 
+      /* dark | light | auto. 'auto' follows Windows, which is what somebody
+         who has set their whole machine light already expects. */
+      theme: 'dark',
+
       hostService: false,       /* run the company service on this machine */
       hostServiceLan: false,    /* and let the rest of the crew reach it */
       liveTelemetry: true,      /* poll the real game when the server is reachable */
@@ -3310,6 +3322,52 @@ const Store = {
     this.db.activity.unshift({ at: new Date().toISOString(), tag, msg });
     this.db.activity = this.db.activity.slice(0, 200);
     this.save();
+  },
+};
+
+/* ============================================================
+   THEME
+   ------------------------------------------------------------
+   Every colour in the client comes from about twenty tokens, so
+   a theme is a data-theme on <html> and nothing else - see the
+   end of tracker.css.
+
+   'auto' follows the machine, and keeps following it: somebody
+   whose Windows flips to dark at sunset should not have to come
+   back here. So the listener stays attached rather than the
+   preference being read once at boot.
+   ============================================================ */
+const Theme = {
+  media: null,
+
+  wanted() {
+    const t = Store.db.settings.theme;
+    return t === 'light' || t === 'auto' ? t : 'dark';
+  },
+
+  apply() {
+    const want = this.wanted();
+    let use = want;
+    if (want === 'auto') {
+      const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      use = dark ? 'dark' : 'light';
+    }
+    /* dark is the stylesheet as written, so it is the ABSENCE of the
+       attribute rather than a value - one place for the default. */
+    if (use === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    this.watch();
+  },
+
+  watch() {
+    if (!window.matchMedia) return;
+    if (!this.media) {
+      this.media = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = () => { if (this.wanted() === 'auto') this.apply(); };
+      /* Safari and older Chromium only have the deprecated form */
+      if (this.media.addEventListener) this.media.addEventListener('change', onChange);
+      else if (this.media.addListener) this.media.addListener(onChange);
+    }
   },
 };
 
@@ -3697,6 +3755,26 @@ function avatarSrc(value) {
   if (/^https?:\/\//i.test(v)) return v;
   if (/^[\w./-]+\.(png|jpe?g|webp|gif|svg)$/i.test(v)) return v;
   return '';
+}
+
+/* An avatar somebody else's server can fetch.
+
+   avatarSrc() answers "can this page show it", which is a different and
+   easier question - a data: URI and a LAN address both pass that and
+   neither survives the trip to Discord, whose servers do the fetching and
+   are not on this network. Anything not plainly public comes back empty,
+   and the card then carries a name with no face rather than a broken
+   image on every delivery. */
+function publicAvatar(value) {
+  const v = avatarSrc(value);
+  if (!/^https:\/\//i.test(v)) return '';       /* https only; Discord refuses the rest */
+  let host = '';
+  try { host = new URL(v).hostname.toLowerCase(); } catch (e) { return ''; }
+  const private_ = host === 'localhost' || host === '::1'
+    || /\.local$/.test(host)
+    || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  return private_ ? '' : v;
 }
 
 /* Clearing onerror first is what stops a missing fallback looping. */
@@ -4848,13 +4926,21 @@ const Career = {
       need.push(n + ' more convoy' + (n === 1 ? '' : 's'));
     }
     if (r.attendance < nx.att) need.push(nx.att + '% attendance');
+    /* How far along, measured on the condition FURTHEST from being met.
+       Measured on distance alone, a driver with 60,000 km and 6 of the 10
+       convoys the next rank wants sees a bar at 100% under the words "4
+       more convoys" - a bar that disagrees with the sentence beneath it is
+       worse than no bar. Each condition is measured from the rank they
+       hold, because that is the ground they started this climb from. */
     const cur = this.rank(r);
-    const span = nx.km - cur.km;
-    return {
-      rank: nx,
-      need,
-      pct: span > 0 ? clamp(Math.round((r.km - cur.km) / span * 100), 0, 100) : 100,
-    };
+    const leg = (have, from, to) => (to <= from ? 1
+      : clamp((have - from) / (to - from), 0, 1));
+    const pct = Math.min(
+      leg(r.km, cur.km, nx.km),
+      leg(r.convoys, cur.convoys, nx.convoys),
+      leg(r.attendance, cur.att, nx.att),
+    );
+    return { rank: nx, need, pct: Math.round(pct * 100) };
   },
 
   /* ---------------- XP ----------------
@@ -4928,7 +5014,6 @@ const ACHIEVEMENTS = [
   { id: 'a-community', name: 'Community Contributor', desc: 'Recognised for outstanding community work.', icon: 'users',  tier: 'gold',   metric: 'manual', goal: 1 },
   { id: 'a-founder',   name: 'Founding Member',       desc: 'Joined Gaming Nation in its first year.',    icon: 'shield', tier: 'plat',   metric: 'manual', goal: 1 },
 ];
-const TIER_COLOR = { bronze: '#a8794f', silver: '#9aa3af', gold: '#e8913a', plat: '#6fb6c9' };
 
 /* ---------------- statistics ----------------
 
@@ -5045,9 +5130,11 @@ function viewAchievements() {
   const done = all.filter((b) => b.done);
   const rank = Career.rank(rec);
 
-  const card = (b) => {
-    const color = TIER_COLOR[b.a.tier] || '#9aa3af';
-    return `<div class="ach ${b.done ? 'got' : ''}" style="--ac:${color}">
+  /* The tier's colour is a class, not an inline value: it has to be a
+     different colour on a pale ground - #9aa3af is a fine silver on
+     #0d111a and an unreadable one on white - and a value written into the
+     element cannot be themed. */
+  const card = (b) => `<div class="ach tier-${esc(b.a.tier)} ${b.done ? 'got' : ''}">
       <span class="ach-ico">${icon(b.a.icon)}</span>
       <div class="grow" style="min-width:0">
         <div class="ach-name">${esc(b.a.name)}</div>
@@ -5061,7 +5148,6 @@ function viewAchievements() {
       </div>
       <span class="ach-tier">${esc(b.a.tier)}</span>
     </div>`;
-  };
 
   return `
   ${viewHead('Achievements', done.length + ' of ' + all.length + ' earned',
@@ -6687,6 +6773,25 @@ function viewSettings() {
         + 'already gets when you are on another call. Messages still arrive.')}
       ${toggle('chatSound', 'Sound on a new message',
         'A short note when a message lands while the client is open.')}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Appearance</span></div>
+    <div class="card-body">
+      <div class="setting-row">
+        <div>
+          <div class="b6">Theme</div>
+          <div class="t3 xs mt-4">${s.theme === 'auto'
+            ? 'Following Windows, and it keeps following it.'
+            : s.theme === 'light' ? 'Light.' : 'Dark, the way the client ships.'}</div>
+        </div>
+        <div class="seg">
+          ${[['dark', 'Dark'], ['light', 'Light'], ['auto', 'Match Windows']].map(([v, l]) => `
+            <button class="${(s.theme || 'dark') === v ? 'on' : ''}"
+              data-act="set-theme" data-v="${v}">${l}</button>`).join('')}
+        </div>
+      </div>
     </div>
   </section>
 
@@ -8586,6 +8691,12 @@ function handle(act, t) {
       render();
       return;
     case 'notify-all': Notify.markAll(); render(); return;
+    case 'set-theme':
+      Store.db.settings.theme = t.dataset.v;
+      Store.save();
+      Theme.apply();
+      render();
+      return;
     case 'convoy-open': state.convoySel = t.dataset.id; render(); return;
     case 'convoy-join': Convoys.toggle(t.dataset.id); return;
     case 'support-open': Support.open(t.dataset.kind); return;
@@ -9564,6 +9675,9 @@ function dismissSplash() {
 
 function boot() {
   Store.load();
+  /* Before anything paints. Applied after the first render, the client
+     would flash the wrong theme at every driver who chose the other one. */
+  Theme.apply();
   Platform.init();
 
   /* manifest shortcuts deep-link with #view */
