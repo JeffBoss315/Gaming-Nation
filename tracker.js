@@ -1004,6 +1004,10 @@ const Fleet = {
     const db = Store.db;
     const live = db.live;
     if (!live) return null;
+    /* Location sharing off: nothing about where this truck is leaves the
+       machine. Deliveries and sessions go through emit(), which is a
+       different road, so the driver's record is untouched by this. */
+    if (!db.settings.shareLocation) return null;
     const job = db.job;
     return {
       id: db.driver.gmnId,
@@ -2737,6 +2741,28 @@ const Siren = {
     };
   },
 
+  /* A message landing. Two soft notes, well under the siren, because this
+     says "somebody spoke" and the siren says "slow down". Sharing the audio
+     context means one resume() and one permission story for both. */
+  note() {
+    const ctx = this.audio();
+    if (!ctx) return;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.02);
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.09);
+    osc.connect(gain);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.26);
+    osc.stop(ctx.currentTime + 0.27);
+    osc.onended = () => { try { gain.disconnect(); } catch (e) {} };
+  },
+
   /* called on every telemetry frame */
   check(speed) {
     const s = Store.db.settings;
@@ -3123,6 +3149,20 @@ function seed() {
       minimiseToTray: true,
       telemetryPort: '25555',
       telemetryHost: '127.0.0.1',   /* not localhost — see Telemetry.endpoint() */
+      /* Whether this driver's truck is drawn on the crew's live map. Off
+         means no position is pushed at all - deliveries and sessions still
+         are, so the record is unaffected and only the map goes quiet. On by
+         default: a live map with nobody on it is the commoner complaint,
+         and this is a company everyone joined on purpose. */
+      shareLocation: true,
+
+      /* A call rung into an empty room is worse than a call refused. With
+         this on, an incoming call is answered 'busy' straight away - the
+         same answer the caller gets when this driver is already on one. */
+      doNotDisturb: false,
+
+      chatSound: true,          /* a note when a message arrives */
+
       hostService: false,       /* run the company service on this machine */
       hostServiceLan: false,    /* and let the rest of the crew reach it */
       liveTelemetry: true,      /* poll the real game when the server is reachable */
@@ -3278,6 +3318,7 @@ const state = {
   view: 'dashboard',
   msgSel: 0,
   chatSel: 0,
+  convoySel: null,
   logFilter: 'all',
   logQuery: '',
 };
@@ -4640,16 +4681,22 @@ function viewLogbook() {
 /* ---------------- profile ---------------- */
 function viewProfile() {
   const db = Store.db, d = db.driver, s = db.stats;
+  const rec = Career.record();
+  const badges = Career.badges(rec).filter((b) => b.done).length;
   return `
   ${viewHead('Driver record', 'Synced with your Gaming Nation profile',
-    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
+    `<button class="btn btn-sm" data-act="nav" data-view="stats">${icon('chart')}Statistics</button>
+     <button class="btn btn-sm" data-act="nav" data-view="achievements">${icon('medal')}Achievements</button>
+     <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
 
   <section class="card"><div class="card-body">
     <div class="row gap-16 wrap">
       ${avatarFace(d, 'lg me')}
       <div class="grow">
         <div class="lg b7">${esc(d.name)}</div>
-        <div class="t2 sm mt-4">${esc(d.rank)} · <span class="mono">${esc(d.gmnId)}</span></div>
+        <div class="t2 sm mt-4">${esc(rec ? Career.rank(rec).name : d.rank)}
+          · <span class="mono">${esc(d.gmnId)}</span>${
+          rec && rec.country ? ' · ' + esc(rec.country) : ''}</div>
         <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
       </div>
     </div>
@@ -4657,6 +4704,7 @@ function viewProfile() {
       <div class="stat"><div class="v">${fmt.n(s.totalKm)}</div><div class="k">Total km</div></div>
       <div class="stat"><div class="v">${fmt.n(s.totalJobs)}</div><div class="k">Runs</div></div>
       <div class="stat"><div class="v">${fmt.eur(s.totalIncome)}</div><div class="k">Revenue</div></div>
+      <div class="stat"><div class="v">${badges} / ${ACHIEVEMENTS.length}</div><div class="k">Badges</div></div>
       <div class="stat"><div class="v">${fmt.n(db.pending.length)}</div><div class="k">Awaiting sync</div></div>
     </div>
   </div></section>
@@ -5768,15 +5816,21 @@ function dmComposer(placeholder) {
    except anybody suspended. Sorted so whoever is out driving is easiest
    to find, because that is usually who somebody wants. */
 function crewDirectory() {
-  const hq = Auth.hqDb();
+  const hq = Auth.hqDb() || {};
   const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
   const onRoad = new Set((Fleet.drivers || []).map((d) => String(d.id)));
 
   return (hq.drivers || [])
     .filter((d) => d && d.id && String(d.id) !== me
       && d.accountStatus !== 'suspended')
-    .map((d) => Object.assign({}, d, { driving: onRoad.has(String(d.id)) }))
-    .sort((a, b) => (b.driving - a.driving)
+    .map((d) => Object.assign({}, d, {
+      driving: onRoad.has(String(d.id)),
+      /* Driving beats online: somebody on the road is reachable AND worth
+         calling about the road. Both beat a status field nobody has
+         refreshed, which is what 'online' amounts to for a parked driver. */
+      online: d.status === 'online',
+    }))
+    .sort((a, b) => (b.driving - a.driving) || (b.online - a.online)
       || String(a.name || a.id).localeCompare(String(b.name || b.id)));
 }
 
@@ -5786,14 +5840,25 @@ function openCrewDirectory() {
     title: 'Start a conversation',
     body: crew.length ? `
       <p class="t2">Anyone on the crew, whether they are driving or not.</p>
-      <div class="col gap-8 mt-12">
+      ${/* A roster of forty is a scroll, not a list. The filter is on the
+            name and the code, because a driver is looked for by whichever
+            one the person remembers. */''}
+      ${crew.length > 6 ? `<div class="field mt-12">
+        <input class="input" id="crewFind" placeholder="Find a driver by name or code"
+          autocomplete="off"></div>` : ''}
+      <div class="col gap-8 mt-12" id="crewList">
         ${crew.map((d) => `
-          <div class="setting-row">
+          <div class="setting-row crew-row"
+            data-find="${esc(String(d.name || '') + ' ' + d.id).toLowerCase()}">
             <div class="row gap-8" style="min-width:0">
               ${avatarFace(d, 'sm')}
               <div style="min-width:0">
-                <div class="b6 trunc">${esc(d.name || d.id)}</div>
-                <div class="t3 xs mono">${esc(d.id)}${d.driving ? ' · on the road' : ''}</div>
+                <div class="b6 trunc">
+                  <span class="crewdot ${d.driving ? 'driving' : d.online ? 'online' : ''}"
+                    title="${esc(d.driving ? 'On the road' : d.online ? 'Online' : 'Offline')}"></span>
+                  ${esc(d.name || d.id)}</div>
+                <div class="t3 xs mono">${esc(d.id)}${
+                  d.driving ? ' · on the road' : d.online ? ' · online' : ''}</div>
               </div>
             </div>
             <div class="row gap-8">
@@ -5808,6 +5873,31 @@ function openCrewDirectory() {
       : `<p class="t2">There is nobody else on the crew yet. Drivers appear here
          once they have signed up and been approved.</p>`,
     foot: `<button class="btn" data-close>Close</button>`,
+    onMount(w) {
+      const find = $('#crewFind', w);
+      if (!find) return;
+      find.focus();
+      find.addEventListener('input', () => {
+        const q = find.value.trim().toLowerCase();
+        let shown = 0;
+        $$('.crew-row', w).forEach((row) => {
+          const hit = !q || row.dataset.find.indexOf(q) > -1;
+          row.hidden = !hit;
+          if (hit) shown++;
+        });
+        /* Saying nothing matched beats an empty box, which reads as broken. */
+        let none = $('#crewNone', w);
+        if (!shown && !none) {
+          none = document.createElement('div');
+          none.id = 'crewNone';
+          none.className = 't3 xs';
+          none.textContent = 'Nobody on the crew matches that.';
+          $('#crewList', w).appendChild(none);
+        } else if (shown && none) {
+          none.remove();
+        }
+      });
+    },
   });
 }
 
@@ -6163,44 +6253,254 @@ function viewMenu() {
 /* ---------------- convoys ----------------
    Read from the company record the platform keeps, so the phone shows the
    same schedule the web dashboard does. */
-function viewConvoy() {
-  const events = Auth.events()
-    .filter((e) => e.status !== 'completed')
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-  const mine = Store.db.driver ? Store.db.driver.gmnId : null;
+/* ============================================================
+   CONVOYS
+   ------------------------------------------------------------
+   This screen used to be a list of names and a button that
+   opened the website. Everything a driver actually wants before
+   a convoy - where it meets, what the route is, who is leading,
+   who else is coming, and whether they are on the list - was on
+   the platform, which is not where they are sitting fifteen
+   minutes before departure.
 
-  const card = (e) => {
-    const live = e.status === 'live';
-    const signed = (e.registered || []).some((r) => r.driverId === mine);
-    const slots = (e.registered || []).length;
-    return `<section class="card conv-card">
-      <div class="card-body">
-        <div class="row-b wrap gap-8">
-          <span class="pill ${live ? 'ok' : 'brand'}">${live ? '<span class="beat"></span>Rolling now' : esc(e.typeLabel || 'Convoy')}</span>
-          <span class="t3 xs">${esc(fmt.dt(e.date))}</span>
-        </div>
-        <div class="conv-name mt-8">${esc(e.name)}</div>
-        ${e.start ? `<div class="t2 sm mt-4">${esc(e.start)} <span class="t3">&rarr;</span> ${esc(e.dest || '')}</div>` : ''}
-        <div class="row gap-12 wrap mt-12 xs t3">
-          ${e.distance ? `<span>${icon('route')}${fmt.km(e.distance)}</span>` : ''}
-          <span>${icon('users')}${slots}${e.maxSlots ? ' / ' + e.maxSlots : ''} signed on</span>
-          ${e.server ? `<span>${icon('wifi')}${esc(e.server)}</span>` : ''}
-        </div>
-        ${signed ? `<div class="pill ok mt-12">${icon('check')}You are signed on</div>` : ''}
-        <button class="btn btn-block mt-12" data-act="open-gmn"
-          data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}Open on the platform</button>
-      </div>
-    </section>`;
-  };
+   All of it is on the company record already. Signing on writes
+   to that same record, so it is the same sign-on the website
+   shows, not a second list to reconcile.
+
+   ONE THING IS NOT HERE. A convoy has no chat room of its own:
+   the company service has exactly one room, hardcoded, and every
+   room id collapses into it. So the chat button opens the crew
+   room and says that is what it is doing, rather than pretending
+   to a room that does not exist and quietly putting a driver's
+   convoy message in front of the whole company.
+   ============================================================ */
+const Convoys = {
+  me() { return String((Store.db.driver && Store.db.driver.gmnId) || ''); },
+
+  all() {
+    return (Auth.events() || [])
+      .filter((e) => e && e.status !== 'completed')
+      .sort((a, b) => {
+        /* rolling now first, then soonest */
+        const live = (x) => (x.status === 'live' ? 0 : 1);
+        return live(a) - live(b) || new Date(a.date) - new Date(b.date);
+      });
+  },
+  find(id) { return this.all().find((e) => String(e.id) === String(id)) || null; },
+
+  signedOn(e) {
+    return !!e && (e.registered || []).some((r) => String(r.driverId) === this.me());
+  },
+  full(e) {
+    return !!e.maxSlots && (e.registered || []).length >= e.maxSlots && !this.signedOn(e);
+  },
+
+  /* The crew on this convoy, as people rather than as ids, with the leader
+     first because that is who a driver looks for. */
+  members(e) {
+    const roster = Auth.roster();
+    const led = String(e.leaderId || '');
+    const onRoad = new Set((Fleet.drivers || []).map((d) => String(d.id)));
+    return (e.registered || []).map((r) => {
+      const d = roster.find((x) => String(x.id) === String(r.driverId));
+      return {
+        id: r.driverId,
+        name: (d && d.name) || r.driverId,
+        row: d || null,
+        state: r.state || 'registered',
+        leader: String(r.driverId) === led,
+        me: String(r.driverId) === this.me(),
+        driving: onRoad.has(String(r.driverId)),
+        online: !!d && d.status === 'online',
+      };
+    }).sort((a, b) => (b.leader - a.leader) || (b.driving - a.driving)
+      || String(a.name).localeCompare(String(b.name)));
+  },
+
+  leader(e) {
+    if (!e.leaderId) return null;
+    return Auth.driverRecord(e.leaderId)
+      || { id: e.leaderId, name: e.leaderId };
+  },
+
+  /* Every stop on the way, which is what `path` is for. An event with no
+     path - a meeting, a training session - has a start and no route, and
+     saying "Rotterdam to Rotterdam" would be worse than saying nothing. */
+  route(e) {
+    const path = Array.isArray(e.path) ? e.path.filter(Boolean) : [];
+    if (path.length > 1) return path;
+    return (e.start && e.dest && e.start !== e.dest) ? [e.start, e.dest] : [];
+  },
+
+  /* Signing on and off. Both write the company record, which is the record
+     the website reads - so this is the same list, not a copy of it. */
+  toggle(id) {
+    const hq = Auth.hqDb();
+    const e = hq && (hq.events || []).find((x) => String(x.id) === String(id));
+    if (!e) { toast('That convoy is no longer on the record', 'warn'); return; }
+
+    const me = this.me();
+    if (!me) { toast('Sign in first', 'warn'); return; }
+
+    e.registered = e.registered || [];
+    const at = e.registered.findIndex((r) => String(r.driverId) === me);
+
+    if (at > -1) {
+      e.registered.splice(at, 1);
+      if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+      Store.log('info', 'Signed off ' + (e.name || id));
+      toast('Signed off', 'ok');
+    } else {
+      if (e.maxSlots && e.registered.length >= e.maxSlots) {
+        toast('That convoy is full', 'warn');
+        return;
+      }
+      /* 'registered' is what the platform writes for a sign-up; 'completed'
+         is what it writes afterwards, and that is what attendance counts.
+         Writing anything else here would credit a convoy nobody drove. */
+      e.registered.push({ driverId: me, state: 'registered' });
+      if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+      Store.log('ok', 'Signed on to ' + (e.name || id));
+      toast('Signed on', 'ok');
+    }
+    render();
+  },
+};
+
+function convoyDetailHTML(e) {
+  const signed = Convoys.signedOn(e);
+  const live = e.status === 'live';
+  const members = Convoys.members(e);
+  const leader = Convoys.leader(e);
+  const route = Convoys.route(e);
+  const slots = (e.registered || []).length;
+  const full = Convoys.full(e);
+
+  const fact = (k, v) => v
+    ? `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>` : '';
+
+  const dot = (m) => `<span class="crewdot ${m.driving ? 'driving' : m.online ? 'online' : ''}"
+    title="${esc(m.driving ? 'On the road' : m.online ? 'Online' : 'Offline')}"></span>`;
 
   return `
-  ${viewHead('Convoys', events.length ? events.length + ' coming up' : 'Nothing on the schedule',
+  <div class="card-body">
+    ${e.description ? `<p class="t2 sm">${esc(e.description)}</p>` : ''}
+
+    ${route.length ? `
+      <div class="cvroute mt-16">
+        ${route.map((city, i) => `
+          <span class="cvstop ${i === 0 ? 'first' : ''} ${i === route.length - 1 ? 'last' : ''}">
+            <span class="cvdot"></span>${esc(city)}</span>`).join('<span class="cvline"></span>')}
+      </div>` : ''}
+
+    <div class="facts mt-16">
+      ${fact('Departs', esc(fmt.dt(e.date)))}
+      ${fact('Meets', e.meetTime ? esc(fmt.hm(e.meetTime)) : '')}
+      ${fact('Distance', e.distance ? fmt.km(e.distance) : '')}
+      ${fact('Expected', e.duration ? esc(fmt.dur(e.duration)) : '')}
+      ${fact('Server', e.server ? esc(e.server) : '')}
+      ${fact('Map', e.dlc ? esc(e.dlc) : '')}
+      ${fact('Leader', leader ? esc(leader.name) : '')}
+      ${fact('Signed on', slots + (e.maxSlots ? ' of ' + e.maxSlots : ''))}
+    </div>
+
+    ${e.meetPoint ? `<div class="t3 xs mt-12">${icon('pin')}Meeting point: ${esc(e.meetPoint)}</div>` : ''}
+
+    ${(e.instructions || []).length ? `
+      <div class="mt-16">
+        <div class="eyebrow">On the day</div>
+        <ul class="cvrules">${e.instructions.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+    <div class="mt-16">
+      <div class="eyebrow">Who is coming${members.length ? ' · ' + members.length : ''}</div>
+      ${members.length ? `<div class="cvcrew mt-8">${members.map((m) => `
+        <span class="cvmember ${m.me ? 'me' : ''}" title="${esc(m.id)}">
+          ${dot(m)}${esc(m.name)}${m.leader ? '<span class="cvlead">leader</span>' : ''}
+        </span>`).join('')}</div>`
+        : `<div class="t3 xs mt-8">Nobody has signed on yet. Be the first.</div>`}
+    </div>
+
+    <div class="row gap-8 wrap mt-16">
+      <button class="btn ${signed ? '' : 'btn-primary'}" data-act="convoy-join"
+        data-id="${esc(e.id)}" ${full ? 'disabled' : ''}>
+        ${icon(signed ? 'x' : 'check')}${signed ? 'Sign off' : full ? 'Full' : 'Sign on'}
+      </button>
+      ${/* One room, company-wide. Said plainly rather than dressed up as a
+            convoy room that does not exist. */''}
+      <button class="btn" data-act="nav" data-view="chats"
+        title="The company has one chat room and this opens it — there is no separate convoy room">
+        ${icon('chat')}Crew chat
+      </button>
+      <button class="btn" data-act="open-gmn"
+        data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}On the platform</button>
+      ${live ? '<span class="pill ok"><span class="beat"></span>Rolling now</span>' : ''}
+    </div>
+  </div>`;
+}
+
+function viewConvoy() {
+  const events = Convoys.all();
+  const me = Convoys.me();
+  const mine = events.filter((e) => Convoys.signedOn(e));
+
+  /* Whatever is rolling, else whatever this driver has signed on to next,
+     else the next one at all. Opening on a convoy they have nothing to do
+     with is a worse first guess than opening on their own. */
+  if (!state.convoySel || !Convoys.find(state.convoySel)) {
+    const first = events.find((e) => e.status === 'live') || mine[0] || events[0];
+    state.convoySel = first ? first.id : null;
+  }
+  const open = Convoys.find(state.convoySel);
+
+  const row = (e) => {
+    const live = e.status === 'live';
+    const signed = Convoys.signedOn(e);
+    const slots = (e.registered || []).length;
+    return `<button class="cvrow ${String(e.id) === String(state.convoySel) ? 'on' : ''}"
+        data-act="convoy-open" data-id="${esc(e.id)}">
+      <span class="cvrow-top">
+        <span class="pill ${live ? 'ok' : 'brand'}">${live
+          ? '<span class="beat"></span>Rolling' : esc(e.typeLabel || 'Convoy')}</span>
+        <span class="t3 xs">${esc(fmt.dt(e.date))}</span>
+      </span>
+      <span class="cvrow-name">${esc(e.name)}</span>
+      <span class="cvrow-sub">${e.start ? esc(e.start) + ' → ' + esc(e.dest || '') : ''}</span>
+      <span class="cvrow-foot">
+        ${icon('users')}${slots}${e.maxSlots ? ' / ' + e.maxSlots : ''}
+        ${signed ? '<span class="pill ok">You are on</span>' : ''}
+      </span>
+    </button>`;
+  };
+
+  if (!events.length) {
+    return `
+    ${viewHead('Convoys', 'Nothing on the schedule',
+      `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+    <section class="card"><div class="card-body"><div class="empty">${icon('route')}
+      <div>No convoys scheduled</div>
+      <div class="t3 xs">Convoys published on the Gaming Nation platform appear here,
+        with the route, the crew and the sign-on sheet.</div>
+    </div></div></section>`;
+  }
+
+  return `
+  ${viewHead('Convoys',
+    mine.length ? 'You are on ' + mine.length + ' of ' + events.length
+      : events.length + ' coming up',
     `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
-  ${events.length ? events.map(card).join('')
-    : `<section class="card"><div class="card-body"><div class="empty">${icon('route')}
-        <div>No convoys scheduled</div>
-        <div class="t3 xs">Convoys published on the Gaming Nation platform show up here.</div>
-      </div></div></section>`}`;
+
+  <div class="split">
+    <div class="split-list">${events.map(row).join('')}</div>
+    <section class="card split-main">
+      ${open ? `<div class="card-head">
+          <span class="label">${esc(open.name)}</span>
+          <span class="label">${esc(open.typeLabel || 'Convoy')}</span>
+        </div>${convoyDetailHTML(open)}`
+        : `<div class="card-body"><div class="empty">${icon('route')}
+            <div>Pick a convoy</div></div></div>`}
+    </section>
+  </div>`;
 }
 
 
@@ -6342,9 +6642,53 @@ function viewSettings() {
         role="switch" aria-checked="${!!s[key]}" aria-label="${esc(label)}"></button>
     </div>`;
 
+  const d = Store.db.driver;
+  const rec = Career.record();
+
   return `
   ${viewHead('Settings', 'Client configuration on this machine',
     `<button class="btn btn-sm btn-primary" data-act="save-settings">${icon('check')}Save</button>`)}
+
+  ${/* Who is signed in, and the way out. Both were reachable only from the
+        menu, which is not where anybody looks for an account. Nothing here
+        is editable: the driver record belongs to the platform, and a second
+        place to change a name is a second name to reconcile. */''}
+  <section class="card">
+    <div class="card-head"><span class="label">Account</span></div>
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        ${avatarFace(d, 'lg me')}
+        <div class="grow" style="min-width:170px">
+          <div class="lg b7">${esc(d.name)}</div>
+          <div class="t2 sm mt-4"><span class="mono">${esc(d.gmnId)}</span>
+            ${rec.country ? ' · ' + esc(rec.country) : ''}</div>
+          <div class="t3 xs mt-4">${esc(Career.rank(rec).name)} ·
+            joined ${esc(fmt.date(d.joined))}</div>
+        </div>
+      </div>
+      <div class="row gap-8 wrap mt-16">
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">
+          ${icon('link')}Change it on the platform</button>
+        <button class="btn btn-sm" data-act="nav" data-view="support">
+          ${icon('lifebuoy')}Support</button>
+        <button class="btn btn-sm btn-danger" data-act="logout">${icon('logout')}Sign out</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Crew</span></div>
+    <div class="card-body">
+      ${toggle('shareLocation', 'Show my truck on the crew map',
+        'Pushes your position while you drive. Off means the map goes quiet — '
+        + 'deliveries, sessions and your record are unaffected.')}
+      ${toggle('doNotDisturb', 'Do not disturb',
+        'Incoming calls are answered busy straight away, which is what the caller '
+        + 'already gets when you are on another call. Messages still arrive.')}
+      ${toggle('chatSound', 'Sound on a new message',
+        'A short note when a message lands while the client is open.')}
+    </div>
+  </section>
 
   <section class="card">
     <div class="card-head"><span class="label">Game</span></div>
@@ -7217,6 +7561,9 @@ const Messages = {
     } else if (!mine) {
       const who = d.room ? 'Crew chat' : (m.driver || 'A driver');
       toast(who + ': ' + String(m.text || 'sent an attachment').slice(0, 60), 'info');
+      /* Only for a conversation that is not already on screen: a note for a
+         message the driver is watching arrive is noise. */
+      if (Store.db.settings.chatSound) Siren.note();
     }
 
     this.pullThreads();
@@ -7538,9 +7885,11 @@ const Calls = {
     }
 
     if (d.kind === 'ring') {
-      /* Already busy: say so, rather than ringing unanswered behind
-         whatever is already on screen. */
-      if (this.state !== 'idle' || this.incoming) {
+      /* Already busy, or asked not to be disturbed: say so, rather than
+         ringing unanswered behind whatever is already on screen. Both give
+         the caller the same honest answer - somebody is there and is not
+         picking up - instead of a phone nobody hears. */
+      if (this.state !== 'idle' || this.incoming || Store.db.settings.doNotDisturb) {
         const was = { withId: this.withId, callId: this.callId };
         this.withId = String(d.from);
         this.callId = d.callId;
@@ -8237,6 +8586,8 @@ function handle(act, t) {
       render();
       return;
     case 'notify-all': Notify.markAll(); render(); return;
+    case 'convoy-open': state.convoySel = t.dataset.id; render(); return;
+    case 'convoy-join': Convoys.toggle(t.dataset.id); return;
     case 'support-open': Support.open(t.dataset.kind); return;
     case 'support-send': Support.send(t.dataset.kind); return;
     case 'test-siren': Siren.wail(1.6); return;

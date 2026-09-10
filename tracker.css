@@ -722,6 +722,58 @@ body.can-install .install-cta{display:inline-flex}
   font-size:11px;line-height:1.55;color:var(--text-2);overflow-x:auto;
 }
 
+
+/* ---------- convoys ---------- */
+.split-main{border:0;border-radius:0;background:var(--panel);min-width:0}
+
+.cvrow{
+  display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;
+  padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text);
+  background:transparent;transition:background var(--t);
+}
+.cvrow:hover{background:var(--panel-3)}
+.cvrow.on{background:var(--panel-3);box-shadow:inset 2px 0 0 var(--accent)}
+.cvrow-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.cvrow-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvrow-sub{font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvrow-foot{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--text-3)}
+.cvrow-foot svg{width:12px;height:12px}
+
+/* the route, read as a line of stops rather than a sentence */
+.cvroute{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.cvstop{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+  border-radius:99px;background:var(--panel-2);border:1px solid var(--line);
+  font-size:11.5px;font-weight:500}
+.cvstop.first,.cvstop.last{border-color:var(--line-2);font-weight:600}
+.cvdot{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.cvstop.first .cvdot{background:var(--accent)}
+.cvstop.last .cvdot{background:#b9e87a}
+.cvline{width:14px;height:1px;background:var(--line-2)}
+
+.cvrules{margin:8px 0 0;padding-left:18px;color:var(--text-2);font-size:11.5px;line-height:1.6}
+.cvrules li{margin-top:3px}
+
+.cvcrew{display:flex;flex-wrap:wrap;gap:6px}
+.cvmember{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;
+  border-radius:99px;background:var(--panel-2);border:1px solid var(--line);
+  font-size:11.5px}
+.cvmember.me{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.cvlead{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent)}
+
+/* a row in the crew directory, hidden by the filter rather than removed */
+.crew-row[hidden]{display:none}
+
+/* who is about, in one dot: driving, online, or neither */
+.crewdot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-3)}
+.crewdot.online{background:var(--ok)}
+.crewdot.driving{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+
+@media (max-width:720px){
+  .cvroute{gap:4px}
+  .cvline{width:8px}
+}
+
 /* ---------- sign-in ----------
    Stands in for the client until a driver signs in. It sits under the title
    bar, so the window controls keep working while signed out. */
