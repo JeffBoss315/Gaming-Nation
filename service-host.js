@@ -34,6 +34,29 @@ let serviceState = {
    not writable, and the service would come up and then fail on the first
    write with nothing on screen to say why. userData is per-machine, is
    writable, and survives an upgrade. */
+/* supabase-client.js is in build.asarUnpack for the same reason this
+   function exists: fleet-server.js looks for it in its own directory, and
+   sealed inside the archive that lookup fails. Both routes are kept - the
+   file beside the service, and the values handed over below - so neither
+   depends on the other surviving the next packaging change.
+
+   The Supabase project this build talks to, read out of supabase-client.js
+   the same way fleet-server.js would if it could see the file. Returns an
+   empty object when there is nothing to pass, so the service falls back to
+   its own lookup rather than being handed blanks. */
+function supabaseEnv() {
+  for (const p of [path.join(__dirname, 'supabase-client.js'),
+                   path.join(process.resourcesPath || '', 'app.asar', 'supabase-client.js')]) {
+    try {
+      const src = fs.readFileSync(p, 'utf8');
+      const u = src.match(/SUPABASE_URL\s*=\s*'([^']+)'/);
+      const k = src.match(/SUPABASE_KEY\s*=\s*'([^']+)'/);
+      if (u && k) return { GMN_SUPABASE_URL: u[1], GMN_SUPABASE_KEY: k[1] };
+    } catch (e) { /* try the next place */ }
+  }
+  return {};
+}
+
 function serviceDir() {
   const dir = path.join(app.getPath('userData'), 'company-service');
   try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* reported on start */ }
@@ -115,6 +138,19 @@ function startService(opts) {
            the script lives inside resources, which is under Program Files and
            read-only, so a credential could never be put there anyway. */
         GMN_DISCORD_FILE: path.join(dir, 'discord.json'),
+        /* The Supabase project, handed over rather than left to be found.
+
+           fleet-server.js looks for supabase-client.js in its OWN folder.
+           Packaged, it is spawned out of app.asar.unpacked, where that file
+           is not - so the lookup failed, SUPABASE came out null, and
+           /api/auth/supabase answered 501 to every installed copy. Crew
+           chat, driver messages and calls all died there, and the screen
+           said only that the service could not be reached.
+
+           This process CAN read the file, asar or not, so it reads it and
+           passes the two values. That works whatever the packaging does
+           next, which file adjacency did not. */
+        ...supabaseEnv(),
         /* so another driver can open the site from this machine and have
            it joined up with no address to type */
         GMN_SITE_DIR: path.dirname(script),

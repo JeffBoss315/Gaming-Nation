@@ -163,7 +163,8 @@
     },
     "afterPack": "./tools/after-pack.js",
     "asarUnpack": [
-      "fleet-server.js"
+      "fleet-server.js",
+      "supabase-client.js"
     ]
   },
   "dependencies": {
