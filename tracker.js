@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.1';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.2';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -3518,6 +3518,89 @@ const MapMods = {
    clears it there; it is not worth deleting somebody's face over
    a query that half-failed.
    ============================================================ */
+/* ============================================================
+   THE CREW'S DISCORD CHANNEL
+   ------------------------------------------------------------
+   The service posts deliveries to a webhook it reads from
+   discord.json in its own directory. Nothing ever created that
+   file: the app offered no way to set one, and the project's
+   gmn-discord.json is not packaged and would not be found by a
+   service running out of app.asar.unpacked anyway.
+
+   So the installed app's service has never had a webhook and has
+   never posted a card. Everything that appeared in the channel
+   came from a test spawning the service out of the checkout.
+
+   A webhook cannot be detected - it is a secret handed out by
+   Discord, and only the person who made it has it - so this is
+   one of the few things in this client that has to be asked for.
+   It is asked for once, kept by the shell, and never read back:
+   the client is told THAT there is one and which host it points
+   at, and never the token.
+   ============================================================ */
+const CrewChannel = {
+  state: null,          /* { set, host } once asked */
+
+  api() { return window.gmnDesktop || null; },
+
+  async load(force) {
+    const D = this.api();
+    if (!D || !D.discordGet) return;
+    if (this.state && !force) return;
+    try {
+      this.state = await D.discordGet();
+      render();
+    } catch (e) { /* the shell is older than this call */ }
+  },
+
+  open() {
+    const D = this.api();
+    if (!D || !D.discordSet) { toast('This needs the desktop app', 'warn'); return; }
+    const on = this.state && this.state.set;
+
+    modal({
+      title: 'Crew Discord channel',
+      body: `
+        <p class="t2 sm">Deliveries and runs are posted to a Discord channel through a
+          webhook. In Discord: <b>Server Settings → Integrations → Webhooks → New
+          Webhook</b>, pick the channel, then <b>Copy Webhook URL</b>.</p>
+        ${on ? `<p class="t3 xs mt-12">One is set already, pointing at
+          <span class="mono">${esc(this.state.host)}</span>. It is not shown here:
+          whoever holds it can post into that channel as this company.</p>` : ''}
+        <div class="field mt-16"><label for="cwHook">Webhook URL</label>
+          <input class="input" id="cwHook" type="password" autocomplete="off"
+            placeholder="https://discord.com/api/webhooks/…"></div>
+        <div class="t3 xs mt-8">It is kept on this machine, in the company service's own
+          folder. It never goes to the website or to Gaming Nation.</div>`,
+      foot: `<button class="btn" data-close>Cancel</button>
+        ${on ? `<button class="btn btn-danger" data-act="crew-channel-clear">${icon('trash')}Remove</button>` : ''}
+        <button class="btn btn-primary" data-act="crew-channel-save">${icon('check')}Save</button>`,
+    });
+  },
+
+  async save(hook) {
+    const D = this.api();
+    if (!D || !D.discordSet) return;
+    const res = await D.discordSet(hook);
+    if (res && res.error) { toast(res.error, 'err'); return; }
+
+    this.state = res && res.set ? { set: true, host: res.host } : { set: false };
+    closeModals();
+    Store.log('ok', hook ? 'Crew Discord channel set' : 'Crew Discord channel removed');
+    toast(hook ? 'Channel set' : 'Channel removed', 'ok');
+
+    /* The service reads that file once, at startup. Without a restart the
+       webhook sits on disk doing nothing while the driver is told it is
+       set - the same shape of lie this whole feature exists to end. */
+    if (HostedService.status.running) {
+      toast('Restarting the service so it picks this up…', 'info');
+      await HostedService.stop();
+      await HostedService.start(!!Store.db.settings.hostServiceLan);
+    }
+    render();
+  },
+};
+
 const ProfileSync = {
   at: 0,
   busy: false,
@@ -7270,6 +7353,19 @@ function viewSettings() {
         + 'already gets when you are on another call. Messages still arrive.')}
       ${toggle('chatSound', 'Sound on a new message',
         'A short note when a message lands while the client is open.')}
+
+      ${isStaff() && Launcher.api() ? `<div class="setting-row">
+        <div>
+          <div class="b6">Crew Discord channel</div>
+          <div class="t3 xs mt-4">${CrewChannel.state && CrewChannel.state.set
+            ? 'Deliveries are posted to ' + esc(CrewChannel.state.host) + '.'
+            : 'Not set — nothing is posted to Discord. A webhook cannot be '
+              + 'found automatically; Discord only gives it to you once.'}</div>
+        </div>
+        <button class="btn btn-sm ${CrewChannel.state && CrewChannel.state.set ? '' : 'btn-primary'}"
+          data-act="crew-channel">${icon('chat')}${
+          CrewChannel.state && CrewChannel.state.set ? 'Change' : 'Set it up'}</button>
+      </div>` : ''}
     </div>
   </section>
 
@@ -9153,6 +9249,11 @@ function handle(act, t) {
       else window.open(href, '_blank');
       return;
     }
+    case 'crew-channel': CrewChannel.open(); return;
+    case 'crew-channel-save':
+      CrewChannel.save(String(($('#cwHook') || {}).value || '').trim());
+      return;
+    case 'crew-channel-clear': CrewChannel.save(''); return;
     case 'set-theme':
       Store.db.settings.theme = t.dataset.v;
       Store.save();
@@ -10187,6 +10288,7 @@ function startServices() {
      which is set there and was only ever read at sign-in. */
   ProfileSync.refresh(true);
   MapMods.detect(true);
+  CrewChannel.load();
   clearInterval(startServices.profileTimer);
   startServices.profileTimer = setInterval(() => ProfileSync.refresh(), 5 * 60 * 1000);
 

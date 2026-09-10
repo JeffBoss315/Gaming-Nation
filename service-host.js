@@ -218,4 +218,9 @@ function status() {
   });
 }
 
-module.exports = { register, startService, stopService, status, serviceScript, lanAddress };
+/* serviceDir is exported so nothing has to keep a second copy of this
+   path. The webhook handler in electron-main.js writes discord.json into
+   it, and a second literal 'company-service' spelled slightly differently
+   is a file written where nothing reads it. */
+module.exports = { register, startService, stopService, status, serviceScript,
+  lanAddress, serviceDir };

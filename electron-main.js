@@ -92,6 +92,71 @@ ipcMain.on('win:close', () => win && win.close());
    in update-check.js so a test can require it - see the note at its top. */
 require('./update-check').register(ipcMain);
 
+/* ---------------- the crew's Discord webhook ----------------
+
+   The service posts deliveries to it, and it reads it from discord.json in
+   the service directory - under userData, with the rest of the state,
+   because in an installed copy the script itself lives under Program Files
+   and a credential could never be written there.
+
+   Nothing ever created that file. The app offered no way to set it, the
+   project's own gmn-discord.json is not packaged and would not be found by
+   a service running out of app.asar.unpacked anyway - so the installed
+   app's service has never had a webhook and has never posted a single
+   card. Every card in the channel came from a test spawning the service
+   out of the checkout.
+
+   Read back as a fact, never as a value: a webhook is a credential, and
+   whoever holds it can post into that channel as this company for as long
+   as it exists. The renderer is told THAT there is one and which host it
+   points at, and never the token. */
+const discordFile = () =>
+  path.join(require('./service-host').serviceDir(), 'discord.json');
+
+ipcMain.handle('service:discordGet', () => {
+  try {
+    const raw = fs.readFileSync(discordFile(), 'utf8').replace(/^﻿/, '');
+    const hook = String((JSON.parse(raw) || {}).webhook || '').trim();
+    if (!hook) return { set: false };
+    let host = '';
+    try { host = new URL(hook).hostname; } catch (e) { return { set: false }; }
+    return { set: true, host };
+  } catch (e) {
+    return { set: false };
+  }
+});
+
+ipcMain.handle('service:discordSet', (_e, webhook) => {
+  const hook = String(webhook || '').trim();
+
+  if (!hook) {
+    try { fs.unlinkSync(discordFile()); } catch (e) { /* already gone */ }
+    return { ok: true, set: false };
+  }
+
+  /* Discord's own address, and https. A webhook posted over http hands the
+     token to anything on the wire, and an address that is not Discord's is
+     somebody else being handed the company's channel. */
+  let url;
+  try { url = new URL(hook); } catch (e) { return { error: 'That is not a URL.' }; }
+  if (url.protocol !== 'https:') return { error: 'A webhook has to be https.' };
+  if (!/(^|\.)discord(app)?\.com$/i.test(url.hostname)) {
+    return { error: 'That is not a Discord webhook address.' };
+  }
+  if (!/^\/api\/webhooks\//.test(url.pathname)) {
+    return { error: 'That looks like a Discord link, but not a webhook.' };
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(discordFile()), { recursive: true });
+    fs.writeFileSync(discordFile(),
+      JSON.stringify({ webhook: hook }, null, 2) + String.fromCharCode(10));
+  } catch (e) {
+    return { error: 'It could not be saved: ' + e.message };
+  }
+  return { ok: true, set: true, host: url.hostname };
+});
+
 ipcMain.handle('fs:exists', (_e, p) => {
   try { return !!p && fs.existsSync(p); } catch (err) { return false; }
 });

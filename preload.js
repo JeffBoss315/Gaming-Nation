@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   exists:     (p)    => ipcRenderer.invoke('fs:exists', p),
   /* the build the website is offering, so this copy can say it is behind */
   latestVersion: (feed) => ipcRenderer.invoke('app:latest', feed),
+  /* the crew's Discord webhook. Never read back as a value - only
+     whether one is set, and which host it points at. */
+  discordGet: () => ipcRenderer.invoke('service:discordGet'),
+  discordSet: (hook) => ipcRenderer.invoke('service:discordSet', hook),
   /* which of the games are running right now */
   gameRunning: ()    => ipcRenderer.invoke('game:running'),
 
