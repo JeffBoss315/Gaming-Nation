@@ -125,7 +125,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.0';
+const APP_VERSION = 'V1.0.2';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -5486,7 +5486,12 @@ function railFootHTML() {
       <span class="t3 xs mono">${esc(d.gmnId)}</span>
     </span>
     ${icon('chevron', 'chev')}
-  </button>`;
+  </button>
+  ${/* Which build this is, where somebody looking at their own name will
+        see it. It was only ever in the status bar and on the About screen,
+        and the version there had been V1.0.0 for two releases - so the one
+        place it was written down was quietly wrong. */''}
+  <div class="rail-build">Build ${esc(APP_VERSION)}</div>`;
 }
 
 /* connection state lives along the bottom edge, not in the header */

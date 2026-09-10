@@ -437,6 +437,34 @@ console.log(problems ? `\n${problems} problem(s)\n` : '\nclean\n');
    of work happens here without installing anything - but it says the
    thing that was not being said.
    --------------------------------------------------------------- */
+/* ---------------------------------------------------------------
+   Does the client know which build it is?
+
+   APP_VERSION in tracker.js is what the status bar, the About screen and
+   every run pushed to the company report as the build. It is written by
+   hand, and it had said V1.0.0 through two releases - so the one place a
+   driver could look to say what they were running was quietly wrong, and
+   any bug report citing it named the wrong version.
+   --------------------------------------------------------------- */
+(function versionAgrees() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const src = fs.readFileSync(path.join(ROOT, 'tracker.js'), 'utf8');
+  const m = src.match(/APP_VERSION\s*=\s*'V?([0-9.]+)'/);
+
+  console.log('');
+  console.log('build number');
+  if (!m) {
+    fail('client', 'APP_VERSION is not where scan can find it', 'tracker.js');
+    return;
+  }
+  if (m[1] !== pkg.version) {
+    fail('client', 'APP_VERSION says ' + m[1] + ' but package.json says '
+      + pkg.version + ' - the client reports the wrong build', 'tracker.js');
+    return;
+  }
+  console.log('  the client and package.json agree: ' + pkg.version);
+})();
+
 (function installedIsStale() {
   const app = process.env.ProgramFiles
     && path.join(process.env.ProgramFiles, 'Gaming Nation Trucker',

@@ -19,6 +19,13 @@
          on again means giving JsonSerializer a source-generated context
          first - until then, size is the cheaper thing to spend. -->
     <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- The runtime travels with this exe, and most of it is never read.
+         Compressing the bundle costs a little startup and takes tens of
+         megabytes off every installer a driver downloads. Unlike trimming
+         it removes nothing, so it cannot break the reflection that
+         JsonSerializer needs. -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <InvariantTimezone>true</InvariantTimezone>
 
     <!-- These live here rather than on the command line because leaving them

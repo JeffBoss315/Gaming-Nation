@@ -1767,3 +1767,12 @@ body.can-install .install-cta{display:inline-flex}
    the banner only ever reported a success nobody asked about. */
 .dm-offline .grow{min-width:0}
 .dm-offline-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+
+/* the build, under the driver chip at the foot of the rail */
+.rail-build{
+    padding:6px 12px 10px;
+    text-align:center;
+    font-size:11px;
+    letter-spacing:.03em;
+    color:var(--text-3);
+}

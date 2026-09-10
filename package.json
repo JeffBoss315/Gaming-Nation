@@ -162,6 +162,11 @@
       "category": "public.app-category.utilities"
     },
     "afterPack": "./tools/after-pack.js",
+    "electronLanguages": [
+      "en-GB",
+      "en-US"
+    ],
+    "compression": "maximum",
     "asarUnpack": [
       "fleet-server.js",
       "supabase-client.js"
