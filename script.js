@@ -230,24 +230,35 @@ function can(perm, user = state.user) {
 
 /* 3.3 Achievements — spec §10 */
 const ACHIEVEMENTS = [
-  { id: 'a-first',    name: 'First Delivery',       desc: 'Complete your first GMN delivery.',            icon: 'package',  tier: 'bronze', metric: 'deliveries', goal: 1 },
-  { id: 'a-10k',      name: '10,000 KM Driven',     desc: 'Cover 10,000 km under GMN colours.',           icon: 'route',    tier: 'bronze', metric: 'km', goal: 10000 },
-  { id: 'a-50k',      name: '50,000 KM Driven',     desc: 'Cover 50,000 km under GMN colours.',           icon: 'route',    tier: 'silver', metric: 'km', goal: 50000 },
-  { id: 'a-100k',     name: '100,000 KM Driven',    desc: 'Join the six-figure mileage club.',            icon: 'gauge',    tier: 'gold',   metric: 'km', goal: 100000 },
-  { id: 'a-250k',     name: 'Quarter Million',      desc: 'Cover 250,000 km under GMN colours.',          icon: 'bolt',     tier: 'plat',   metric: 'km', goal: 250000 },
-  { id: 'a-conv10',   name: '10 Convoys',           desc: 'Attend 10 official GMN convoys.',              icon: 'truck',    tier: 'bronze', metric: 'convoys', goal: 10 },
-  { id: 'a-conv50',   name: '50 Convoys',           desc: 'Attend 50 official GMN convoys.',              icon: 'truck',    tier: 'silver', metric: 'convoys', goal: 50 },
-  { id: 'a-conv100',  name: '100 Convoys',          desc: 'Attend 100 official GMN convoys.',             icon: 'trophy',   tier: 'gold',   metric: 'convoys', goal: 100 },
-  { id: 'a-perfect',  name: 'Perfect Attendance',   desc: 'Hold 100% attendance across a full season.',   icon: 'checkCircle', tier: 'gold', metric: 'attendance', goal: 100 },
-  { id: 'a-deliv100', name: 'Century Hauler',       desc: 'Complete 100 deliveries.',                     icon: 'package',  tier: 'silver', metric: 'deliveries', goal: 100 },
-  { id: 'a-deliv500', name: 'Freight Machine',      desc: 'Complete 500 deliveries.',                     icon: 'package',  tier: 'plat',   metric: 'deliveries', goal: 500 },
-  { id: 'a-veteran',  name: 'Veteran Driver',       desc: 'Reach the rank of Veteran Driver.',            icon: 'medal',    tier: 'gold',   metric: 'rank', goal: 7 },
-  { id: 'a-elite',    name: 'Elite Driver',         desc: 'Reach the rank of Elite Driver.',              icon: 'star',     tier: 'gold',   metric: 'rank', goal: 6 },
-  { id: 'a-lead',     name: 'Convoy Leader',        desc: 'Lead an official GMN convoy.',                 icon: 'flag',     tier: 'silver', metric: 'manual', goal: 1 },
-  { id: 'a-community',name: 'Community Contributor',desc: 'Recognised for outstanding community work.',   icon: 'users',    tier: 'gold',   metric: 'manual', goal: 1 },
-  { id: 'a-founder',  name: 'Founding Member',      desc: 'Joined Gaming Nation in its first year.',icon: 'shield',   tier: 'plat',   metric: 'manual', goal: 1 },
+  { id: 'a-first',    name: 'First Delivery',       desc: 'Complete your first GMN delivery.',            icon: 'package',  tier: 'bronze', group: 'haul', metric: 'deliveries', goal: 1 },
+  { id: 'a-10k',      name: '10,000 KM Driven',     desc: 'Cover 10,000 km under GMN colours.',           icon: 'route',    tier: 'bronze', group: 'haul', metric: 'km', goal: 10000 },
+  { id: 'a-50k',      name: '50,000 KM Driven',     desc: 'Cover 50,000 km under GMN colours.',           icon: 'map',    tier: 'silver', group: 'haul', metric: 'km', goal: 50000 },
+  { id: 'a-100k',     name: '100,000 KM Driven',    desc: 'Join the six-figure mileage club.',            icon: 'gauge',    tier: 'gold',   group: 'haul', metric: 'km', goal: 100000 },
+  { id: 'a-250k',     name: 'Quarter Million',      desc: 'Cover 250,000 km under GMN colours.',          icon: 'bolt',     tier: 'plat',   group: 'haul', metric: 'km', goal: 250000 },
+  { id: 'a-conv10',   name: '10 Convoys',           desc: 'Attend 10 official GMN convoys.',              icon: 'users',    tier: 'bronze', group: 'convoy', metric: 'convoys', goal: 10 },
+  { id: 'a-conv50',   name: '50 Convoys',           desc: 'Attend 50 official GMN convoys.',              icon: 'userPlus',    tier: 'silver', group: 'convoy', metric: 'convoys', goal: 50 },
+  { id: 'a-conv100',  name: '100 Convoys',          desc: 'Attend 100 official GMN convoys.',             icon: 'trophy',   tier: 'gold',   group: 'convoy', metric: 'convoys', goal: 100 },
+  { id: 'a-perfect',  name: 'Perfect Attendance',   desc: 'Hold 100% attendance across a full season.',   icon: 'checkCircle', tier: 'gold', group: 'rank', metric: 'attendance', goal: 100 },
+  { id: 'a-deliv100', name: 'Century Hauler',       desc: 'Complete 100 deliveries.',                     icon: 'truck',  tier: 'silver', group: 'haul', metric: 'deliveries', goal: 100 },
+  { id: 'a-deliv500', name: 'Freight Machine',      desc: 'Complete 500 deliveries.',                     icon: 'activity',  tier: 'plat',   group: 'haul', metric: 'deliveries', goal: 500 },
+  { id: 'a-veteran',  name: 'Veteran Driver',       desc: 'Reach the rank of Veteran Driver.',            icon: 'medal',    tier: 'gold',   group: 'rank', metric: 'rank', goal: 7 },
+  { id: 'a-elite',    name: 'Elite Driver',         desc: 'Reach the rank of Elite Driver.',              icon: 'star',     tier: 'gold',   group: 'rank', metric: 'rank', goal: 6 },
+  { id: 'a-lead',     name: 'Convoy Leader',        desc: 'Lead an official GMN convoy.',                 icon: 'flag',     tier: 'silver', group: 'convoy', metric: 'manual', goal: 1 },
+  { id: 'a-community',name: 'Community Contributor',desc: 'Recognised for outstanding community work.',   icon: 'megaphone',    tier: 'gold',   group: 'community', metric: 'manual', goal: 1 },
+  { id: 'a-founder',  name: 'Founding Member',      desc: 'Joined Gaming Nation in its first year.',icon: 'shield',   tier: 'plat',   group: 'community', metric: 'manual', goal: 1 },
 ];
 const TIER_COLOR = { bronze: '#a8794f', silver: '#9aa3af', gold: '#e8913a', plat: '#6fb6c9' };
+
+/* The four things a badge can be about. Sixteen cards in one undivided
+   grid is a wall; a driver looking for "how far off is the next convoy
+   badge" should not have to read the mileage ones to find out. */
+const ACH_GROUPS = [
+  ['haul',      'Delivery & mileage', 'truck'],
+  ['convoy',    'Convoys',            'users'],
+  ['rank',      'Rank & standing',    'medal'],
+  ['community', 'Community & legacy', 'star'],
+];
+
 
 /* 3.4 Map graph — schematic European network (viewBox 640 x 470) */
 const CITIES = {
@@ -5902,9 +5913,24 @@ function viewAchievements() {
       </div>
     </div>
 
-    <div class="grid g-auto" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">
-      ${list.map((a, i) => `<div class="reveal d${clamp(i % 8 + 1, 1, 8)}">${achCard(a, u)}</div>`).join('')}
-    </div>
+    ${/* Grouped, in the order a career runs: what you haul, who you drive
+          with, what that makes you, and what you gave back. A group with
+          nothing in it after filtering is not drawn - an empty heading is
+          a worse answer than no heading. */''}
+    ${ACH_GROUPS.map(([key, label, ic]) => {
+      const inGroup = list.filter((a) => (a.group || 'haul') === key);
+      if (!inGroup.length) return '';
+      const got = inGroup.filter((a) => achEarned(a, u)).length;
+      return `
+      <div class="row-b mb-12" style="margin-top:22px">
+        <div class="row gap-8"><span class="t3" style="width:16px;height:16px">${icon(ic)}</span>
+          <span class="b6">${esc(label)}</span></div>
+        <span class="t3 sm mono">${got} / ${inGroup.length}</span>
+      </div>
+      <div class="grid g-auto" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">
+        ${inGroup.map((a, i) => `<div class="reveal d${clamp(i % 8 + 1, 1, 8)}">${achCard(a, u)}</div>`).join('')}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -13249,16 +13275,16 @@ function clientDownloadUrl(build) {
 }
 
 const CLIENT_RELEASE = {
-  version: '1.0.8',
+  version: '1.0.9',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Trucker-1.0.8-windows-setup.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.9-windows-setup.exe',
       size: '96.4 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Trucker-1.0.8-windows-portable.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.9-windows-portable.exe',
       size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Trucker-1.0.8-android.apk',
+      file: 'release/Gaming-Nation-Trucker-1.0.9-android.apk',
       size: '6.7 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };

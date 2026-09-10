@@ -71,6 +71,9 @@ const P = {
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>',
   chat:'<path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8.5 12h7M8.5 9h4"/>',
   ticket:'<path d="M4 8.5V6.5h16v2a2.6 2.6 0 0 0 0 5.2v3.8H4v-3.8a2.6 2.6 0 0 0 0-5.2z"/><path d="M12 7v3M12 13.5v3.5"/>',
+  activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  megaphone:'<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/>',
   medal:'<circle cx="12" cy="14" r="6"/><path d="M8.2 8.5 5 2h5l2.5 5M15.8 8.5 19 2h-5"/>',
   star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
   chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -130,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.8';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.9';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -5403,23 +5406,34 @@ const Career = {
    half of it - but the client has to work with no platform reachable, so it
    cannot fetch them, and showing a driver a shorter list than the website
    does would read as badges having been taken away. */
+/* The four things a badge can be about, in the order a career runs:
+   what you haul, who you drive with, what that makes you, and what you
+   gave back. Sixteen cards in one undivided grid is a wall. Kept in step
+   with ACH_GROUPS in script.js. */
+const ACH_GROUPS = [
+  ['haul',      'Delivery & mileage', 'truck'],
+  ['convoy',    'Convoys',            'users'],
+  ['rank',      'Rank & standing',    'medal'],
+  ['community', 'Community & legacy', 'star'],
+];
+
 const ACHIEVEMENTS = [
-  { id: 'a-first',     name: 'First Delivery',        desc: 'Complete your first GMN delivery.',          icon: 'box',    tier: 'bronze', metric: 'deliveries', goal: 1 },
-  { id: 'a-10k',       name: '10,000 KM Driven',      desc: 'Cover 10,000 km under GMN colours.',         icon: 'route',  tier: 'bronze', metric: 'km', goal: 10000 },
-  { id: 'a-50k',       name: '50,000 KM Driven',      desc: 'Cover 50,000 km under GMN colours.',         icon: 'route',  tier: 'silver', metric: 'km', goal: 50000 },
-  { id: 'a-100k',      name: '100,000 KM Driven',     desc: 'Join the six-figure mileage club.',          icon: 'gauge',  tier: 'gold',   metric: 'km', goal: 100000 },
-  { id: 'a-250k',      name: 'Quarter Million',       desc: 'Cover 250,000 km under GMN colours.',        icon: 'bolt',   tier: 'plat',   metric: 'km', goal: 250000 },
-  { id: 'a-conv10',    name: '10 Convoys',            desc: 'Attend 10 official GMN convoys.',            icon: 'truck',  tier: 'bronze', metric: 'convoys', goal: 10 },
-  { id: 'a-conv50',    name: '50 Convoys',            desc: 'Attend 50 official GMN convoys.',            icon: 'truck',  tier: 'silver', metric: 'convoys', goal: 50 },
-  { id: 'a-conv100',   name: '100 Convoys',           desc: 'Attend 100 official GMN convoys.',           icon: 'trophy', tier: 'gold',   metric: 'convoys', goal: 100 },
-  { id: 'a-perfect',   name: 'Perfect Attendance',    desc: 'Hold 100% attendance across a full season.', icon: 'check',  tier: 'gold',   metric: 'attendance', goal: 100 },
-  { id: 'a-deliv100',  name: 'Century Hauler',        desc: 'Complete 100 deliveries.',                   icon: 'box',    tier: 'silver', metric: 'deliveries', goal: 100 },
-  { id: 'a-deliv500',  name: 'Freight Machine',       desc: 'Complete 500 deliveries.',                   icon: 'box',    tier: 'plat',   metric: 'deliveries', goal: 500 },
-  { id: 'a-veteran',   name: 'Veteran Driver',        desc: 'Reach the rank of Veteran Driver.',          icon: 'medal',  tier: 'gold',   metric: 'rank', goal: 7 },
-  { id: 'a-elite',     name: 'Elite Driver',          desc: 'Reach the rank of Elite Driver.',            icon: 'star',   tier: 'gold',   metric: 'rank', goal: 6 },
-  { id: 'a-lead',      name: 'Convoy Leader',         desc: 'Lead an official GMN convoy.',               icon: 'flag',   tier: 'silver', metric: 'manual', goal: 1 },
-  { id: 'a-community', name: 'Community Contributor', desc: 'Recognised for outstanding community work.', icon: 'users',  tier: 'gold',   metric: 'manual', goal: 1 },
-  { id: 'a-founder',   name: 'Founding Member',       desc: 'Joined Gaming Nation in its first year.',    icon: 'shield', tier: 'plat',   metric: 'manual', goal: 1 },
+  { id: 'a-first',     name: 'First Delivery',        desc: 'Complete your first GMN delivery.',          icon: 'box',    tier: 'bronze', group: 'haul', metric: 'deliveries', goal: 1 },
+  { id: 'a-10k',       name: '10,000 KM Driven',      desc: 'Cover 10,000 km under GMN colours.',         icon: 'route',  tier: 'bronze', group: 'haul', metric: 'km', goal: 10000 },
+  { id: 'a-50k',       name: '50,000 KM Driven',      desc: 'Cover 50,000 km under GMN colours.',         icon: 'map',  tier: 'silver', group: 'haul', metric: 'km', goal: 50000 },
+  { id: 'a-100k',      name: '100,000 KM Driven',     desc: 'Join the six-figure mileage club.',          icon: 'gauge',  tier: 'gold',   group: 'haul', metric: 'km', goal: 100000 },
+  { id: 'a-250k',      name: 'Quarter Million',       desc: 'Cover 250,000 km under GMN colours.',        icon: 'bolt',   tier: 'plat',   group: 'haul', metric: 'km', goal: 250000 },
+  { id: 'a-conv10',    name: '10 Convoys',            desc: 'Attend 10 official GMN convoys.',            icon: 'users',  tier: 'bronze', group: 'convoy', metric: 'convoys', goal: 10 },
+  { id: 'a-conv50',    name: '50 Convoys',            desc: 'Attend 50 official GMN convoys.',            icon: 'userPlus',  tier: 'silver', group: 'convoy', metric: 'convoys', goal: 50 },
+  { id: 'a-conv100',   name: '100 Convoys',           desc: 'Attend 100 official GMN convoys.',           icon: 'trophy', tier: 'gold',   group: 'convoy', metric: 'convoys', goal: 100 },
+  { id: 'a-perfect',   name: 'Perfect Attendance',    desc: 'Hold 100% attendance across a full season.', icon: 'checkCircle',  tier: 'gold',   group: 'rank', metric: 'attendance', goal: 100 },
+  { id: 'a-deliv100',  name: 'Century Hauler',        desc: 'Complete 100 deliveries.',                   icon: 'truck',    tier: 'silver', group: 'haul', metric: 'deliveries', goal: 100 },
+  { id: 'a-deliv500',  name: 'Freight Machine',       desc: 'Complete 500 deliveries.',                   icon: 'activity',    tier: 'plat',   group: 'haul', metric: 'deliveries', goal: 500 },
+  { id: 'a-veteran',   name: 'Veteran Driver',        desc: 'Reach the rank of Veteran Driver.',          icon: 'medal',  tier: 'gold',   group: 'rank', metric: 'rank', goal: 7 },
+  { id: 'a-elite',     name: 'Elite Driver',          desc: 'Reach the rank of Elite Driver.',            icon: 'star',   tier: 'gold',   group: 'rank', metric: 'rank', goal: 6 },
+  { id: 'a-lead',      name: 'Convoy Leader',         desc: 'Lead an official GMN convoy.',               icon: 'flag',   tier: 'silver', group: 'convoy', metric: 'manual', goal: 1 },
+  { id: 'a-community', name: 'Community Contributor', desc: 'Recognised for outstanding community work.', icon: 'megaphone',  tier: 'gold',   group: 'community', metric: 'manual', goal: 1 },
+  { id: 'a-founder',   name: 'Founding Member',       desc: 'Joined Gaming Nation in its first year.',    icon: 'shield', tier: 'plat',   group: 'community', metric: 'manual', goal: 1 },
 ];
 
 /* ---------------- statistics ----------------
@@ -5578,21 +5592,22 @@ function viewAchievements() {
     </div>
   </section>
 
-  ${done.length ? `<section class="card">
-    <div class="card-head"><span class="label">Earned</span></div>
-    <div class="card-body"><div class="achgrid">${done.map(card).join('')}</div></div>
-  </section>` : ''}
-
-  <section class="card">
-    <div class="card-head">
-      <span class="label">${done.length ? 'Still to come' : 'Every badge'}</span>
-    </div>
-    <div class="card-body">
-      <div class="achgrid">${all.filter((b) => !b.done).map(card).join('')}</div>
-      ${all.every((b) => b.done)
-        ? `<div class="empty">${icon('trophy')}<div>Every badge earned</div></div>` : ''}
-    </div>
-  </section>`;
+  ${/* By what the badge is about, not by whether it is won. Earned and
+        unearned side by side inside a group is the useful comparison -
+        "four of the seven mileage ones" reads at a glance, and the next
+        one along is right there rather than in a different card. */''}
+  ${ACH_GROUPS.map(([key, label, ic]) => {
+    const inGroup = all.filter((b) => (b.a.group || 'haul') === key);
+    if (!inGroup.length) return '';
+    const got = inGroup.filter((b) => b.done).length;
+    return `<section class="card">
+      <div class="card-head">
+        <span class="label">${icon(ic)} ${esc(label)}</span>
+        <span class="label">${got} / ${inGroup.length}</span>
+      </div>
+      <div class="card-body"><div class="achgrid">${inGroup.map(card).join('')}</div></div>
+    </section>`;
+  }).join('')}`;
 }
 
 
