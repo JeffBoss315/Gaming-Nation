@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   pickFile:   (opts) => ipcRenderer.invoke('fs:pickFile', opts),
   autoDetect: (kind) => ipcRenderer.invoke('game:autoDetect', kind),
   launch:     (exe)  => ipcRenderer.invoke('game:launch', exe),
+  /* the game's own icon, read out of its executable on this machine */
+  gameIcon:   (exe)  => ipcRenderer.invoke('game:icon', exe),
   exists:     (p)    => ipcRenderer.invoke('fs:exists', p),
   /* which of the games are running right now */
   gameRunning: ()    => ipcRenderer.invoke('game:running'),

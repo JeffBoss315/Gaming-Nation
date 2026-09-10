@@ -168,6 +168,26 @@ ipcMain.handle('game:autoDetect', (_e, kind) => {
   return null;
 });
 
+/* The game's own icon, out of the game's own executable.
+
+   The launch tiles used a generic truck glyph, which tells a driver
+   nothing about which of two trucking games a button starts. The real
+   marks are somebody else's trademarks and are not ours to ship - but
+   the driver already has them, on their own disk, inside the .exe this
+   button launches. Windows will hand them over.
+
+   Fails quietly to null: a tile with no icon falls back to the glyph,
+   which is exactly what it looked like before. */
+ipcMain.handle('game:icon', async (_e, exe) => {
+  if (!exe || !fs.existsSync(exe)) return null;
+  try {
+    const img = await app.getFileIcon(exe, { size: 'large' });
+    return img && !img.isEmpty() ? img.toDataURL() : null;
+  } catch (err) {
+    return null;
+  }
+});
+
 ipcMain.handle('game:launch', async (_e, exe) => {
   if (!exe) return { error: 'No path set' };
   if (!fs.existsSync(exe)) return { error: 'That file no longer exists' };

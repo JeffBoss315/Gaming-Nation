@@ -1776,3 +1776,12 @@ body.can-install .install-cta{display:inline-flex}
     letter-spacing:.03em;
     color:var(--text-3);
 }
+
+/* a launch tile wearing the game's own icon rather than a glyph */
+.lt-mark img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    border-radius:4px;
+}

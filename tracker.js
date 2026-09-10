@@ -3790,6 +3790,53 @@ function saveProfileName() {
   render();
 }
 
+/* The icons the launch tiles wear.
+
+   Read once out of each game's own executable and kept in the store, so a
+   tile is not waiting on a round trip every time the page draws. Refreshed
+   whenever the path changes - a driver who repoints ETS2 at a different
+   install gets that install's icon.
+
+   Nothing here ships anybody's artwork: the marks belong to SCS and to
+   TruckersMP, and this only ever shows what is already on the driver's
+   own disk. */
+const GameIcons = {
+  pending: false,
+
+  async refresh() {
+    const D = window.gmnDesktop;
+    if (!D || !D.gameIcon || this.pending) return;
+    const s = Store.db.settings;
+    const want = { ets2: s.ets2Exe, ats: s.atsExe, tmp: s.tmpExe };
+    const have = s.gameIcons || (s.gameIcons = {});
+
+    /* only ask for what has changed, or nothing at all on most loads */
+    const todo = Object.keys(want).filter((k) =>
+      want[k] && have[k + ':from'] !== want[k]);
+    if (!todo.length) return;
+
+    this.pending = true;
+    try {
+      for (const k of todo) {
+        const url = await D.gameIcon(want[k]);
+        have[k] = url || null;
+        have[k + ':from'] = want[k];
+      }
+      Store.save();
+      render();
+    } catch (e) {
+      /* a tile without an icon is the tile as it was before */
+    } finally {
+      this.pending = false;
+    }
+  },
+
+  of(kind) {
+    const g = Store.db.settings.gameIcons;
+    return (g && g[kind]) || null;
+  },
+};
+
 function launchBarHTML() {
   const db = Store.db;
   const s = db.settings;
@@ -3800,14 +3847,18 @@ function launchBarHTML() {
   return `<div class="launchbar">
     <button class="launch-tile game game-only" data-act="launch-game" data-kind="ets2"
       title="${ets2Ready ? esc(s.ets2Exe) : 'Set the path in Settings'}">
-      <span class="lt-mark">${icon('truck')}</span>
+      <span class="lt-mark">${GameIcons.of('ets2')
+        ? '<img src="' + esc(GameIcons.of('ets2')) + '" alt="">'
+        : icon('truck')}</span>
       <span class="lt-text"><span class="lt-1">EURO TRUCK</span><span class="lt-2">Simulator 2</span></span>
       ${ets2Ready ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
 
     <button class="launch-tile tmp game-only" data-act="launch-game" data-kind="tmp"
       title="${tmpReady ? esc(s.tmpExe) : 'Set the path in Settings'}">
-      <span class="lt-mark">${icon('users')}</span>
+      <span class="lt-mark">${GameIcons.of('tmp')
+        ? '<img src="' + esc(GameIcons.of('tmp')) + '" alt="">'
+        : icon('users')}</span>
       <span class="lt-text"><span class="lt-1">TRUCKERS</span><span class="lt-2">Multiplayer</span></span>
       ${tmpReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
@@ -7308,6 +7359,9 @@ function handle(act, t) {
         if (el) db.settings[Launcher.pathKey(kind)] = el.value.trim();
       });
       Launcher.syncOsPreferences();
+      /* a path that has just changed points at a different install, and a
+         different install has a different icon */
+      GameIcons.refresh();
       if (db.settings.liveTelemetry) Telemetry.start(); else Telemetry.stop();
       Fleet.start();                 /* pick the new heartbeat up straight away */
       GameWatch.start();             /* and any change to how the game is watched */
@@ -8128,6 +8182,10 @@ function boot() {
 /* nothing polls, tracks or reports until a driver is behind the client */
 function startServices() {
   const job = Store.db.job;
+
+  /* Read once, kept in the store, and only re-read when a path changes -
+     so this costs nothing on the loads where nothing has moved. */
+  GameIcons.refresh();
 
   /* A machine that was hosting keeps hosting. Started before the probe
      below, or the first look finds nothing and the driver waits out the
