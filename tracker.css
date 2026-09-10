@@ -603,6 +603,34 @@ body.can-install .install-cta{display:inline-flex}
 }
 
 
+/* THE SIZES.
+
+   This client asks for an avatar by size word - avatarFace(d, 'sm'),
+   'lg me', or nothing at all. Those words were never CSS classes. The
+   only size classes that exist are the platform's a-24 … a-120, so
+   .avatar in here had no width and no height whatsoever.
+
+   With initials it looked right, because the text gave the span its
+   size. With a photo it does not: .avatar-img is absolutely positioned
+   at inset:0 of a box that is zero by zero, so it collapsed to nothing -
+   and every driver photo in this client, on every screen, has been
+   invisible for as long as photos have existed. Only the initials ever
+   showed, which is exactly why nobody could tell the difference. */
+.avatar{width:38px;height:38px;font-size:13px}
+.avatar.sm{width:30px;height:30px;font-size:11px}
+.avatar.lg{width:48px;height:48px;font-size:16px}
+
+/* A driver photo fills the circle. The image is clipped rather than the
+   avatar itself, so a status dot on the edge is left alone.
+
+   These were inside a max-width:760px block, along with the sizes above,
+   so on any window wider than a phone nothing styled the photo at all. */
+.avatar.has-img{background:var(--panel-2);position:relative}
+.avatar-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:50%;
+}
+
 /* ---------- the driver strip ----------
    Seven cells under the launch tiles. It wraps rather than scrolls: a
    figure a driver has to drag sideways to read is a figure they will not
@@ -1685,11 +1713,6 @@ body.can-install .install-cta{display:inline-flex}
 
 /* A driver photo fills the circle. The image is clipped rather than the
    avatar itself, so anything sitting on the edge of it is left alone. */
-.avatar.has-img{background:var(--panel-2);position:relative}
-.avatar-img{
-  position:absolute;inset:0;width:100%;height:100%;
-  object-fit:cover;border-radius:50%;
-}
   .fr-who{grid-area:who}
   .fr-run{grid-area:run}
   .fr-state{grid-area:state}

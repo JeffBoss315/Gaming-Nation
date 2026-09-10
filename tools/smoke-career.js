@@ -256,7 +256,11 @@ app.whenReady().then(async () => {
        you go and set a photo.
 
        Supabase is stubbed, so this never touches the real project. */
-    const PIC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
+    /* A REAL 1x1 PNG. The made-up truncated string that stood here looked
+       like a photo to every string check and decoded to nothing, which is
+       exactly the failure the measured check below is for. */
+    const PIC = 'data:image/png;base64,'
+      + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     const sync = await run(`(async () => {
       /* A whole render happens inside refresh(), and the strip test above
          left a deliberately minimal live frame - enough for the strip,
@@ -319,10 +323,35 @@ app.whenReady().then(async () => {
     /* And the photo has to reach the screen. avatarFace looked the kept
        copy up by d.id; the signed-in driver record calls it gmnId, so the
        one person whose photo this app keeps was the one it never found. */
-    const drawn = await run(`avatarFace(Store.db.driver, 'lg me')`);
-    check('the avatar on screen is the photo, not initials',
-      drawn.indexOf('avatar-img') > -1 && drawn.indexOf(PIC) > -1,
-      drawn.indexOf('avatar-img') > -1 ? 'drawn as an image' : 'STILL INITIALS');
+    /* MEASURED, not read off the markup. The markup was right for months
+       while nothing appeared: avatarFace asks for sizes by word - 'sm',
+       'lg' - and those were never CSS classes, so .avatar had no width or
+       height, and .avatar-img is absolutely positioned at inset:0 of it.
+       Initials still looked right, because text gives a box its size. A
+       photo collapsed to nothing. Checking the HTML could never see it. */
+    const drawn = await run(`(async () => {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:fixed;left:-500px;top:0';
+      host.innerHTML = avatarFace(Store.db.driver, 'lg me');
+      document.body.appendChild(host);
+      const el = host.querySelector('.avatar');
+      const img = host.querySelector('.avatar-img');
+      /* a data: URI still decodes asynchronously */
+      if (img && !img.complete) await new Promise((r) => {
+        img.onload = r; img.onerror = r; setTimeout(r, 1500);
+      });
+      const box = el.getBoundingClientRect();
+      const out = { w: Math.round(box.width), h: Math.round(box.height),
+        natural: img ? img.naturalWidth : 0, isImg: !!img };
+      host.remove();
+      return out;
+    })()`);
+    check('the avatar is drawn as the photo', drawn.isImg === true,
+      drawn.isImg ? 'an image element' : 'STILL INITIALS');
+    check('and the box has a size at all', drawn.w >= 24 && drawn.h >= 24,
+      drawn.w + 'x' + drawn.h + (drawn.w < 24 ? ' — COLLAPSED' : ''));
+    check('and the picture actually decoded', drawn.natural > 0,
+      drawn.natural ? drawn.natural + 'px source' : 'THE IMAGE NEVER LOADED');
 
     /* ---- which world the driver is in ----
        A map mod replaces the world the truck drives in. The client knew
