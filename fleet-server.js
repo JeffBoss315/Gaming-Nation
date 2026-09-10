@@ -340,13 +340,37 @@ function legacyName(file) {
   return path.join(dir, 'hll-' + base.slice(4));
 }
 
+/* A byte-order mark is not a syntax error, whatever JSON.parse thinks.
+
+   Notepad, PowerShell's Set-Content -Encoding utf8 and most Windows editors
+   put EF BB BF at the front of a UTF-8 file. JSON.parse refuses it, this
+   function swallowed the refusal and returned the fallback, and the caller
+   got an empty object that looked exactly like an absent file.
+
+   That cost a working Discord integration: the webhook config was written
+   with PowerShell, read back as {}, and the service reported "not
+   configured" while the file sat there perfectly readable to a person. A
+   driver setting this up by hand on Windows would have hit the same wall
+   with nothing on screen to explain it. */
+/* A function declaration, not a const arrow, and that is load-bearing.
+
+   DISCORD_WEBHOOK is worked out near the top of this file and calls
+   readJSON, which is hoisted and therefore runs long before a const
+   further down exists. As an arrow this threw a ReferenceError from
+   inside readJSON's own try/catch, which swallowed it and returned the
+   fallback - so the BOM fix appeared to change nothing, for a completely
+   different reason than the one being fixed. */
+function stripBOM(text) {
+  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+}
+
 function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* try the old name */ }
+  try { return JSON.parse(stripBOM(fs.readFileSync(file, 'utf8'))); } catch (e) { /* try the old name */ }
 
   const old = legacyName(file);
   if (old) {
     try {
-      const held = JSON.parse(fs.readFileSync(old, 'utf8'));
+      const held = JSON.parse(stripBOM(fs.readFileSync(old, 'utf8')));
       console.log('[gmn] carried ' + path.basename(old) + ' over to ' + path.basename(file));
       return held;
     } catch (e) { /* not there either */ }
