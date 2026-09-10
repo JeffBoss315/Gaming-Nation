@@ -1,7 +1,7 @@
 {
   "name": "gaming-nation-trucker",
   "productName": "Gaming Nation Trucker",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
   "author": "Gaming Nation",
   "main": "electron-main.js",

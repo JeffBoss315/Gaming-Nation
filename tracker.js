@@ -130,7 +130,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.6';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.7';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -4326,11 +4326,13 @@ const GameProfiles = {
       const newest = this.list[0] && this.list[0].name;
       if (!newest) return;
 
-      /* only when nothing has been chosen, or when the chosen one is no
-         longer a profile that exists */
+      /* Whatever the game saved last, always. This used to leave a name
+         the driver had typed alone - but there is no longer anywhere to
+         type one, and a name kept from a build that had that box would
+         otherwise stick forever and label every run with a profile the
+         driver stopped using. */
       const chosen = String(s.profileName || '').trim();
-      const stillThere = chosen && this.list.some((p) => p.name === chosen);
-      if (chosen && stillThere) return;
+      if (chosen === newest) return;
 
       s.profileName = newest;
       Store.db.conn.profile = newest;
@@ -7169,24 +7171,20 @@ function viewSettings() {
       </div>
       ${toggle('autoStartTracking', 'Start tracking after launching the game',
                'Arm the telemetry link as soon as the game is started from here.')}
-      <div class="field"><label for="setProfile">Game profile</label>
-        <input class="input" id="setProfile" value="${esc(s.profileName)}" placeholder="Detected from the game — leave blank to keep it automatic"></div>
-      ${/* What the client found, so this field is not a blank box somebody
-            has to guess into. It picks the most recently saved on its own;
-            this is only here for the driver who wants to say otherwise. */''}
-      <div class="t3 xs" style="margin-top:-8px">${GameProfiles.list.length
-        ? 'Found on this machine: ' + GameProfiles.list.slice(0, 6)
-            .map((pr) => esc(pr.name) + (pr === GameProfiles.list[0] ? ' (playing)' : '')).join(', ')
-        : Launcher.api()
-          ? 'No game profiles found yet — they appear once the game has saved one.'
-          : 'Profiles are read from the game folder, which only the desktop app can see.'}</div>
-      <div class="row gap-8 wrap">
-        <div class="field grow"><label for="setHost">Telemetry host</label>
-          <input class="input" id="setHost" value="${esc(s.telemetryHost || '127.0.0.1')}"
-            placeholder="127.0.0.1 — on a phone use the PC's LAN address"></div>
-        <div class="field" style="max-width:120px"><label for="setPort">Port</label>
-          <input class="input" id="setPort" value="${esc(s.telemetryPort)}"></div>
-      </div>
+      ${/* A "Game profile" box stood here, and under it the client's own
+            answer - "Found on this machine: AFRICA (playing), LAND". The
+            box was asking a question the line beneath it had already
+            answered. The games write the profile name down and stamp the
+            folder every time they save, so the one being played is simply
+            the newest, and the client reads it. The run monitor's header
+            says which one.
+
+            Beside them, Telemetry host and Port. The client starts the
+            adapter itself and the adapter binds 127.0.0.1:25555 - it is
+            not configurable at the other end, so a box offering to change
+            this end could only ever break it. "localhost" typed here was
+            already being rewritten to 127.0.0.1 before use, which is a
+            field whose value is silently ignored: worse than no field. */''}
       <div class="field"><label for="setGame">Game</label>
         <select class="select" id="setGame">
           <option value="ets2" ${s.game !== 'ats' ? 'selected' : ''}>Euro Truck Simulator 2</option>
@@ -9338,11 +9336,7 @@ function handle(act, t) {
       return;
     }
     case 'save-settings': {
-      const prof = $('#setProfile'), port = $('#setPort');
-      const host = $('#setHost'), game = $('#setGame'), poll = $('#setPoll');
-      if (prof) db.settings.profileName = prof.value.trim();
-      if (port) db.settings.telemetryPort = port.value.trim() || '25555';
-      if (host) db.settings.telemetryHost = host.value.trim() || 'localhost';
+      const game = $('#setGame'), poll = $('#setPoll');
       if (game) db.settings.game = game.value;
       if (poll) db.settings.pollRate = clamp(Number(poll.value) || 400, 250, 10000);
       const jobSec = $('#setJobSec'), beatSec = $('#setBeatSec'), siren = $('#setSiren');
