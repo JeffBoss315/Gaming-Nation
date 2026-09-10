@@ -274,10 +274,41 @@ const CITY_GEO = {
 
 /* Fitted against the hand-placed schematic that came before, so calibrations
    saved by earlier versions still land in the right place. */
+/* ---------- ProMods ----------
+   ProMods is the base ETS2 map plus a great deal more of Europe, so its
+   city table is the ETS2 one plus what ProMods reaches that the base game
+   does not. Most of it is already here - this table was always generous -
+   so what follows is only the places the base game genuinely has no road
+   to: Iceland, the Faroes, the Hebrides and Shetland, the far north-east,
+   Belarus east of Minsk, and the southern edges.
+
+   The projection is the SAME fit. It is a linear lat/lon transform, so
+   the extra cities land in the right place without refitting anything;
+   only the bounds grow, which is exactly what a bigger map means. */
+const PROMODS_EXTRA = {
+  Reykjavik:  [64.15, -21.94, 2],
+  Akureyri:   [65.68, -18.09, 3],
+  Torshavn:   [62.01,  -6.77, 3],
+  Stornoway:  [58.21,  -6.39, 3],
+  Ullapool:   [57.90,  -5.16, 3],
+  Lerwick:    [60.15,  -1.15, 3],
+  Limerick:   [52.66,  -8.63, 2],
+  Kirkenes:   [69.73,  30.05, 3],
+  Grodno:     [53.68,  23.83, 2],
+  Vitebsk:    [55.19,  30.20, 2],
+  Gomel:      [52.44,  30.99, 2],
+  Patras:     [38.25,  21.73, 2],
+  Antalya:    [36.90,  30.69, 2],
+  Valletta:   [35.90,  14.51, 3],
+};
+CITY_GEO.promods = Object.assign({}, CITY_GEO.ets2, PROMODS_EXTRA);
+
 const SCHEMATIC_FIT = {
   ets2: { kx: 16.039371, bx: 233.4234, ky: -713.604217, by: 972.0218 },
   ats:  { kx: 14.613165, bx: 1880.3941, ky: -835.413402, by: 847.8460 },
 };
+/* the same transform, deliberately - see PROMODS_EXTRA above */
+SCHEMATIC_FIT.promods = SCHEMATIC_FIT.ets2;
 /* ---------- display names ----------
    Keys stay ASCII so they are safe to store, sort and search; the map, the
    tooltips and the pickers show the name the country actually uses, which is
@@ -389,7 +420,7 @@ const cityKey = (name) => {
   return CITY_KEY[n.toLowerCase()] || n;
 };
 
-const geoFor = (game) => CITY_GEO[game === 'ats' ? 'ats' : 'ets2'];
+const geoFor = (game) => CITY_GEO[game] || CITY_GEO.ets2;
 /* a city keeps its label at every zoom only if the table marks it major */
 const cityTier = (game, name) => (geoFor(game)[name] || [])[2] || 2;
 
@@ -414,7 +445,7 @@ function schematicCities(geo, f) {
 }
 /* schematic units back to lat/lon, so distances can be measured for real */
 function schematicToGeo(game, x, y) {
-  const f = SCHEMATIC_FIT[game === 'ats' ? 'ats' : 'ets2'];
+  const f = SCHEMATIC_FIT[game] || SCHEMATIC_FIT.ets2;
   return [invMercY((y - f.by) / f.ky), (x - f.bx) / f.kx];
 }
 function haversineKm(a, b) {
@@ -440,7 +471,11 @@ function gameMap(key, label, short) {
 }
 const MAP_ETS2 = gameMap('ets2', 'Euro Truck Simulator 2', 'ETS2');
 const MAP_ATS  = gameMap('ats',  'American Truck Simulator', 'ATS');
-const MAPS = { ets2: MAP_ETS2, ats: MAP_ATS };
+const MAP_PROMODS = gameMap('promods', 'Euro Truck Simulator 2 · ProMods', 'ProMods');
+/* Telemetry never says 'promods' - the game reports ets2 either way - so
+   this is a VIEW, chosen by the driver or by what the client detected on
+   the machine, not something a position arrives labelled with. */
+const MAPS = { ets2: MAP_ETS2, ats: MAP_ATS, promods: MAP_PROMODS };
 const mapFor = (key) => MAPS[key] || MAP_ETS2;
 
 function nearestCity(mapKey, mx, mz) {
@@ -807,6 +842,13 @@ function geoToGameLatLng(gameKey, lat, lon) {
    best effort.
    ============================================================ */
 const COUNTRY_AREAS = [
+  /* --- islands ProMods reaches that the base game has no road to ---
+     Tight, and first: first match wins here, and an island needs a box
+     no bigger than the island or the sea around it swallows a coast. */
+  ['IS', [[63.20, -24.60, 66.60, -13.40]]],
+  ['FO', [[61.30,  -7.80, 62.50,  -6.20]]],
+  ['MT', [[35.70,  14.10, 36.10,  14.60]]],
+
   /* --- the crowded corner, carved deliberately and asked first --- */
   ['LU', [[49.44,  5.72, 50.20,  6.54]]],
   ['BE', [[50.65,  2.85, 51.52,  5.55],     /* Flanders: Ostend to Hasselt  */

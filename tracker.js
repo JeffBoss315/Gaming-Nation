@@ -130,7 +130,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.5';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.6';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -539,6 +539,11 @@ const Telemetry = {
       engineOn: frame.truck.engineOn,
       cargoLoaded: frame.cargoLoaded,
     };
+
+    /* Whether this position is one the base map can explain. It is the only
+       evidence anything has that a map mod is loaded rather than merely
+       sitting on the disk. */
+    if (mx != null) MapMods.seen(frame.game, mx, mz);
 
     /* breadcrumb trail, thinned so it stays cheap to draw. The schematic
        trail is in map units; the tile map needs raw world coords because its
@@ -1020,6 +1025,10 @@ const Fleet = {
       speed: live.speed,
       state: db.activityState || 'idle',
       truck: (live.truck || (db.driver && db.driver.truck) || ''),
+      /* which world this position is in, so the crew map does not draw a
+         driver in Australia somewhere in Belgium */
+      mapMod: MapMods.label() || undefined,
+      mapModState: MapMods.state() || undefined,
       fuel: job && Number.isFinite(+job.fuel) ? +job.fuel : undefined,
       damage: job && Number.isFinite(+job.damage) ? +job.damage : undefined,
       job: job ? {
@@ -2802,7 +2811,11 @@ function viewLiveMap() {
   const db = Store.db;
   const live = db.live;
   const detected = Telemetry.mode === 'live' && live && live.game;
-  const mapKey = detected || db.settings.game || 'ets2';
+  /* Telemetry says 'ets2' whether or not ProMods is loaded - the game does
+     not know it has been modded. So the wider map is chosen here, from what
+     the client found on the machine, rather than waited for on the wire. */
+  const base = detected || db.settings.game || 'ets2';
+  const mapKey = (base === 'ets2' && MapMods.usingProMods()) ? 'promods' : base;
   const M = mapFor(mapKey);
   const src = Telemetry.mode === 'live' ? 'Live telemetry'
     : db.conn.ets2 === 'running' ? 'Simulated' : 'No signal';
@@ -2819,7 +2832,9 @@ function viewLiveMap() {
   const calPts = Calib.points(mapKey).length;
 
   return `
-  ${viewHead('Live map', M.label + ' · ' + src, `
+  ${viewHead('Live map',
+    M.label + ' · ' + src
+      + (MapMods.label() ? ' · ' + MapMods.label() + ' ' + MapMods.state() : ''), `
     <button class="btn btn-sm ${db.settings.liveTelemetry ? 'btn-primary' : ''}" data-act="toggle-live">
       ${icon('wifi')}${db.settings.liveTelemetry ? 'Live on' : 'Live off'}</button>
     ${useTiles ? `<button class="btn btn-sm ${TileMap.following ? 'btn-primary' : ''}" id="followBtn" data-act="follow-toggle">
@@ -3334,6 +3349,118 @@ const Store = {
     this.db.activity.unshift({ at: new Date().toISOString(), tag, msg });
     this.db.activity = this.db.activity.slice(0, 200);
     this.save();
+  },
+};
+
+/* ============================================================
+   THE MAP THE DRIVER IS ACTUALLY ON
+   ------------------------------------------------------------
+   ProMods, RusMap, Road to Asia, The Land Down Under - a map mod
+   replaces the world the truck drives in. The client knew only
+   the two base maps, so a driver in Australia or east of the
+   Urals was drawn in Europe or not at all, and nothing on screen
+   said why.
+
+   Two halves, and they answer different questions.
+
+   INSTALLED comes from the shell: the game's mods_info.sii and
+   its mod folder. It is a fact about the machine, not about the
+   drive, because nothing outside the game can read which mods a
+   profile has ENABLED - that lives in an encrypted profile.sii.
+
+   IN USE is decided by the truck. A position outside the base
+   map's own bounds cannot happen on the base map, so it is proof
+   a map mod is loaded - the only proof available. Until that
+   happens the client says "installed", which is what it knows.
+
+   Both travel with the driver's position, so the crew map and
+   the website can say which world somebody is in rather than
+   drawing everyone on the same one.
+   ============================================================ */
+const MapMods = {
+  installed: [],       /* [{ name, known, size }] */
+  at: 0,
+  looking: false,
+  offMap: false,       /* a position the base map cannot explain */
+
+  /* The bridge, reached through a method the way Launcher does it. The
+     object contextBridge exposes is frozen, so this is also the only seam
+     a test can take hold of. */
+  api() { return window.gmnDesktop || null; },
+
+  async detect(force) {
+    const D = this.api();
+    if (!D || !D.gameMods || this.looking) return;
+    if (!force && this.at && Date.now() - this.at < 30 * 60 * 1000) return;
+
+    this.looking = true;
+    try {
+      const kind = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+      const res = await D.gameMods(kind);
+      this.at = Date.now();
+      if (!res || !res.ok) return;
+
+      const was = this.installed.map((m) => m.name).join('|');
+      this.installed = res.maps || [];
+      const now = this.installed.map((m) => m.name).join('|');
+      if (was !== now) {
+        if (this.installed.length) {
+          Store.log('ok', 'Map mod' + (this.installed.length === 1 ? '' : 's')
+            + ' found: ' + this.installed.map((m) => m.name).join(', '));
+        }
+        render();
+      }
+    } catch (e) {
+      /* no shell, or no Documents folder. The base maps still work. */
+    } finally {
+      this.looking = false;
+    }
+  },
+
+  /* The one worth naming. A driver with five installed is on one of them,
+     and the biggest recognised map is the best guess anything can make
+     without reading an encrypted file. */
+  primary() {
+    return this.installed.length ? this.installed[0] : null;
+  },
+
+  /* Called on every live frame. The base map's bounds are its own cities'
+     extent, so a little slack keeps a lorry parked past the last depot
+     from being called a mod. */
+  seen(mapKey, mx, mz) {
+    const b = mapFor(mapKey).bounds;
+    if (!b || !Number.isFinite(mx) || !Number.isFinite(mz)) return;
+    const padX = (b.x1 - b.x0) * 0.06;
+    const padY = (b.y1 - b.y0) * 0.06;
+    const off = mx < b.x0 - padX || mx > b.x1 + padX
+      || mz < b.y0 - padY || mz > b.y1 + padY;
+    if (off === this.offMap) return;
+    this.offMap = off;
+    if (off) {
+      Store.log('info', 'Your position is outside the base ' + mapFor(mapKey).short
+        + ' map — a map mod is loaded'
+        + (this.primary() ? ' (' + this.primary().name + ')' : ''));
+    }
+    render();
+  },
+
+  /* ProMods specifically, because the client HAS a ProMods map - the base
+     European table plus everywhere ProMods reaches that the base game has
+     no road to. Any other map mod is named but drawn on the base map,
+     which is honest: nothing here has its cities. */
+  usingProMods() {
+    return this.installed.some((m) => /^promods/i.test(m.name));
+  },
+
+  /* What to put on screen, and on the card the rest of the crew sees. */
+  label() {
+    const p = this.primary();
+    if (!p) return '';
+    return p.name;
+  },
+  state() {
+    if (!this.installed.length) return '';
+    return this.offMap ? 'in use' : 'installed';
   },
 };
 
@@ -10072,6 +10199,7 @@ function startServices() {
   /* And what the website knows about this driver - the photo above all,
      which is set there and was only ever read at sign-in. */
   ProfileSync.refresh(true);
+  MapMods.detect(true);
   clearInterval(startServices.profileTimer);
   startServices.profileTimer = setInterval(() => ProfileSync.refresh(), 5 * 60 * 1000);
 

@@ -324,6 +324,49 @@ app.whenReady().then(async () => {
       drawn.indexOf('avatar-img') > -1 && drawn.indexOf(PIC) > -1,
       drawn.indexOf('avatar-img') > -1 ? 'drawn as an image' : 'STILL INITIALS');
 
+    /* ---- which world the driver is in ----
+       A map mod replaces the world the truck drives in. The client knew
+       only the two base maps, so a driver in Australia or east of the
+       Urals was drawn in Europe or nowhere, with nothing saying why.
+
+       Installed comes from the shell. IN USE can only be proved by the
+       truck: a position the base map cannot reach. */
+    const mods = await run(`(async () => {
+      /* contextBridge freezes window.gmnDesktop, so the seam is MapMods.api */
+      MapMods.api = () => ({
+        gameMods: async () => ({ ok: true, maps: [
+          { name: 'ProMods', known: true, size: 3e9 },
+          { name: 'The Land Down Under', known: true, size: 4.6e9 },
+        ] }),
+      });
+      MapMods.at = 0;
+      await MapMods.detect(true);
+      return { label: MapMods.label(), state: MapMods.state(),
+        promods: MapMods.usingProMods() };
+    })()`);
+    check('an installed map mod is found and named', mods.label === 'ProMods',
+      mods.label || 'NOTHING FOUND');
+    check('and it says installed, not in use', mods.state === 'installed',
+      mods.state + ' — nothing has driven off the base map yet');
+    check('ProMods switches the client to the ProMods map', mods.promods === true,
+      'the wider European table');
+
+    const proof = await run(`(() => {
+      const b = mapFor('ets2').bounds;
+      /* well past the western edge — Iceland, which ETS2 has no road to */
+      MapMods.seen('ets2', b.x0 - (b.x1 - b.x0) * 0.5, (b.y0 + b.y1) / 2);
+      return MapMods.state();
+    })()`);
+    check('a position off the base map proves one is in use', proof === 'in use',
+      proof);
+
+    const inside = await run(`(() => {
+      const b = mapFor('ets2').bounds;
+      MapMods.seen('ets2', (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
+      return MapMods.state();
+    })()`);
+    check('and coming back inside stops claiming it', inside === 'installed', inside);
+
     check('the renderer logged no errors', errors.length === 0,
       errors.length ? errors.slice(0, 2).join(' | ') : 'none');
   } catch (e) {

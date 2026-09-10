@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   gameIcon:   (exe)  => ipcRenderer.invoke('game:icon', exe),
   /* the game profiles on this machine, newest-saved first */
   gameProfiles: (kind) => ipcRenderer.invoke('game:profiles', kind),
+  /* the map mods installed for a game - ProMods and the rest */
+  gameMods: (kind) => ipcRenderer.invoke('game:mods', kind),
   exists:     (p)    => ipcRenderer.invoke('fs:exists', p),
   /* the build the website is offering, so this copy can say it is behind */
   latestVersion: (feed) => ipcRenderer.invoke('app:latest', feed),

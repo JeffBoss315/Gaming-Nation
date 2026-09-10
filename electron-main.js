@@ -210,6 +210,132 @@ function decodeProfileName(folder) {
   return out.trim() || null;
 }
 
+/* ---------------- which map the driver is actually on ----------------
+
+   ProMods and the other map mods change the world the truck is driving in:
+   new countries, new cities, roads a thousand kilometres past where the
+   base game stops. A client that only knows the base map puts those
+   drivers nowhere, or clamps them to the edge, and the map quietly lies.
+
+   TWO SOURCES, because neither is enough on its own.
+
+   mods_info.sii, beside the profiles under Documents, is plain text and
+   lists every mod the game knows about - Steam Workshop included, which
+   is most of them and which never appears in the mod folder at all.
+
+   The mod folder itself carries the manually installed .scs archives,
+   with their sizes. Size matters: the smallest real map mod is hundreds
+   of megabytes, so a 4 GB archive is a map whatever it is called and a
+   4 MB one is a skin whatever it is called.
+
+   WHAT NEITHER CAN SEE is which mods a profile has ENABLED. That lives in
+   the profile's own profile.sii, which SCS ships encrypted. So this
+   reports what is INSTALLED and says so in those words. Confirming one is
+   in use is the client's job, and there is only one honest way to do it:
+   a truck turning up somewhere the base map does not reach. */
+const MOD_DIRS = { ets2: 'Euro Truck Simulator 2', ats: 'American Truck Simulator' };
+
+/* Below this, it is not a map. */
+const MAP_MOD_MIN = 64 * 1024 * 1024;
+
+/* Longest key first, so 'promods-middle-east' is not read as plain
+   ProMods and 'RIW_Heart_of_Africa' is not read as RIW. */
+const KNOWN_MAPS = [
+  ['promods middle-east', 'ProMods Middle-East'],
+  ['promods-middle-east', 'ProMods Middle-East'],
+  ['promods_middle_east', 'ProMods Middle-East'],
+  ['promods canada', 'ProMods Canada'],
+  ['promods-canada', 'ProMods Canada'],
+  ['promods_canada', 'ProMods Canada'],
+  ['promods', 'ProMods'],
+  ['heart_of_africa', 'RIW Heart of Africa'],
+  ['heart of africa', 'RIW Heart of Africa'],
+  ['riw_beyond', 'RIW Beyond'],
+  ['riw', 'Road to Asia'],
+  ['hoa_', 'Heart of Asia'],
+  ['land down under', 'The Land Down Under'],
+  ['far east russia', 'Far East Russia'],
+  ['africa_', 'Africa'],
+  ['roextended', 'RoExtended'],
+  ['rusmap', 'RusMap'],
+  ['southern_region', 'Southern Region'],
+  ['great_steppe', 'The Great Steppe'],
+  ['sibirmap', 'SibirMap'],
+  ['coast_to_coast', 'Coast to Coast'],
+  ['reforma', 'Reforma'],
+  ['midwest_expansion', 'Midwest Expansion'],
+];
+
+function nameMapMod(text) {
+  const low = String(text || '').toLowerCase();
+  for (const [key, label] of KNOWN_MAPS) if (low.indexOf(key) > -1) return label;
+  return null;
+}
+
+/* 'The Land Down Under v1.0' -> 'The Land Down Under'. A version on a
+   label is noise; the driver knows which version they installed. */
+function tidyModName(raw) {
+  return String(raw || '')
+    .replace(/\.scs$/i, '')
+    .replace(/[_]+/g, ' ')
+    .replace(/\s*(v?\d+(\.\d+)*|alpha|beta|rc)\s*$/i, '')
+    .trim() || String(raw || '');
+}
+
+ipcMain.handle('game:mods', async (_e, kind) => {
+  const game = MOD_DIRS[kind === 'ats' ? 'ats' : 'ets2'];
+  const home = path.join(app.getPath('documents'), game);
+  const found = new Map();          /* label -> { name, known, size, from } */
+
+  const add = (raw, size, from) => {
+    const known = nameMapMod(raw);
+    const name = known || tidyModName(raw);
+    const prev = found.get(name);
+    if (prev) {
+      /* the same map arrives as several archives - assets, def, models */
+      prev.size += size || 0;
+      if (from && prev.from.indexOf(from) === -1) prev.from.push(from);
+      return;
+    }
+    found.set(name, { name, known: !!known, size: size || 0, from: [from] });
+  };
+
+  /* ---- what the game knows about, workshop included ---- */
+  let info = '';
+  try { info = await fs.promises.readFile(path.join(home, 'mods_info.sii'), 'latin1'); }
+  catch (err) { /* no file: this driver has never had a mod */ }
+  if (info) {
+    /* entries read  info[3]: "hoa_assets1|1788904229"  — the id after the
+       bar is the workshop item and is not worth showing anybody */
+    const re = /"([^"|]+)\|/g;
+    let m;
+    while ((m = re.exec(info))) {
+      const raw = m[1];
+      /* the workshop's own bookkeeping package is not a mod */
+      if (/^mod_workshop_package\./i.test(raw)) continue;
+      if (nameMapMod(raw)) add(raw, 0, 'game');
+    }
+  }
+
+  /* ---- and the archives sitting in the mod folder ---- */
+  let files = [];
+  try { files = await fs.promises.readdir(path.join(home, 'mod')); }
+  catch (err) { /* no mod folder is normal */ }
+  for (const file of files) {
+    if (!/\.scs$/i.test(file)) continue;
+    let size = 0;
+    try { size = (await fs.promises.stat(path.join(home, 'mod', file))).size; }
+    catch (err) { continue; }
+    /* named, or big enough that nothing else could be that size */
+    if (nameMapMod(file) || size >= MAP_MOD_MIN) add(file, size, 'folder');
+  }
+
+  const maps = Array.from(found.values()).sort((a, b) =>
+    (b.known - a.known) || (b.size - a.size) || a.name.localeCompare(b.name));
+
+  return { ok: true, home, maps };
+});
+
 ipcMain.handle('game:profiles', async (_e, kind) => {
   const game = PROFILE_DIRS[kind === 'ats' ? 'ats' : 'ets2'];
   const docs = app.getPath('documents');

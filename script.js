@@ -8814,7 +8814,10 @@ function handleAction(act, t, ev) {
       return;
     }
     case 'map-game':
-      LiveMap.game = t.dataset.v === 'ats' ? 'ats' : 'ets2';
+      /* Named rather than guessed: a third map means "not ats" can no
+         longer stand in for "ets2". */
+      LiveMap.game = ['ets2', 'ats', 'promods'].indexOf(t.dataset.v) > -1
+        ? t.dataset.v : 'ets2';
       LiveMap.destroy(); render();
       return;
     case 'map-service': openFleetService(); return;
@@ -11431,6 +11434,8 @@ function viewLivemap() {
         <p class="page-sub">The whole road network, and every driver reporting a position</p></div>
       <div class="row gap-8 wrap">
         <button class="btn ${g === 'ets2' ? 'btn-primary' : ''}" data-act="map-game" data-v="ets2">Europe</button>
+        <button class="btn ${g === 'promods' ? 'btn-primary' : ''}" data-act="map-game" data-v="promods"
+          title="Europe as ProMods draws it — Iceland, the Faroes, the Hebrides, Shetland and the far north-east">ProMods</button>
         <button class="btn ${g === 'ats' ? 'btn-primary' : ''}" data-act="map-game" data-v="ats">America</button>
         ${can('admin.view') ? `<button class="btn" data-act="map-service">${icon('link')}Company service</button>` : ''}
       </div>
@@ -13244,16 +13249,16 @@ function clientDownloadUrl(build) {
 }
 
 const CLIENT_RELEASE = {
-  version: '1.0.5',
+  version: '1.0.6',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Trucker-1.0.5-windows-setup.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.6-windows-setup.exe',
       size: '96.4 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Trucker-1.0.5-windows-portable.exe',
+      file: 'release/Gaming-Nation-Trucker-1.0.6-windows-portable.exe',
       size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Trucker-1.0.5-android.apk',
+      file: 'release/Gaming-Nation-Trucker-1.0.6-android.apk',
       size: '6.7 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
