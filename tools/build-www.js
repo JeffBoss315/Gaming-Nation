@@ -308,6 +308,21 @@ if (!SITE_URL) {
      further up — the front door is the page most worth having the canonical
      and the cards on */
   site.write('index.html', html);
+  /* What build the website is offering, so an installed client can tell a
+     driver their copy is behind.
+
+     Written from package.json rather than typed, because a number typed in
+     two places is a number that disagrees with itself - and this one would
+     disagree loudly, telling every driver on the current build that they
+     are out of date. */
+  const pkg = JSON.parse(read('package.json'));
+  site.write('version.json', JSON.stringify({
+    version: pkg.version,
+    at: new Date().toISOString(),
+    downloads: SITE_URL ? SITE_URL + '/#/download' : '#/download',
+  }, null, 2) + String.fromCharCode(10));
+  site.log.push('version.json      (the build the site is offering)');
+
   /* Cloudflare Pages reads _headers from the site root. Written by the
      builder so it ships with the payload rather than being remembered. */
   if (fs.existsSync(path.join(ROOT, 'www_headers_src'))) {

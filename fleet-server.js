@@ -180,9 +180,22 @@ function postToDiscord(event) {
     return name || code;
   };
 
-  /* The client already filters this, and the service checks again rather
-     than trusting it: the event arrives over the network and an embed icon
-     is a URL this service hands to Discord to fetch. */
+  /* THE DRIVER'S FACE.
+
+     An embed icon_url is fetched by Discord's own servers, so the obvious
+     approach - hand them the avatar's address - only works for an avatar
+     already sitting on a public https host. Ours are not: they are data:
+     URIs in the driver's own record, or files on this machine at a LAN
+     address nobody outside the network can reach. That is why the card
+     showed a name and no face.
+
+     So the picture is not linked, it is SENT. A webhook accepts
+     multipart/form-data, and an embed may point at a file uploaded in the
+     same request with attachment://<name>. No public hosting, no bucket,
+     nothing to expire.
+
+     A real https URL is still used as-is when there is one - it costs
+     nothing to send and Discord caches it. */
   const publicIcon = (value) => {
     const v = String(value || '').trim();
     if (!/^https:\/\//i.test(v)) return '';
@@ -193,6 +206,32 @@ function postToDiscord(event) {
     if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return '';
     return v.slice(0, 500);
   };
+
+  /* A data: URI as bytes Discord can be handed. Refuses anything that is
+     not an image, and anything big enough to slow a delivery report down -
+     an avatar is tens of kilobytes and a megabyte of one is a mistake
+     somewhere, not a portrait. */
+  const AVATAR_MAX = 1024 * 1024;
+  const decodeAvatar = (value) => {
+    const m = /^data:image\/(png|jpe?g|gif|webp);base64,([A-Za-z0-9+/=\s]+)$/i
+      .exec(String(value || '').trim());
+    if (!m) return null;
+    let buf;
+    try { buf = Buffer.from(m[2].replace(/\s+/g, ''), 'base64'); }
+    catch (e) { return null; }
+    if (!buf.length || buf.length > AVATAR_MAX) return null;
+    const ext = m[1].toLowerCase() === 'jpg' ? 'jpeg' : m[1].toLowerCase();
+    return { buf, ext, type: 'image/' + ext };
+  };
+
+  /* The service's own record first: it is the company's copy and it is
+     here already, so a client that never sends an avatar still gets one on
+     the card. The event is the fallback, for a driver this service has no
+     row for yet. */
+  const known = event.driverId ? driverRecord(event.driverId) : null;
+  const rawAvatar = (known && known.avatar) || event.avatar || '';
+  const iconUrl = publicIcon(rawAvatar);
+  const iconFile = iconUrl ? null : decodeAvatar(rawAvatar);
 
   const cargoMark = (name) => {
     const t = String(name || '').toLowerCase();
@@ -227,7 +266,7 @@ function postToDiscord(event) {
   }
   if (!fields.length && event.cargo) add('Cargo', String(event.cargo).slice(0, 80));
 
-  const payload = JSON.stringify({
+  const card = JSON.stringify({
     username: 'Gaming Nation',
     embeds: [{
       /* The driver above the route rather than in a field: it is who the
@@ -243,7 +282,9 @@ function postToDiscord(event) {
       author: (event.driver || event.driverId)
         ? {
             name: authorName(event).slice(0, 120),
-            icon_url: publicIcon(event.avatar) || undefined,
+            /* attachment:// resolves to the file uploaded alongside this
+               payload - see the multipart body below */
+            icon_url: iconUrl || (iconFile ? 'attachment://avatar.' + iconFile.ext : undefined),
           }
         : undefined,
       title: String(title).slice(0, 240),
@@ -260,6 +301,32 @@ function postToDiscord(event) {
     }],
   });
 
+  /* With a face to send, this goes as multipart: the card under
+     payload_json, the picture as files[0], and the embed's attachment://
+     name matching the filename here. Without one it stays the plain JSON
+     post it has always been - no boundary, no buffers copied, nothing new
+     to go wrong on the ordinary path. */
+  let payload, contentType;
+  if (iconFile) {
+    const CRLF = '\r\n';
+    const boundary = '----gmn' + crypto.randomBytes(12).toString('hex');
+    const name = 'avatar.' + iconFile.ext;
+    const head = Buffer.from(
+      '--' + boundary + CRLF
+      + 'Content-Disposition: form-data; name="payload_json"' + CRLF
+      + 'Content-Type: application/json' + CRLF + CRLF
+      + card + CRLF
+      + '--' + boundary + CRLF
+      + 'Content-Disposition: form-data; name="files[0]"; filename="' + name + '"' + CRLF
+      + 'Content-Type: ' + iconFile.type + CRLF + CRLF, 'utf8');
+    const tail = Buffer.from(CRLF + '--' + boundary + '--' + CRLF, 'utf8');
+    payload = Buffer.concat([head, iconFile.buf, tail]);
+    contentType = 'multipart/form-data; boundary=' + boundary;
+  } else {
+    payload = Buffer.from(card, 'utf8');
+    contentType = 'application/json';
+  }
+
   let target;
   try { target = new URL(DISCORD_WEBHOOK); }
   catch (e) { console.warn('  the Discord webhook is not a valid URL - not posting'); return; }
@@ -275,8 +342,8 @@ function postToDiscord(event) {
     port: target.port || (target.protocol === 'http:' ? 80 : 443),
     path: target.pathname + target.search,
     method: 'POST',
-    headers: { 'content-type': 'application/json',
-               'content-length': Buffer.byteLength(payload) },
+    headers: { 'content-type': contentType,
+               'content-length': payload.length },
   }, (r) => {
     /* 204 is the success Discord answers a webhook with */
     if (r.statusCode !== 204 && r.statusCode !== 200) {

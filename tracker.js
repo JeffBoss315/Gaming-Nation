@@ -130,7 +130,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.2';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.3';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -1101,13 +1101,15 @@ const Fleet = {
         (db.live && db.live.game) || db.settings.game, job.to) : null,
       game: (db.live && db.live.game) || db.settings.game || 'ets2',
 
-      /* The driver's face, for the Discord card. Only ever a public http(s)
-         URL: Discord fetches an embed icon from its own servers, so a
-         data: URI renders as nothing and a LAN address is not reachable
-         from the internet at all. Sending either would put a broken image
-         on every card, and a data: avatar is also fifty kilobytes on an
-         event that is otherwise a few hundred bytes. */
-      avatar: publicAvatar(db.driver && db.driver.avatar),
+      /* The driver's face, for the Discord card. The service does not link
+         to it, it uploads it alongside the card, so a data: URI is as good
+         as a URL here - see postToDiscord.
+
+         Only on the run events, though. This is tens of kilobytes on a
+         message that is otherwise a few hundred bytes, and session and
+         speeding notices never reach Discord at all. */
+      avatar: String(kind).indexOf('job.') === 0
+        ? cardAvatar(db.driver && db.driver.avatar) : '',
     }, extra || {});
     fetch(this.endpoint() + '/api/fleet/event', {
       method: 'POST',
@@ -3326,6 +3328,116 @@ const Store = {
 };
 
 /* ============================================================
+   IS THIS COPY THE CURRENT ONE?
+   ------------------------------------------------------------
+   The website publishes the build it is offering at
+   /version.json, and this compares it to APP_VERSION.
+
+   THREE ANSWERS, NOT TWO. Current, behind, and "could not
+   ask" - and the third is never quietly folded into the
+   first. A client that cannot reach the site and says "up to
+   date" is making a claim it has no basis for, and that is
+   exactly the failure this whole feature exists to prevent:
+   somebody running old code with nothing on screen saying so.
+
+   Versions are compared number by number, not as strings.
+   '1.0.10' is above '1.0.9' and sorts below it as text.
+   ============================================================ */
+const UPDATE_FEED = 'https://gaming-nation.pages.dev/version.json';
+
+const Updates = {
+  state: 'unknown',    /* unknown | current | behind | unreachable */
+  latest: null,
+  where: '',
+  reason: '',
+  at: 0,
+  asking: false,
+
+  /* '1.0.3' or 'V1.0.3' as [1, 0, 3] */
+  parts(v) {
+    return String(v || '').replace(/^v/i, '').split('.')
+      .map((n) => parseInt(n, 10) || 0);
+  },
+  /* -1 this is older, 0 the same, 1 this is newer */
+  compare(a, b) {
+    const x = this.parts(a), y = this.parts(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      const d = (x[i] || 0) - (y[i] || 0);
+      if (d) return d < 0 ? -1 : 1;
+    }
+    return 0;
+  },
+
+  behind() { return this.state === 'behind'; },
+
+  async check(force) {
+    /* once a boot and every six hours after, unless somebody asks */
+    if (this.asking) return;
+    if (!force && this.at && Date.now() - this.at < 6 * 3600 * 1000) return;
+    this.asking = true;
+    try {
+      const res = await this.fetch();
+      this.at = Date.now();
+
+      if (!res || res.error || !res.feed || !res.feed.version) {
+        this.state = 'unreachable';
+        this.reason = (res && res.error) || 'the site did not answer';
+        return;
+      }
+      this.latest = String(res.feed.version);
+      this.where = String(res.feed.downloads || '');
+      const cmp = this.compare(APP_VERSION, this.latest);
+      this.state = cmp < 0 ? 'behind' : 'current';
+      this.reason = '';
+      if (this.state === 'behind') {
+        Store.log('warn', 'A newer client is on the website — '
+          + this.latest + ' (this is ' + APP_VERSION + ')');
+      }
+    } catch (e) {
+      this.state = 'unreachable';
+      this.reason = e && e.message ? e.message : 'the check failed';
+    } finally {
+      this.asking = false;
+      render();
+    }
+  },
+
+  /* The desktop shell asks for us: the client's pages are file://, so a
+     cross-origin fetch from here is subject to CORS and one missing header
+     would turn this into a check that never answers - which reads as "up
+     to date". In a browser there is no shell, and the site does send the
+     header, so fetch is right there and wrong here. */
+  fetch() {
+    const D = window.gmnDesktop;
+    if (D && D.latestVersion) return D.latestVersion(UPDATE_FEED);
+    return window.fetch(UPDATE_FEED, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((feed) => ({ ok: true, feed }))
+      .catch((e) => ({ error: e.message }));
+  },
+
+  /* What to say in the status bar, which is where a driver's eye already
+     goes for the build number. */
+  chip() {
+    if (this.state === 'behind') {
+      return { cls: 'warn', text: 'Outdated · ' + this.latest + ' is out',
+        title: 'This client is ' + APP_VERSION + '. The website is offering '
+          + this.latest + '. Click to open the download page.' };
+    }
+    if (this.state === 'unreachable') {
+      return { cls: '', text: 'build ' + APP_VERSION,
+        title: 'Could not check for a newer build — ' + this.reason
+          + '. This is not the same as being up to date.' };
+    }
+    if (this.state === 'current') {
+      return { cls: '', text: 'build ' + APP_VERSION,
+        title: 'This is the build the website is offering.' };
+    }
+    return { cls: '', text: 'build ' + APP_VERSION, title: 'Checking for a newer build…' };
+  },
+};
+
+/* ============================================================
    THEME
    ------------------------------------------------------------
    Every colour in the client comes from about twenty tokens, so
@@ -3757,24 +3869,34 @@ function avatarSrc(value) {
   return '';
 }
 
-/* An avatar somebody else's server can fetch.
+/* The driver's face, in a form the service can put on a Discord card.
 
-   avatarSrc() answers "can this page show it", which is a different and
-   easier question - a data: URI and a LAN address both pass that and
-   neither survives the trip to Discord, whose servers do the fetching and
-   are not on this network. Anything not plainly public comes back empty,
-   and the card then carries a name with no face rather than a broken
-   image on every delivery. */
-function publicAvatar(value) {
+   Two shapes are useful and they get there differently. A public https
+   address is handed to Discord to fetch. A data: URI cannot be fetched by
+   anybody - it is bytes, not a location - so the service uploads it with
+   the card and the embed points at the upload. Either works; what does not
+   is a LAN address, which Discord's servers cannot reach and which would
+   be a broken image on every delivery.
+
+   Capped, because this rides on an ordinary event. An avatar is tens of
+   kilobytes; anything past a megabyte is a mistake somewhere rather than a
+   portrait, and it is not worth slowing a delivery report down for. */
+const CARD_AVATAR_MAX = 1024 * 1024;
+
+function cardAvatar(value) {
   const v = avatarSrc(value);
-  if (!/^https:\/\//i.test(v)) return '';       /* https only; Discord refuses the rest */
+  if (!v) return '';
+
+  if (/^data:image\//i.test(v)) return v.length > CARD_AVATAR_MAX ? '' : v;
+
+  if (!/^https:\/\//i.test(v)) return '';       /* http and bare filenames: no */
   let host = '';
   try { host = new URL(v).hostname.toLowerCase(); } catch (e) { return ''; }
-  const private_ = host === 'localhost' || host === '::1'
+  const unreachable = host === 'localhost' || host === '::1'
     || /\.local$/.test(host)
     || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
     || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-  return private_ ? '' : v;
+  return unreachable ? '' : v;
 }
 
 /* Clearing onerror first is what stops a missing fallback looping. */
@@ -7040,7 +7162,8 @@ function railFootHTML() {
         see it. It was only ever in the status bar and on the About screen,
         and the version there had been V1.0.0 for two releases - so the one
         place it was written down was quietly wrong. */''}
-  <div class="rail-build">Build ${esc(APP_VERSION)}</div>`;
+  <div class="rail-build">Build ${esc(APP_VERSION)}${Updates.behind()
+    ? ' <span class="rail-old">outdated</span>' : ''}</div>`;
 }
 
 /* connection state lives along the bottom edge, not in the header */
@@ -7090,7 +7213,17 @@ function statusBarHTML() {
     <span class="sb-spacer"></span>
     <button class="sb-item btn-like" data-act="nav" data-view="pending">${icon('clock')}${queued} queued</button>
     <span class="sb-sep"></span>
-    <span class="sb-item optional">build ${APP_VERSION}</span>`;
+    ${(() => {
+      /* The build number, and whether it is the current one. This is the
+         one place a driver already looks for the version, so it is where
+         "yours is old" belongs - not behind a menu they have no reason to
+         open. */
+      const u = Updates.chip();
+      return u.cls === 'warn'
+        ? `<button class="sb-item btn-like warn" data-act="open-update"
+             title="${esc(u.title)}">${icon('download')}${esc(u.text)}</button>`
+        : `<span class="sb-item optional" title="${esc(u.title)}">${esc(u.text)}</span>`;
+    })()}`;
 }
 
 /* ============================================================
@@ -8691,6 +8824,18 @@ function handle(act, t) {
       render();
       return;
     case 'notify-all': Notify.markAll(); render(); return;
+    case 'open-update': {
+      /* Ask again while we are here: the driver may have updated already,
+         and a badge that only clears on the next boot is a badge that
+         stops meaning anything. */
+      Updates.check(true);
+      const href = Updates.where
+        || UPDATE_FEED.replace(/\/version\.json$/, '/#/download');
+      Store.log('info', 'Opening the download page — ' + href);
+      if (window.Capacitor) location.href = href;
+      else window.open(href, '_blank');
+      return;
+    }
     case 'set-theme':
       Store.db.settings.theme = t.dataset.v;
       Store.save();
@@ -9721,6 +9866,10 @@ function startServices() {
 
   /* Where the games are, worked out rather than asked for. Ahead of the
      icons, which are read out of those very executables. */
+  /* Whether this copy is the one the website is offering. Asked once a
+     boot; the answer is remembered for six hours. */
+  Updates.check();
+
   GamePaths.fill();
 
   /* Read once, kept in the store, and only re-read when a path changes -

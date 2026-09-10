@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('gmnDesktop', {
   /* the game profiles on this machine, newest-saved first */
   gameProfiles: (kind) => ipcRenderer.invoke('game:profiles', kind),
   exists:     (p)    => ipcRenderer.invoke('fs:exists', p),
+  /* the build the website is offering, so this copy can say it is behind */
+  latestVersion: (feed) => ipcRenderer.invoke('app:latest', feed),
   /* which of the games are running right now */
   gameRunning: ()    => ipcRenderer.invoke('game:running'),
 

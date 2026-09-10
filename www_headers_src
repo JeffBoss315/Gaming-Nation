@@ -4,3 +4,12 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: SAMEORIGIN
+
+# The client asks this for the current build so it can tell a driver their
+# copy is out of date. It is fetched cross-origin - the desktop app's pages
+# are file://, and there is nothing secret in it - so it is the one path
+# that says so. Never cached: a stale answer is a client that goes on
+# insisting it is current for hours after a release.
+/version.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: no-store

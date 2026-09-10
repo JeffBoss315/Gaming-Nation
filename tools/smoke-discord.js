@@ -40,10 +40,15 @@ const posted = [];
 let stubMode = 204;
 
 const stub = http.createServer((req, res) => {
-  let body = '';
-  req.on('data', (c) => { body += c; });
+  /* Buffers, not a string: a multipart post carries PNG bytes and
+     concatenating those onto a string mangles them, which would make this
+     stub disagree with what Discord actually receives. */
+  const chunks = [];
+  req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
-    posted.push({ path: req.url, body });
+    const raw = Buffer.concat(chunks);
+    const body = raw.toString('utf8');
+    posted.push({ path: req.url, body, raw, type: req.headers['content-type'] || '' });
     if (stubMode === 'hang') return;                 /* never answers */
     res.writeHead(stubMode); res.end();
   });
@@ -65,6 +70,17 @@ const post = (kind, extra) => new Promise((resolve) => {
 });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* The card, however it arrived: plain JSON, or the payload_json part of a
+   multipart post carrying the driver's picture. */
+const CRLF = String.fromCharCode(13) + String.fromCharCode(10);
+const cardOf = (p) => {
+  if (p.type.indexOf('multipart/form-data') === -1) return JSON.parse(p.body);
+  const at = p.body.indexOf('name="payload_json"');
+  const start = p.body.indexOf('{', at);
+  const end = p.body.indexOf(CRLF + '--', start);
+  return JSON.parse(p.body.slice(start, end));
+};
 
 (async () => {
   const log = [];
@@ -97,7 +113,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
     if (posted.length) {
       let embed = null;
-      try { embed = JSON.parse(posted[0].body).embeds[0]; } catch (e) { /* checked below */ }
+      try { embed = cardOf(posted[0]).embeds[0]; } catch (e) { /* checked below */ }
 
       /* The route reads as the headline, the way a delivery is read: where
          it went, how far, where it ended. */
@@ -148,19 +164,57 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await post('job.delivered', { fromCountry: null, toCountry: null, cargo: 'Steel Coils' });
     await wait(600);
     if (posted.length) {
-      const e2 = JSON.parse(posted[0].body).embeds[0];
+      const e2 = cardOf(posted[0]).embeds[0];
       check('no country means no flag, not a guess',
         !/[\u{1F1E6}-\u{1F1FF}]/u.test(e2.title || ''), e2.title);
       check('and an unlisted load still gets a mark',
         /\u{1F3D7}/u.test(e2.description || ''), e2.description);
     }
 
-    /* An embed icon is fetched by Discord's own servers, so an address only
-       this machine can reach is a broken image on every card the crew
-       reads. Better to show the name alone. The client filters these and
-       the service checks again, because the event arrives over a network. */
+    /* THE FACE, WHICH IS THE WHOLE POINT OF THIS SECTION.
+
+       Our avatars are data: URIs in the driver's own record - bytes, not a
+       location - and an embed icon_url is fetched by Discord's servers. So
+       the picture is not linked, it is uploaded with the card, and the
+       embed points at it with attachment://. If this regresses the card
+       loses the face silently and the only symptom is a name on its own.
+
+       A 1x1 PNG, so the bytes are real and checkable. */
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64');
+    posted.length = 0;
+    await post('job.delivered',
+      { avatar: 'data:image/png;base64,' + PNG.toString('base64') });
+    await wait(600);
+    if (posted.length) {
+      const p0 = posted[0];
+      check('a data: avatar is uploaded with the card',
+        p0.type.indexOf('multipart/form-data') > -1, p0.type.split(';')[0]);
+      const a3 = cardOf(p0).embeds[0].author || {};
+      check('and the embed points at that upload',
+        a3.icon_url === 'attachment://avatar.png', a3.icon_url || 'NO ICON');
+      check('the picture arrives intact, not mangled',
+        p0.raw.indexOf(PNG) > -1, p0.raw.indexOf(PNG) > -1
+          ? PNG.length + ' bytes, byte for byte' : 'THE BYTES DID NOT SURVIVE');
+      check('and it is sent as a file, with a name',
+        p0.body.indexOf('filename="avatar.png"') > -1
+          && p0.body.indexOf('name="files[0]"') > -1, 'files[0] avatar.png');
+    }
+
+    /* An avatar already on a public host needs no upload - Discord fetches
+       and caches it, and the post stays plain JSON. */
+    posted.length = 0;
+    await post('job.delivered', { avatar: 'https://cdn.gaming-nation.test/a/ana.png' });
+    await wait(500);
+    if (posted.length) {
+      check('a public https avatar is linked, not uploaded',
+        posted[0].type.indexOf('application/json') > -1, posted[0].type);
+    }
+
+    /* And the addresses Discord cannot reach: name alone beats a broken
+       image on every card the crew reads. */
     for (const [what, url] of [
-      ['a data: URI', 'data:image/png;base64,iVBORw0KGgo='],
       ['a LAN address', 'https://192.168.1.14:7040/files/a.png'],
       ['localhost', 'https://localhost:7040/files/a.png'],
       ['plain http', 'http://cdn.gaming-nation.test/a/ana.png'],
@@ -188,7 +242,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       await wait(500);
       let f = null;
       try {
-        f = (JSON.parse(posted[0].body).embeds[0].fields || [])
+        f = (cardOf(posted[0]).embeds[0].fields || [])
           .find((x) => x.name === 'Top speed');
       } catch (e) { /* reported below */ }
       const v = (f && f.value) || '';

@@ -648,6 +648,19 @@ body.can-install .install-cta{display:inline-flex}
   .dcell{padding:9px 10px}
 }
 
+/* This copy is behind the one the website is offering. Said in the two
+   places the build number already appears, in the colour the client uses
+   for "this wants attention" and not the one it uses for "this is broken":
+   an old client still works, it is just old. */
+.rail-old{
+  display:inline-block;margin-left:6px;padding:1px 5px;border-radius:99px;
+  background:color-mix(in srgb,var(--warn) 20%,transparent);
+  color:var(--warn);font-size:8.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;vertical-align:1px;
+}
+.sb-item.warn{color:var(--warn)}
+.sb-item.warn:hover{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
+
 /* ---------- rank ---------- */
 .rank-chip{
   width:46px;height:46px;flex:none;display:grid;place-items:center;

@@ -88,6 +88,10 @@ ipcMain.on('win:maximize', () => {
 ipcMain.on('win:close', () => win && win.close());
 
 /* ---------------- file system ---------------- */
+/* Whether this copy is the build the website is offering. The fetch lives
+   in update-check.js so a test can require it - see the note at its top. */
+require('./update-check').register(ipcMain);
+
 ipcMain.handle('fs:exists', (_e, p) => {
   try { return !!p && fs.existsSync(p); } catch (err) { return false; }
 });
