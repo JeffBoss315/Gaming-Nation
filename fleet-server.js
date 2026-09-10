@@ -91,12 +91,39 @@ const SITE_URL = String(process.env.GMN_PUBLIC_URL
    it is a RACE. */
 const RACE_OVER = Number(process.env.GMN_RACE_SPEED) || 100;
 
+/* THE WEBHOOK BELONGS TO A COMPANY, NOT TO A DIRECTORY.
+
+   gmn-discord.json sits beside gmn-company.json and holds the address of
+   one company's crew channel. Every test spawns this service with a
+   scratch GMN_COMPANY_FILE so a run never touches the real company - and
+   thirteen of them then inherited the real company's webhook, because the
+   webhook was read from the folder rather than tied to the record. Every
+   one of those runs posted a fabricated delivery into a channel real
+   people read. Rotterdam to Hamburg, 480 km, Steel coils, over and over.
+
+   So: a service told to use a company file that is not the default one is
+   serving a different company, and it does not get this company's
+   channel. It can still have its own - GMN_DISCORD_WEBHOOK or
+   GMN_DISCORD_FILE, set deliberately - which is how a second real
+   deployment configures itself and how smoke:discord points at its stub.
+
+   This is a rule about ownership, not a test flag. A flag would have to be
+   remembered by whoever writes the fourteenth test. */
+const OWN_COMPANY = !process.env.GMN_COMPANY_FILE && !process.env.HLL_COMPANY_FILE;
+
 const DISCORD_FILE = process.env.GMN_DISCORD_FILE
-  || path.join(ROOT, 'gmn-discord.json');
+  || (OWN_COMPANY ? path.join(ROOT, 'gmn-discord.json') : null);
+
 const DISCORD_WEBHOOK = String(
   process.env.GMN_DISCORD_WEBHOOK
-  || (readJSON(DISCORD_FILE, {}) || {}).webhook
+  || (DISCORD_FILE ? (readJSON(DISCORD_FILE, {}) || {}).webhook : '')
   || '').trim();
+
+/* Said out loud at startup, because "why did nothing post" is otherwise a
+   silent difference between two identical-looking runs. */
+const DISCORD_WHY = DISCORD_WEBHOOK ? ''
+  : OWN_COMPANY ? 'no webhook configured'
+  : 'this service is running against another company record';
 
 /* Which events are worth a person's attention in a chat channel.
 
@@ -1906,7 +1933,7 @@ server.listen(PORT, HOST, () => {
      every terminal scrollback and every screenshot of one. */
   console.log('  Discord      :  ' + (DISCORD_WEBHOOK
     ? 'runs and deliveries are posted to the crew channel'
-    : 'not configured — set GMN_DISCORD_WEBHOOK or gmn-discord.json'));
+    : 'off — ' + DISCORD_WHY));
   if (HOST === '127.0.0.1') {
     console.log('  (this machine only — pass --lan to let phones reach it)');
   }

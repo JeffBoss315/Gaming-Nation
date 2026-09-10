@@ -281,12 +281,48 @@ const cardOf = (p) => {
     const hung = await post('job.delivered');
     check('nor does Discord never answering', hung === 200,
       'the client got HTTP ' + hung);
+
+    /* ---- and the channel belongs to the company that owns the record ----
+
+       Thirteen tests spawned this service with a scratch company file so a
+       run would not touch the real company, and every one of them then
+       inherited the REAL company's webhook, because it was read from the
+       folder rather than tied to the record. Each of those runs posted a
+       fabricated delivery into a channel real people read.
+
+       A service pointed at another company's record does not get this
+       company's channel. It is a rule about ownership, so nobody has to
+       remember a flag when they write the fourteenth test. */
+    const other = await new Promise((resolve) => {
+      const p2 = spawn(process.execPath, [path.join(ROOT, 'fleet-server.js')], {
+        cwd: ROOT,
+        env: Object.assign({}, process.env, {
+          GMN_PORT: String(FLEET_PORT + 3),
+          /* a scratch company, and NO webhook told to it - exactly the
+             shape every other smoke test spawns */
+          GMN_COMPANY_FILE: path.join(ROOT, '.smoke-discord-other.json'),
+          GMN_SESSION_FILE: path.join(ROOT, '.smoke-discord-other-s.json'),
+          GMN_DISCORD_WEBHOOK: '',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let said = '';
+      const done = () => resolve(said);
+      p2.stdout.on('data', (d) => { said += String(d); });
+      p2.stderr.on('data', (d) => { said += String(d); });
+      setTimeout(() => { p2.kill(); done(); }, 2500);
+    });
+    check('another company’s record gets no channel of ours',
+      /Discord\s+:\s+off/.test(other)
+        && /another company record/.test(other.replace(/another company's record/g, 'another company record')),
+      (/(Discord\s+:.*)/.exec(other) || [, 'no banner'])[1].trim());
   } catch (e) {
     check('the test itself ran', false, e && e.message);
   } finally {
     if (fleet) fleet.kill();
     stub.close();
-    for (const f of ['.smoke-discord-company.json', '.smoke-discord-sessions.json']) {
+    for (const f of ['.smoke-discord-company.json', '.smoke-discord-sessions.json',
+                     '.smoke-discord-other.json', '.smoke-discord-other-s.json']) {
       try { require('fs').rmSync(path.join(ROOT, f), { force: true }); } catch (e) { /* fine */ }
     }
   }
