@@ -60,7 +60,6 @@
     "smoke:career": "node tools/run-electron.js tools/smoke-career.js .",
     "smoke:notify": "node tools/run-electron.js tools/smoke-notify-support.js .",
     "smoke:convoysheet": "node tools/run-electron.js tools/smoke-convoy-client.js .",
-    "check:discord": "node tools/check-discord-avatar.js",
     "smoke:update": "node tools/run-electron.js tools/smoke-update-check.js .",
     "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
     "smoke:plugin": "node tools/smoke-plugin-install.js .",
