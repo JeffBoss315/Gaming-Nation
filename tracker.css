@@ -683,6 +683,45 @@ body.can-install .install-cta{display:inline-flex}
   .achgrid{grid-template-columns:1fr}
 }
 
+
+/* ---------- notifications ---------- */
+.ntf-list{display:flex;flex-direction:column}
+.ntf{
+  position:relative;display:flex;gap:11px;align-items:flex-start;width:100%;
+  padding:12px 14px;text-align:left;color:var(--text);
+  border-top:1px solid var(--line);background:transparent;
+  transition:background var(--t);
+}
+.ntf:first-child{border-top:0}
+.ntf:hover{background:var(--panel-2)}
+.ntf.new{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.ntf.new:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.ntf-ico{width:28px;height:28px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
+.ntf.new .ntf-ico{color:var(--accent)}
+.ntf-ico svg{width:15px;height:15px}
+.ntf-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.ntf-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.ntf-kind{font-size:9.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--text-3)}
+.ntf.new .ntf-kind{color:var(--accent)}
+.ntf-when{font-size:10px;color:var(--text-3);white-space:nowrap}
+.ntf-title{font-size:12.5px;font-weight:600;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntf-text{font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ntf-dot{flex:none;align-self:center;width:7px;height:7px;border-radius:50%;
+  background:var(--accent)}
+
+/* ---------- what the client reports about itself ----------
+   Fixed width so a wrapped line is the writer's, not the layout's. */
+.diagbox{
+  margin:0;padding:11px 12px;border-radius:var(--r);white-space:pre-wrap;
+  background:var(--panel-3);border:1px solid var(--line);
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-size:11px;line-height:1.55;color:var(--text-2);overflow-x:auto;
+}
+
 /* ---------- sign-in ----------
    Stands in for the client until a driver signs in. It sits under the title
    bar, so the window controls keep working while signed out. */

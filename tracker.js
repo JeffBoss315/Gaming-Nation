@@ -70,6 +70,7 @@ const P = {
   user:'<circle cx="12" cy="8" r="3.4"/><path d="M5 20v-1.2A4.8 4.8 0 0 1 9.8 14h4.4A4.8 4.8 0 0 1 19 18.8V20"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>',
   chat:'<path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8.5 12h7M8.5 9h4"/>',
+  ticket:'<path d="M4 8.5V6.5h16v2a2.6 2.6 0 0 0 0 5.2v3.8H4v-3.8a2.6 2.6 0 0 0 0-5.2z"/><path d="M12 7v3M12 13.5v3.5"/>',
   medal:'<circle cx="12" cy="14" r="6"/><path d="M8.2 8.5 5 2h5l2.5 5M15.8 8.5 19 2h-5"/>',
   star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
   chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -3106,6 +3107,13 @@ function seed() {
     activity: [],
     messages: [],
     chats: [],
+
+    /* Which notifications this driver has already looked at. An id and a
+       flag, never a copy of the thing itself - a copy goes stale the moment
+       the announcement behind it is edited, and a driver reading a headline
+       that no longer matches is worse off than one who was never told. */
+    seen: {},
+
     settings: {
       profileName: '',
       autoSubmit: false,
@@ -3195,6 +3203,7 @@ const Store = {
       .forEach((k) => { if (!Array.isArray(this.db[k])) { this.db[k] = []; added++; } });
     if (!this.db.conn || typeof this.db.conn !== 'object') { this.db.conn = fresh.conn; added++; }
     if (!this.db.stats || typeof this.db.stats !== 'object') { this.db.stats = fresh.stats; added++; }
+    if (!this.db.seen || typeof this.db.seen !== 'object') { this.db.seen = {}; added++; }
     if (added) console.info('[GMN] filled in ' + added + ' setting(s) this build added');
 
     const s = this.db.settings;
@@ -3285,6 +3294,9 @@ const NAV = [
   { key: 'leaderboard', label: 'Standings',     icon: 'trophy' },
   { key: 'stats',       label: 'Statistics',    icon: 'chart' },
   { key: 'achievements', label: 'Achievements', icon: 'medal' },
+  { key: 'notifications', label: 'Notifications', icon: 'bell',
+    count: () => Notify.count() },
+  { key: 'support',     label: 'Support',       icon: 'lifebuoy' },
   /* Announcements AND conversations. The count used to be the unread
      announcements alone, which was the whole of this screen; a message
      from another driver now arrives here too and has to be counted, or
@@ -5043,6 +5055,424 @@ function viewAchievements() {
 }
 
 
+/* ============================================================
+   NOTIFICATIONS
+   ------------------------------------------------------------
+   One feed, gathered from the places these things already live
+   rather than a new store that has to be written to from six
+   directions and kept in step with all of them.
+
+     a job dispatched to you        the company's assignments
+     a message                      the threads the service holds
+     a crew announcement            the platform's announcements
+     a convoy coming up             the convoys you signed on to
+     a badge earned                 worked out from your record
+     anything staff sent you        the platform's notifications
+
+   Read state comes from the source wherever the source has one -
+   a platform notification carries `read`, a thread carries its
+   unread count - so opening a message here and opening it on the
+   messages screen are the same act, not two states to reconcile.
+
+   The rest get a marker in `seen`, which is the ONLY thing this
+   stores: an id and the fact that somebody looked at it. Not a
+   copy of the notification, because a copy goes stale the moment
+   the real thing changes, and a driver reading a headline that
+   no longer matches the announcement it came from is worse off
+   than one who was never told.
+   ============================================================ */
+const SOON_MS = 48 * 3600 * 1000;    /* how far ahead a convoy is "coming up" */
+
+const Notify = {
+  me() { return String((Store.db.driver && Store.db.driver.gmnId) || ''); },
+  seen() { return Store.db.seen || (Store.db.seen = {}); },
+  isSeen(id) { return !!this.seen()[id]; },
+
+  /* Everything worth telling this driver, newest first. Each entry knows
+     where it came from, so opening one can take them to the real thing
+     rather than to a copy of it. */
+  feed() {
+    const db = Store.db;
+    const hq = Auth.hqDb() || {};
+    const me = this.me();
+    const out = [];
+    const add = (o) => { out.push(Object.assign({ unread: !this.isSeen(o.id) }, o)); };
+
+    /* ---- staff sent you something ----
+       driverId null is a broadcast, which is how the platform publishes to
+       everybody without writing a row per driver. */
+    (hq.notifications || [])
+      .filter((n) => n && (!n.driverId || String(n.driverId) === me))
+      .forEach((n) => add({
+        id: 'n:' + n.id, kind: 'Admin', icon: 'bell', at: n.at,
+        title: n.title || 'Notification', body: n.body || '',
+        unread: !n.read && !this.isSeen('n:' + n.id),
+        view: 'messages',
+      }));
+
+    /* ---- crew announcements ---- */
+    (hq.announcements || []).forEach((a) => add({
+      id: 'a:' + a.id, kind: a.pinned ? 'Pinned' : 'Announcement', icon: 'mail',
+      at: a.date || a.at, title: a.title || 'Announcement',
+      body: String(a.body || '').slice(0, 160), view: 'messages',
+    }));
+
+    /* ---- a job dispatched to you ----
+       Only while it still wants something doing. A run already accepted and
+       finished is not news. */
+    (typeof myAssignments === 'function' ? myAssignments() : [])
+      .filter((a) => a.status === 'assigned')
+      .forEach((a) => add({
+        id: 'j:' + a.id, kind: 'New job', icon: 'box', at: a.at || a.created,
+        title: cityLabel(a.from) + ' to ' + cityLabel(a.to),
+        body: a.cargo + ' · ' + fmt.km(a.km) + (a.payout ? ' · ' + fmt.eur(a.payout) : ''),
+        view: 'dashboard',
+      }));
+
+    /* ---- messages waiting ----
+       The thread's own unread count is the truth here; there is no separate
+       read flag to fall out of step with the messages screen. */
+    (Messages.threads || [])
+      .filter((t) => (t.unread || 0) > 0)
+      .forEach((t) => add({
+        id: 'm:' + t.withId, kind: 'Message', icon: 'chat',
+        at: t.last && t.last.at,
+        title: String(t.withId) === FLEET_ROOM ? 'Crew chat' : (t.name || t.withId),
+        body: t.last ? String(t.last.text || 'Attachment').slice(0, 120) : '',
+        unread: true,
+        view: String(t.withId) === FLEET_ROOM ? 'chats' : 'messages',
+      }));
+
+    /* ---- a convoy you are signed on to ---- */
+    const now = Date.now();
+    (Auth.events() || [])
+      .filter((e) => e && e.status !== 'completed'
+        && (e.registered || []).some((r) => r.driverId === me))
+      .forEach((e) => {
+        const when = new Date(e.date).getTime();
+        if (!Number.isFinite(when) || when - now > SOON_MS || when < now - 6 * 3600000) return;
+        add({
+          id: 'c:' + e.id, kind: 'Convoy', icon: 'route', at: e.date,
+          title: e.name || 'Convoy',
+          body: (when <= now ? 'Rolling now' : 'Starts ' + fmt.rel(e.date).replace(' ago', ' from now'))
+            + (e.start ? ' · ' + e.start + ' to ' + (e.dest || '') : ''),
+          view: 'convoy',
+        });
+      });
+
+    /* ---- a badge earned ----
+       Worked out, so a driver who earned one while the client was closed is
+       still told about it when they come back. */
+    Career.badges().filter((b) => b.done).forEach((b) => add({
+      id: 'b:' + b.a.id, kind: 'Achievement', icon: b.a.icon, at: null,
+      title: b.a.name, body: b.a.desc, view: 'achievements',
+    }));
+
+    return out.sort((x, y) => {
+      /* unread first, then newest. An achievement has no date of its own -
+         the record does not say when it tipped over - so it sorts last
+         rather than pretending to a time it does not have. */
+      if (x.unread !== y.unread) return x.unread ? -1 : 1;
+      const a = x.at ? new Date(x.at).getTime() : 0;
+      const b = y.at ? new Date(y.at).getTime() : 0;
+      return b - a;
+    });
+  },
+
+  count() { return this.feed().filter((n) => n.unread).length; },
+
+  /* Marking one read marks it where it actually lives, so the badge on the
+     Messages tab agrees with the badge here. */
+  markRead(id) {
+    this.seen()[id] = true;
+    if (id.indexOf('n:') === 0) {
+      const hq = Auth.hqDb();
+      const row = hq && (hq.notifications || []).find((n) => 'n:' + n.id === id);
+      if (row && !row.read) { row.read = true; Auth.saveHqDb(hq); }
+    }
+    /* A message is unread until the MESSAGE is read. Marking only the
+       notification would clear the badge here and leave it on the Messages
+       tab, which is two inboxes disagreeing about the same message - so this
+       marks the thread itself, through the service that owns it. */
+    if (id.indexOf('m:') === 0) Messages.markRead(id.slice(2));
+    Store.save();
+  },
+  markAll() {
+    const feed = this.feed();
+    feed.forEach((n) => { this.seen()[n.id] = true; });
+
+    const hq = Auth.hqDb();
+    if (hq && Array.isArray(hq.notifications)) {
+      let touched = false;
+      hq.notifications.forEach((n) => {
+        if (!n.read && (!n.driverId || String(n.driverId) === this.me())) {
+          n.read = true; touched = true;
+        }
+      });
+      if (touched) Auth.saveHqDb(hq);
+    }
+
+    /* and the threads, for the same reason as above. If the service is
+       unreachable the thread stays unread, which is the honest outcome -
+       nothing here pretends a message was read when it was not. */
+    feed.filter((n) => n.id.indexOf('m:') === 0)
+      .forEach((n) => Messages.markRead(n.id.slice(2)));
+
+    Store.save();
+  },
+};
+
+function viewNotifications() {
+  const feed = Notify.feed();
+  const unread = feed.filter((n) => n.unread).length;
+
+  const row = (n) => `<button class="ntf ${n.unread ? 'new' : ''}"
+      data-act="notify-open" data-id="${esc(n.id)}" data-view="${esc(n.view)}">
+    <span class="ntf-ico">${icon(n.icon)}</span>
+    <span class="ntf-body">
+      <span class="ntf-top">
+        <span class="ntf-kind">${esc(n.kind)}</span>
+        <span class="ntf-when">${n.at ? esc(fmt.rel(n.at)) : ''}</span>
+      </span>
+      <span class="ntf-title">${esc(n.title)}</span>
+      ${n.body ? `<span class="ntf-text">${esc(n.body)}</span>` : ''}
+    </span>
+    ${n.unread ? '<span class="ntf-dot"></span>' : ''}
+  </button>`;
+
+  return `
+  ${viewHead('Notifications', unread ? unread + ' unread' : 'Nothing waiting',
+    unread ? `<button class="btn btn-sm" data-act="notify-all">${icon('check')}Mark all read</button>` : '')}
+
+  <section class="card"><div class="card-body p-0">
+    ${feed.length ? `<div class="ntf-list">${feed.map(row).join('')}</div>`
+      : `<div class="empty">${icon('bell')}
+          <div>Nothing waiting</div>
+          <div class="t3 xs">Dispatched jobs, messages, announcements, convoys you have
+            signed on to and badges you earn all arrive here.</div>
+        </div>`}
+  </div></section>`;
+}
+
+
+/* ============================================================
+   SUPPORT
+   ------------------------------------------------------------
+   Four ways to reach the company, and all four raise a real
+   ticket on the company record - the same tickets the admin
+   console opens. A support screen that collects a message and
+   drops it is worse than no support screen: the driver believes
+   they have been heard.
+
+   A technical report carries the client's own diagnosis with it,
+   unasked: version, which game, whether the adapter is running
+   and what it last said about why nothing is arriving. That is
+   the whole of the first exchange on every technical ticket
+   anybody has ever filed, and the client already knows all of
+   it. Nobody should have to be walked through reading it back.
+
+   Nothing here is sent anywhere the driver cannot see. The
+   diagnosis is shown in the form before it goes.
+   ============================================================ */
+const SUPPORT_KINDS = {
+  admin: { label: 'Contact admin', icon: 'mail', category: 'Question', priority: 'normal',
+    blurb: 'A question for management — anything that is not a fault.' },
+  issue: { label: 'Report an issue', icon: 'alert', category: 'Issue', priority: 'normal',
+    blurb: 'Something on the platform is wrong: a run credited oddly, a figure that looks off.' },
+  driver: { label: 'Report a driver', icon: 'shield', category: 'Conduct', priority: 'high',
+    blurb: 'Conduct on a convoy or in chat. Goes to management, not to the driver.' },
+  tech: { label: 'Technical problem', icon: 'wrench', category: 'Technical', priority: 'normal',
+    blurb: 'The client, the game link or telemetry. Your diagnosis is attached.' },
+};
+
+const Support = {
+  me() { return Store.db.driver || {}; },
+
+  /* Every ticket this driver has raised, newest first. Read off the company
+     record, so a reply written in the admin console shows up here. */
+  mine() {
+    const hq = Auth.hqDb();
+    const me = String(this.me().gmnId || '');
+    if (!hq || !Array.isArray(hq.tickets) || !me) return [];
+    return hq.tickets.filter((t) => String(t.driverId) === me);
+  },
+
+  /* What the client knows about its own state. Written as prose because a
+     person reads it first, and every line of it is a question somebody would
+     otherwise have to ask. */
+  diagnosis() {
+    const db = Store.db;
+    const a = Telemetry.adapter;
+    const d = Telemetry.diagnostics;
+    const lines = [
+      'Client ' + APP_VERSION + ' on ' + (Launcher.api() ? 'the desktop app' : 'a browser'),
+      'Game: ' + mapFor(db.settings.game).label
+        + (db.conn.ets2 === 'running' ? ' (running)' : ' (not running)'),
+      'Telemetry: ' + (Telemetry.mode === 'live' ? 'live' : 'not arriving'),
+      'Company service: ' + (db.conn.gmn === 'connected' ? 'connected' : 'not reachable'),
+    ];
+    if (a) lines.push('Adapter: ' + (a.running ? 'running' : 'not running — ' + (a.reason || 'no reason given')));
+    if (d && d.advice) lines.push('Adapter says: ' + d.advice);
+    if (d && d.foreign && d.foreign.length) {
+      lines.push('Another plugin is writing ' + d.foreign[0].map + ' (' + d.foreign[0].plugin + ')');
+    }
+    return lines.join('\n');
+  },
+
+  open(kind) {
+    const k = SUPPORT_KINDS[kind] || SUPPORT_KINDS.admin;
+    const roster = Auth.roster()
+      .filter((d) => d.id !== this.me().gmnId && d.accountStatus !== 'deleted');
+
+    modal({
+      title: k.label,
+      body: `
+        <p class="t2 sm">${esc(k.blurb)}</p>
+        ${kind === 'driver' ? `
+          <div class="field mt-16"><label for="spWho">Which driver</label>
+            <select class="select" id="spWho">
+              ${roster.length
+                ? roster.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} · ${esc(d.id)}</option>`).join('')
+                : '<option value="">Nobody else is on the roster</option>'}
+            </select></div>` : ''}
+        <div class="field mt-16"><label for="spSubject">Subject</label>
+          <input class="input" id="spSubject" maxlength="90"
+            placeholder="${esc(kind === 'tech' ? 'No telemetry from ETS2' : 'One line')}"></div>
+        <div class="field mt-12"><label for="spBody">What happened</label>
+          <textarea class="input" id="spBody" rows="5"
+            placeholder="As much as you can. When it started, what you were doing."></textarea></div>
+        ${kind === 'tech' ? `
+          <div class="t3 xs mt-12">Sent with it, so nobody has to ask:</div>
+          <pre class="diagbox">${esc(this.diagnosis())}</pre>` : ''}`,
+      foot: `<button class="btn" data-close>Cancel</button>
+             <button class="btn btn-primary" data-act="support-send" data-kind="${esc(kind)}">
+               ${icon('send')}Send</button>`,
+    });
+  },
+
+  send(kind) {
+    const k = SUPPORT_KINDS[kind] || SUPPORT_KINDS.admin;
+    const subject = String(($('#spSubject') || {}).value || '').trim();
+    const body = String(($('#spBody') || {}).value || '').trim();
+    const who = String((($('#spWho') || {}).value) || '').trim();
+
+    if (!subject) { toast('A subject, so somebody can tell what it is about', 'warn'); return; }
+    if (!body) { toast('Say what happened — an empty ticket cannot be answered', 'warn'); return; }
+
+    const hq = Auth.hqDb();
+    if (!hq) {
+      toast('The company record is not reachable — nothing was sent', 'err');
+      Store.log('err', 'Support ticket could not be raised: no company record');
+      return;
+    }
+
+    const me = this.me();
+    const now = new Date().toISOString();
+    let text = body;
+    if (kind === 'driver' && who) {
+      const d = Auth.driverRecord(who);
+      text = 'About ' + (d ? d.name + ' (' + who + ')' : who) + '\n\n' + body;
+    }
+    if (kind === 'tech') text = body + '\n\n--- what the client reports ---\n' + this.diagnosis();
+
+    const ticket = {
+      id: 'TCK-' + Date.now().toString(36).toUpperCase(),
+      subject, category: k.category, priority: k.priority, status: 'open',
+      driverId: me.gmnId, created: now, updated: now,
+      messages: [{ from: me.gmnId, at: now, body: text }],
+    };
+    hq.tickets = hq.tickets || [];
+    hq.tickets.unshift(ticket);
+
+    /* Staff have to be told, or the ticket sits unread until somebody
+       happens to open the console. driverId null is how the platform
+       broadcasts, so this addresses nobody in particular and everybody
+       with the console sees it. */
+    hq.notifications = hq.notifications || [];
+    hq.notifications.unshift({
+      id: 'n-' + Date.now().toString(36), driverId: null, type: 'warn', icon: 'ticket',
+      title: k.label, body: (me.name || 'A driver') + ': ' + subject,
+      href: '#/ticket/' + ticket.id, at: now, read: false,
+    });
+
+    if (!Auth.saveHqDb(hq)) {
+      toast('That could not be saved — nothing was sent', 'err');
+      return;
+    }
+    Store.log('ok', 'Support ticket ' + ticket.id + ' raised — ' + subject);
+    closeModals();
+    toast('Sent — ' + ticket.id, 'ok');
+    state.view = 'support';
+    render();
+  },
+};
+
+function viewSupport() {
+  const mine = Support.mine();
+  const open = mine.filter((t) => t.status !== 'closed');
+
+  const route = (key) => {
+    const k = SUPPORT_KINDS[key];
+    return `<button class="menu-row" data-act="support-open" data-kind="${esc(key)}">
+      <span class="menu-ico">${icon(k.icon)}</span>
+      <span class="grow">
+        <span class="b6">${esc(k.label)}</span>
+        <span class="t3 xs" style="display:block;margin-top:2px">${esc(k.blurb)}</span>
+      </span>
+      ${icon('chevron', 'menu-chev')}
+    </button>`;
+  };
+
+  const ticket = (t) => {
+    const last = (t.messages || [])[t.messages.length - 1];
+    const replied = last && String(last.from) !== String(Store.db.driver.gmnId);
+    return `<div class="setting-row">
+      <div style="min-width:0">
+        <div class="b6">${esc(t.subject)}</div>
+        <div class="t3 xs mt-4"><span class="mono">${esc(t.id)}</span> · ${esc(t.category)}
+          · raised ${esc(fmt.rel(t.created))}${replied ? ' · management replied' : ''}</div>
+      </div>
+      <span class="pill ${t.status === 'closed' ? '' : t.status === 'open' ? 'brand' : 'info'}">${
+        esc(t.status)}</span>
+    </div>`;
+  };
+
+  return `
+  ${viewHead('Support', open.length ? open.length + ' open' : 'Reach the company')}
+
+  <section class="card">
+    <div class="card-head"><span class="label">What do you need</span></div>
+    <div class="card-body p-0">
+      ${['admin', 'issue', 'driver', 'tech'].map(route).join('')}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Your tickets</span>
+      ${mine.length ? `<span class="label">${mine.length}</span>` : ''}
+    </div>
+    <div class="card-body">
+      ${mine.length ? mine.map(ticket).join('')
+        : `<div class="empty">${icon('ticket')}
+            <div>Nothing raised</div>
+            <div class="t3 xs">Anything you send goes on the company record, and management
+              answers it there. Replies appear on this screen.</div>
+          </div>`}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">What the client reports about itself</span></div>
+    <div class="card-body">
+      <pre class="diagbox">${esc(Support.diagnosis())}</pre>
+      <div class="t3 xs mt-8">A technical report carries this with it, so nobody has to
+        ask you to read it out.</div>
+    </div>
+  </section>`;
+}
+
+
 /* ---------------- messages ----------------
 
    Two things live here now. The announcements from management, which is
@@ -5662,7 +6092,7 @@ function decideApplication(id, verdict) {
 const MENU_SECTIONS = [
   { label: 'Operation', items: ['dashboard', 'pending', 'uploads'] },
   { label: 'Record',    items: ['profile', 'stats', 'achievements', 'messages'] },
-  { label: 'Client',    items: ['settings', 'about'] },
+  { label: 'Client',    items: ['notifications', 'settings', 'support', 'about'] },
 ];
 
 function viewMenu() {
@@ -6109,7 +6539,7 @@ const NAV_GROUPS = [
   /* staff only: without this the company controls were reachable on a phone
      and nowhere at all on the desktop */
   { label: 'Company',   items: ['adm-drivers', 'adm-apps'], staff: true },
-  { label: 'Client',    items: ['settings', 'about'] },
+  { label: 'Client',    items: ['notifications', 'settings', 'support', 'about'] },
 ];
 
 /* rail entries that open a dialog rather than a view */
@@ -7526,6 +7956,8 @@ const VIEWS = {
   leaderboard: viewLeaderboard,
   stats: viewStats,
   achievements: viewAchievements,
+  notifications: viewNotifications,
+  support: viewSupport,
   pending: viewPending,
   uploads: viewUploads,
   settings: viewSettings,
@@ -7798,6 +8230,15 @@ function handle(act, t) {
     case 'launch-game': Launcher.launch(t.dataset.kind); return;
     case 'browse-exe': Launcher.browse(t.dataset.kind); return;
     case 'detect-exe': Launcher.autoDetect(t.dataset.kind); return;
+
+    case 'notify-open':
+      Notify.markRead(t.dataset.id);
+      if (t.dataset.view) state.view = t.dataset.view;
+      render();
+      return;
+    case 'notify-all': Notify.markAll(); render(); return;
+    case 'support-open': Support.open(t.dataset.kind); return;
+    case 'support-send': Support.send(t.dataset.kind); return;
     case 'test-siren': Siren.wail(1.6); return;
 
     case 'toggle-live': {
