@@ -57,6 +57,7 @@
     "smoke:host": "node tools/run-electron.js tools/smoke-host-service.js .",
     "smoke:launch": "node tools/smoke-launch.js .",
     "smoke:tiles": "node tools/run-electron.js tools/smoke-launch-tiles.js .",
+    "smoke:career": "node tools/run-electron.js tools/smoke-career.js .",
     "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
     "smoke:plugin": "node tools/smoke-plugin-install.js .",
     "smoke:apploss": "node tools/run-electron.js tools/smoke-application-loss.js .",

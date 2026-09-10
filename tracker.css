@@ -602,6 +602,87 @@ body.can-install .install-cta{display:inline-flex}
   .launch-tile{height:44px;padding:0 10px}
 }
 
+
+/* ---------- the driver strip ----------
+   Seven cells under the launch tiles. It wraps rather than scrolls: a
+   figure a driver has to drag sideways to read is a figure they will not
+   read, and this exists to be read at a glance. */
+.dstrip{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);
+  overflow:hidden;margin-bottom:14px;
+}
+.dcell{
+  display:flex;align-items:center;gap:9px;min-width:0;
+  padding:10px 12px;background:var(--panel);text-align:left;color:var(--text);
+}
+.dcell.go{cursor:pointer;transition:background var(--t)}
+.dcell.go:hover{background:var(--panel-2)}
+.dcell-ico{width:24px;height:24px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:var(--panel-2);color:var(--text-3)}
+.dcell-ico svg{width:14px;height:14px}
+.dcell-body{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.dcell-k{font-size:9.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--text-3)}
+.dcell-v{font-size:12.5px;font-weight:600;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsub{color:var(--text-3);font-weight:500}
+.dstate{display:inline-flex;align-items:center;gap:6px}
+.dstate.live{color:var(--accent)}
+.dstate.on{color:var(--ok)}
+.dstate.off{color:var(--text-3)}
+.dstate.off .beat{background:var(--text-3);animation:none}
+@media (max-width:720px){
+  .dstrip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dcell{padding:9px 10px}
+}
+
+/* ---------- rank ---------- */
+.rank-chip{
+  width:46px;height:46px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r);background:color-mix(in srgb,var(--rc) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--rc) 45%,transparent);
+  color:var(--rc);font-size:12px;font-weight:800;letter-spacing:.06em;
+}
+.rankbar{height:6px;border-radius:99px;background:var(--panel-3);overflow:hidden}
+.rankbar-fill{height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),#b9e87a)}
+
+/* the XP sum, shown as its parts so anyone can check it */
+.xpsplit{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.xprow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
+  padding:8px 12px;font-size:12px;border-top:1px solid var(--line)}
+.xprow:first-child{border-top:0}
+.xprow .mono{min-width:76px;text-align:right;font-variant-numeric:tabular-nums}
+.xprow.total{background:var(--panel-2);font-weight:700}
+
+/* ---------- achievements ---------- */
+.achgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px}
+.ach{
+  display:flex;gap:11px;align-items:flex-start;padding:12px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--panel-2);
+}
+.ach.got{border-color:color-mix(in srgb,var(--ac) 42%,transparent);
+  background:color-mix(in srgb,var(--ac) 8%,var(--panel-2))}
+.ach-ico{width:32px;height:32px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
+.ach.got .ach-ico{background:color-mix(in srgb,var(--ac) 18%,transparent);color:var(--ac)}
+.ach-ico svg{width:17px;height:17px}
+.ach-name{font-size:12.5px;font-weight:600}
+.ach-desc{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.4}
+.ach-bar{height:4px;border-radius:99px;background:var(--panel-3);overflow:hidden;margin-top:8px}
+.ach-fill{height:100%;border-radius:99px;background:var(--ac)}
+.ach-pct{font-size:10px;color:var(--text-3);margin-top:4px;font-variant-numeric:tabular-nums}
+.ach-got{display:inline-flex;align-items:center;gap:5px;margin-top:7px;
+  font-size:10.5px;font-weight:700;color:var(--ac)}
+.ach-got svg{width:12px;height:12px}
+.ach-manual{font-size:10.5px;color:var(--text-3);margin-top:7px;font-style:italic}
+.ach-tier{flex:none;align-self:flex-start;font-size:9px;font-weight:800;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ac);opacity:.85}
+@media (max-width:720px){
+  .achgrid{grid-template-columns:1fr}
+}
+
 /* ---------- sign-in ----------
    Stands in for the client until a driver signs in. It sits under the title
    bar, so the window controls keep working while signed out. */

@@ -70,6 +70,10 @@ const P = {
   user:'<circle cx="12" cy="8" r="3.4"/><path d="M5 20v-1.2A4.8 4.8 0 0 1 9.8 14h4.4A4.8 4.8 0 0 1 19 18.8V20"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>',
   chat:'<path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8.5 12h7M8.5 9h4"/>',
+  medal:'<circle cx="12" cy="14" r="6"/><path d="M8.2 8.5 5 2h5l2.5 5M15.8 8.5 19 2h-5"/>',
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  lifebuoy:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="M5.6 5.6l3.8 3.8M14.6 14.6l3.8 3.8M18.4 5.6l-3.8 3.8M9.4 14.6l-3.8 3.8"/>',
   trophy:'<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11"/><path d="M12 14v3M8.5 20h7l-.6-2.4H9.1z"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5.3l3.4 2"/>',
   upload:'<path d="M12 20V9M7.5 12.5 12 8l4.5 4.5"/><path d="M4.5 4.5h15"/>',
@@ -3279,6 +3283,8 @@ const NAV = [
   { key: 'logbook',     label: 'Logbook',       icon: 'book' },
   { key: 'profile',     label: 'Driver record', icon: 'user' },
   { key: 'leaderboard', label: 'Standings',     icon: 'trophy' },
+  { key: 'stats',       label: 'Statistics',    icon: 'chart' },
+  { key: 'achievements', label: 'Achievements', icon: 'medal' },
   /* Announcements AND conversations. The count used to be the unread
      announcements alone, which was the whole of this screen; a message
      from another driver now arrives here too and has to be counted, or
@@ -3719,6 +3725,8 @@ function viewDashboard() {
 
   ${launchBarHTML()}
 
+  ${driverStripHTML()}
+
   ${assignmentsCardHTML()}
 
   <section class="card">
@@ -3909,6 +3917,95 @@ const GamePaths = {
     if (found) { Store.save(); render(); GameIcons.refresh(); }
   },
 };
+
+/* ============================================================
+   THE DRIVER STRIP
+   ------------------------------------------------------------
+   Seven things a driver wants without reading a screen: whether
+   the crew can see them, what they are driving, what they are
+   carrying, where they are, what today has paid, how far it has
+   gone, and what the career adds up to.
+
+   Every cell says "-" when it does not know, and carries a
+   title saying WHY. A dash with no explanation is what sends
+   people to the forums; "the game is not sending telemetry" is
+   what sends them to fix it. Nothing here is ever filled in
+   with a plausible guess.
+   ============================================================ */
+function driverStripHTML() {
+  const db = Store.db;
+  const live = Telemetry.mode === 'live' ? db.live : null;
+  const job = db.job;
+  const rec = Career.record();
+  const rank = Career.rank(rec);
+  const day = Career.today();
+  const linked = db.conn.gmn === 'connected';
+
+  /* How this driver appears to everybody else, which is the only version of
+     "online" worth showing. A client that cannot reach the company is
+     invisible to the crew however open its window is, and saying "Online"
+     then would be a lie the driver has no way to see through. */
+  const playing = !!(rec.row && rec.row.playing);
+  const state = !linked
+    ? { cls: 'off',  text: 'Not linked', why: 'This client cannot reach the company service, so the crew cannot see you.' }
+    : playing
+    ? { cls: 'live', text: 'Driving',    why: 'The crew sees you as driving right now.' }
+    : rec.status === 'online'
+    ? { cls: 'on',   text: 'Online',     why: 'The crew sees you as online.' }
+    : { cls: 'off',  text: 'Offline',    why: 'The crew sees you as offline.' };
+
+  const truck = (live && live.truck) || (db.driver && db.driver.truck) || '';
+  const truckWhy = truck ? 'What the game reports you are sitting in.'
+    : live ? 'The game has not named the truck yet.'
+    : 'The game is not sending telemetry, so the truck is unknown.';
+
+  const where = (live && live.near) || '';
+  const whereWhy = where ? 'The nearest city the game map knows.'
+    : live ? 'No city near enough to name.'
+    : 'The game is not sending telemetry, so the position is unknown.';
+
+  const cell = (o) => {
+    const tag = o.view ? 'button' : 'div';
+    const attrs = o.view ? ` data-act="nav" data-view="${esc(o.view)}"` : '';
+    return `<${tag} class="dcell${o.view ? ' go' : ''}" title="${esc(o.why || '')}"${attrs}>
+      <span class="dcell-ico">${icon(o.icon)}</span>
+      <span class="dcell-body">
+        <span class="dcell-k">${esc(o.k)}</span>
+        <span class="dcell-v">${o.v}</span>
+      </span>
+    </${tag}>`;
+  };
+  const sub = (t) => `<span class="dsub">${esc(t)}</span>`;
+
+  return `<div class="dstrip">
+    ${cell({ icon: 'wifi', k: 'Status', why: state.why,
+      v: `<span class="dstate ${state.cls}"><span class="beat"></span>${esc(state.text)}</span>` })}
+
+    ${cell({ icon: 'truck', k: 'Truck', why: truckWhy,
+      v: truck ? esc(truck) : '&mdash;' })}
+
+    ${cell({ icon: 'box', k: 'Delivery',
+      why: job ? 'The load you are running now.' : 'No load is booked in game.',
+      v: job ? esc(job.cargo) + ' ' + sub('to ' + job.to) : '&mdash;' })}
+
+    ${cell({ icon: 'pin', k: 'Location', why: whereWhy,
+      v: where ? esc(where) : '&mdash;' })}
+
+    ${cell({ icon: 'bolt', k: 'Earned today',
+      why: day.runs ? day.runs + ' run' + (day.runs === 1 ? '' : 's') + ' finished since midnight.'
+        : 'No runs finished since midnight.',
+      v: fmt.eur(day.income) })}
+
+    ${cell({ icon: 'route', k: 'Driven today',
+      why: day.minutes >= 1 ? fmt.dur(Math.round(day.minutes)) + ' at the wheel today.'
+        : 'No driving recorded today.',
+      v: fmt.km(day.km) })}
+
+    ${cell({ icon: 'star', k: 'XP', view: 'stats',
+      why: 'Rank and XP come from your Gaming Nation record. Opens Statistics.',
+      v: fmt.n(Career.xp(rec)) + ' ' + sub(rank.name) })}
+  </div>`;
+}
 
 function launchBarHTML() {
   const db = Store.db;
@@ -4571,6 +4668,381 @@ function viewProfile() {
   </section>`;
 }
 
+/* ============================================================
+   THE DRIVER'S CAREER
+   ------------------------------------------------------------
+   Statistics, rank, XP and achievements, all worked out from
+   records that already exist rather than kept in counters of
+   their own.
+
+   That is the design rule here, and it is not tidiness. A
+   counter has to be maintained: today's kilometres need
+   resetting at midnight, and a reset that never runs - the
+   client was closed, the machine was asleep - leaves a number
+   that is wrong for the rest of the day with nothing anywhere
+   to correct it. Summing runs that each carry a date cannot
+   drift, because the runs are the truth.
+
+   Rank and XP read the company record, which is the same record
+   the website reads. A driver seeing 47,000 km here and 47,000
+   km on the platform is not being shown two numbers that happen
+   to agree; there is one number.
+   ============================================================ */
+const Career = {
+  midnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); },
+
+  /* Every run this driver has finished, whether or not it has reached the
+     company yet - a delivery held in the queue because the service was down
+     still happened, and somebody who has just driven 400 km should not be
+     told they have driven none. */
+  runs() {
+    return Store.db.logbook.concat(Store.db.pending).filter((r) => r && r.finished);
+  },
+
+  today() {
+    const since = this.midnight();
+    const runs = this.runs().filter((r) => new Date(r.finished).getTime() >= since);
+    return {
+      runs: runs.length,
+      km: runs.reduce((n, r) => n + (r.km || 0), 0),
+      income: runs.reduce((n, r) => n + (r.income || 0), 0),
+      minutes: this.minutes(since),
+    };
+  },
+
+  /* the sittings this driver has had */
+  sessions() {
+    const hq = Auth.hqDb();
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    if (!hq || !me || !Array.isArray(hq.sessions)) return [];
+    return hq.sessions.filter((s) => s && s.driverId === me);
+  },
+
+  /* Minutes at the wheel. A session still open counts up to right now, which
+     is what makes the figure move while somebody is driving rather than
+     jumping only when they finally close the game. */
+  minutes(since) {
+    return this.sessions().reduce((n, s) => {
+      const a = new Date(s.started).getTime();
+      const b = s.ended ? new Date(s.ended).getTime() : Date.now();
+      if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return n;
+      const from = since ? Math.max(a, since) : a;
+      return b <= from ? n : n + (b - from) / 60000;
+    }, 0);
+  },
+
+  /* The company's row for this driver - the one the website reads. Falls
+     back to what this machine has logged, so a client that cannot reach the
+     company shows the driver's own work rather than zeroes.
+
+     Each field falls back on its own, and a real 0 must never be read as
+     "missing" and quietly replaced by something larger. */
+  record() {
+    const hq = Auth.hqDb();
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    const row = (hq && (hq.drivers || []).find((d) => d.id === me)) || null;
+    const s = Store.db.stats || {};
+    const num = (v, alt) => (Number.isFinite(+v) ? +v : alt);
+    return {
+      row,
+      km: row ? num(row.km, 0) : num(s.totalKm, 0),
+      deliveries: row ? num(row.deliveries, 0) : num(s.totalJobs, 0),
+      earned: row ? num(row.earned, 0) : num(s.totalIncome, 0),
+      convoys: row ? num(row.convoys, 0) : 0,
+      attendance: row ? num(row.attendance, 100) : 100,
+      rankIdx: row && Number.isFinite(+row.rankIdx) ? +row.rankIdx : null,
+      achievements: (row && row.achievements) || [],
+      country: (row && row.country) || '',
+      status: (row && row.status) || 'offline',
+    };
+  },
+
+  /* ---------------- rank ----------------
+     The company awards a rank and the record carries it, so that is what is
+     shown. Working one out from the numbers is only for a record that
+     predates the field - and it applies EVERY condition the platform
+     applies, not distance alone, or this client would promote a driver the
+     website has not. */
+  rank(rec) {
+    const r = rec || this.record();
+    if (Number.isFinite(r.rankIdx) && RANK_LADDER[r.rankIdx]) return RANK_LADDER[r.rankIdx];
+    let out = RANK_LADDER[0];
+    RANK_LADDER.forEach((R) => {
+      if (r.km >= R.km && r.convoys >= R.convoys && r.attendance >= R.att) out = R;
+    });
+    return out;
+  },
+  nextRank(rec) { return RANK_LADDER[this.rank(rec).i + 1] || null; },
+
+  /* What is still standing between this driver and the next rank, said as
+     the conditions themselves. "62%" on its own does not tell somebody they
+     are four convoys short. */
+  toNext(rec) {
+    const r = rec || this.record();
+    const nx = this.nextRank(r);
+    if (!nx) return null;
+    const need = [];
+    if (r.km < nx.km) need.push(fmt.km(nx.km - r.km) + ' further');
+    if (r.convoys < nx.convoys) {
+      const n = nx.convoys - r.convoys;
+      need.push(n + ' more convoy' + (n === 1 ? '' : 's'));
+    }
+    if (r.attendance < nx.att) need.push(nx.att + '% attendance');
+    const cur = this.rank(r);
+    const span = nx.km - cur.km;
+    return {
+      rank: nx,
+      need,
+      pct: span > 0 ? clamp(Math.round((r.km - cur.km) / span * 100), 0, 100) : 100,
+    };
+  },
+
+  /* ---------------- XP ----------------
+     There is no XP column on the platform, and adding one here would create
+     a second truth that drifts from the record the website shows. So XP is a
+     pure function of that record: distance covered, deliveries landed,
+     convoys attended. The same driver gets the same number wherever it is
+     worked out, and it moves only when real work moves it.
+
+     The weights are printed on the statistics screen. A score nobody can
+     check is a score nobody has any reason to trust. */
+  XP: { km: 1, delivery: 250, convoy: 500 },
+  xp(rec) {
+    const r = rec || this.record();
+    return Math.round(r.km * this.XP.km
+      + r.deliveries * this.XP.delivery
+      + r.convoys * this.XP.convoy);
+  },
+
+  /* ---------------- achievements ----------------
+     The same list the platform awards, so a badge earned is a badge shown in
+     both places. The 'manual' ones are granted by staff and live on the
+     driver record; the rest are simply true or not, from the numbers. */
+  earned(a, rec) {
+    const r = rec || this.record();
+    switch (a.metric) {
+      case 'km':         return r.km >= a.goal;
+      case 'deliveries': return r.deliveries >= a.goal;
+      case 'convoys':    return r.convoys >= a.goal;
+      case 'attendance': return r.attendance >= a.goal;
+      case 'rank':       return this.rank(r).i >= a.goal;
+      case 'manual':     return r.achievements.indexOf(a.id) > -1;
+      default:           return false;
+    }
+  },
+  progress(a, rec) {
+    const r = rec || this.record();
+    if (a.metric === 'manual') return this.earned(a, r) ? 1 : 0;
+    const cur = { km: r.km, deliveries: r.deliveries, convoys: r.convoys,
+      attendance: r.attendance, rank: this.rank(r).i }[a.metric];
+    return clamp((cur || 0) / a.goal, 0, 1);
+  },
+  badges(rec) {
+    const r = rec || this.record();
+    return ACHIEVEMENTS.map((a) => ({
+      a, done: this.earned(a, r), pct: Math.round(this.progress(a, r) * 100),
+    }));
+  },
+};
+
+/* The badges the company awards, kept in step with ACHIEVEMENTS in script.js.
+   Two lists that have to agree is a poor arrangement and this is the second
+   half of it - but the client has to work with no platform reachable, so it
+   cannot fetch them, and showing a driver a shorter list than the website
+   does would read as badges having been taken away. */
+const ACHIEVEMENTS = [
+  { id: 'a-first',     name: 'First Delivery',        desc: 'Complete your first GMN delivery.',          icon: 'box',    tier: 'bronze', metric: 'deliveries', goal: 1 },
+  { id: 'a-10k',       name: '10,000 KM Driven',      desc: 'Cover 10,000 km under GMN colours.',         icon: 'route',  tier: 'bronze', metric: 'km', goal: 10000 },
+  { id: 'a-50k',       name: '50,000 KM Driven',      desc: 'Cover 50,000 km under GMN colours.',         icon: 'route',  tier: 'silver', metric: 'km', goal: 50000 },
+  { id: 'a-100k',      name: '100,000 KM Driven',     desc: 'Join the six-figure mileage club.',          icon: 'gauge',  tier: 'gold',   metric: 'km', goal: 100000 },
+  { id: 'a-250k',      name: 'Quarter Million',       desc: 'Cover 250,000 km under GMN colours.',        icon: 'bolt',   tier: 'plat',   metric: 'km', goal: 250000 },
+  { id: 'a-conv10',    name: '10 Convoys',            desc: 'Attend 10 official GMN convoys.',            icon: 'truck',  tier: 'bronze', metric: 'convoys', goal: 10 },
+  { id: 'a-conv50',    name: '50 Convoys',            desc: 'Attend 50 official GMN convoys.',            icon: 'truck',  tier: 'silver', metric: 'convoys', goal: 50 },
+  { id: 'a-conv100',   name: '100 Convoys',           desc: 'Attend 100 official GMN convoys.',           icon: 'trophy', tier: 'gold',   metric: 'convoys', goal: 100 },
+  { id: 'a-perfect',   name: 'Perfect Attendance',    desc: 'Hold 100% attendance across a full season.', icon: 'check',  tier: 'gold',   metric: 'attendance', goal: 100 },
+  { id: 'a-deliv100',  name: 'Century Hauler',        desc: 'Complete 100 deliveries.',                   icon: 'box',    tier: 'silver', metric: 'deliveries', goal: 100 },
+  { id: 'a-deliv500',  name: 'Freight Machine',       desc: 'Complete 500 deliveries.',                   icon: 'box',    tier: 'plat',   metric: 'deliveries', goal: 500 },
+  { id: 'a-veteran',   name: 'Veteran Driver',        desc: 'Reach the rank of Veteran Driver.',          icon: 'medal',  tier: 'gold',   metric: 'rank', goal: 7 },
+  { id: 'a-elite',     name: 'Elite Driver',          desc: 'Reach the rank of Elite Driver.',            icon: 'star',   tier: 'gold',   metric: 'rank', goal: 6 },
+  { id: 'a-lead',      name: 'Convoy Leader',         desc: 'Lead an official GMN convoy.',               icon: 'flag',   tier: 'silver', metric: 'manual', goal: 1 },
+  { id: 'a-community', name: 'Community Contributor', desc: 'Recognised for outstanding community work.', icon: 'users',  tier: 'gold',   metric: 'manual', goal: 1 },
+  { id: 'a-founder',   name: 'Founding Member',       desc: 'Joined Gaming Nation in its first year.',    icon: 'shield', tier: 'plat',   metric: 'manual', goal: 1 },
+];
+const TIER_COLOR = { bronze: '#a8794f', silver: '#9aa3af', gold: '#e8913a', plat: '#6fb6c9' };
+
+/* ---------------- statistics ----------------
+
+   The career in numbers, and the rank ladder those numbers are climbing.
+
+   Everything here is derived (see Career), so there is nothing to keep in
+   step and nothing that can drift out of it. The XP weights are printed
+   rather than hidden, because a score nobody can check is a score nobody
+   has any reason to trust - and a driver who can see the weights can work
+   out for themselves that a convoy is worth five hundred. */
+function viewStats() {
+  const rec = Career.record();
+  const rank = Career.rank(rec);
+  const next = Career.toNext(rec);
+  const day = Career.today();
+  const mins = Career.minutes();
+  const sess = Career.sessions();
+  const badges = Career.badges(rec).filter((b) => b.done).length;
+
+  const big = (v, k, why) => `<div class="stat" title="${esc(why || '')}">
+    <div class="v">${v}</div><div class="k">${esc(k)}</div></div>`;
+
+  return `
+  ${viewHead('Statistics', 'Your record at Gaming Nation',
+    `<button class="btn btn-sm" data-act="nav" data-view="achievements">${icon('medal')}Achievements</button>`)}
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Rank</span>
+      <span class="label">${esc(rec.row ? 'from your company record' : 'from this machine')}</span>
+    </div>
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        <span class="rank-chip" style="--rc:${esc(rank.color)}">${esc(rank.abbr)}</span>
+        <div class="grow" style="min-width:180px">
+          <div class="lg b7">${esc(rank.name)}</div>
+          <div class="t3 xs mt-4">${next
+            ? 'Next: ' + esc(next.rank.name)
+            : 'The top of the ladder. There is nothing above this.'}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="lg b7">${fmt.n(Career.xp(rec))}</div>
+          <div class="t3 xs">XP</div>
+        </div>
+      </div>
+
+      ${next ? `
+        <div class="rankbar mt-16"><div class="rankbar-fill" style="width:${next.pct}%"></div></div>
+        <div class="t3 xs mt-8">${next.need.length
+          ? 'Still needed for ' + esc(next.rank.name) + ': ' + esc(next.need.join(', ')) + '.'
+          : 'Every condition for ' + esc(next.rank.name)
+            + ' is met — the company awards the promotion.'}</div>` : ''}
+
+      ${/* The sum, shown as its parts. Anyone can check it. */''}
+      <div class="xpsplit mt-16">
+        <div class="xprow"><span>${fmt.n(rec.km)} km</span>
+          <span class="t3">&times; ${Career.XP.km}</span>
+          <span class="mono">${fmt.n(Math.round(rec.km * Career.XP.km))}</span></div>
+        <div class="xprow"><span>${fmt.n(rec.deliveries)} deliveries</span>
+          <span class="t3">&times; ${Career.XP.delivery}</span>
+          <span class="mono">${fmt.n(rec.deliveries * Career.XP.delivery)}</span></div>
+        <div class="xprow"><span>${fmt.n(rec.convoys)} convoys</span>
+          <span class="t3">&times; ${Career.XP.convoy}</span>
+          <span class="mono">${fmt.n(rec.convoys * Career.XP.convoy)}</span></div>
+        <div class="xprow total"><span>XP</span><span></span>
+          <span class="mono">${fmt.n(Career.xp(rec))}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Career</span></div>
+    <div class="card-body">
+      <div class="stat-row">
+        ${big(fmt.n(rec.km), 'Total km', 'Distance credited to your Gaming Nation record.')}
+        ${big(fmt.n(rec.deliveries), 'Deliveries', 'Runs the company has credited.')}
+        ${big(fmt.eur(rec.earned), 'Earnings', 'Everything your runs have paid.')}
+        ${big(mins >= 1 ? fmt.dur(Math.round(mins)) : '—', 'Driving hours',
+          sess.length ? sess.length + ' session' + (sess.length === 1 ? '' : 's') + ' recorded'
+            : 'No sessions recorded on this company record yet.')}
+        ${big(fmt.n(rec.convoys), 'Convoys', 'Official convoys attended.')}
+        ${big(fmt.n(Career.xp(rec)), 'XP', 'Worked out from the three figures above.')}
+        ${big(esc(rank.name), 'Rank', 'The rank the company has awarded you.')}
+        ${big(badges + ' / ' + ACHIEVEMENTS.length, 'Badges', 'Achievements earned.')}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Today</span></div>
+    <div class="card-body">
+      <div class="stat-row">
+        ${big(fmt.km(day.km), 'Driven', 'Summed from the runs you finished since midnight.')}
+        ${big(fmt.eur(day.income), 'Earned', 'Summed from the same runs.')}
+        ${big(fmt.n(day.runs), 'Runs', 'Deliveries finished since midnight, queued ones included.')}
+        ${big(day.minutes >= 1 ? fmt.dur(Math.round(day.minutes)) : '—', 'At the wheel',
+          'Time in game today. A session still open counts up to now.')}
+      </div>
+      ${day.runs ? '' : `<div class="t3 xs mt-12">Nothing has been finished today yet.
+        These fill in from your runs, so they are right even if the client was closed at midnight.</div>`}
+    </div>
+  </section>`;
+}
+
+
+/* ---------------- achievements ----------------
+
+   The same badges the platform awards, so one earned is one shown in both
+   places. Locked ones are shown too, with how far along they are: a wall
+   of things you cannot see is not a wall worth climbing. */
+function viewAchievements() {
+  const rec = Career.record();
+  const all = Career.badges(rec);
+  const done = all.filter((b) => b.done);
+  const rank = Career.rank(rec);
+
+  const card = (b) => {
+    const color = TIER_COLOR[b.a.tier] || '#9aa3af';
+    return `<div class="ach ${b.done ? 'got' : ''}" style="--ac:${color}">
+      <span class="ach-ico">${icon(b.a.icon)}</span>
+      <div class="grow" style="min-width:0">
+        <div class="ach-name">${esc(b.a.name)}</div>
+        <div class="ach-desc">${esc(b.a.desc)}</div>
+        ${b.done
+          ? `<div class="ach-got">${icon('check')}Earned</div>`
+          : b.a.metric === 'manual'
+            ? `<div class="ach-manual">Awarded by the company</div>`
+            : `<div class="ach-bar"><div class="ach-fill" style="width:${b.pct}%"></div></div>
+               <div class="ach-pct">${b.pct}%</div>`}
+      </div>
+      <span class="ach-tier">${esc(b.a.tier)}</span>
+    </div>`;
+  };
+
+  return `
+  ${viewHead('Achievements', done.length + ' of ' + all.length + ' earned',
+    `<button class="btn btn-sm" data-act="nav" data-view="stats">${icon('chart')}Statistics</button>`)}
+
+  <section class="card">
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        <span class="rank-chip" style="--rc:${esc(rank.color)}">${esc(rank.abbr)}</span>
+        <div class="grow" style="min-width:170px">
+          <div class="lg b7">${esc(rank.name)}</div>
+          <div class="t3 xs mt-4">Driver level ${rank.i + 1} of ${RANK_LADDER.length}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="lg b7">${done.length}<span class="t3">/${all.length}</span></div>
+          <div class="t3 xs">Badges</div>
+        </div>
+      </div>
+      <div class="rankbar mt-16"><div class="rankbar-fill"
+        style="width:${Math.round(done.length / all.length * 100)}%"></div></div>
+    </div>
+  </section>
+
+  ${done.length ? `<section class="card">
+    <div class="card-head"><span class="label">Earned</span></div>
+    <div class="card-body"><div class="achgrid">${done.map(card).join('')}</div></div>
+  </section>` : ''}
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">${done.length ? 'Still to come' : 'Every badge'}</span>
+    </div>
+    <div class="card-body">
+      <div class="achgrid">${all.filter((b) => !b.done).map(card).join('')}</div>
+      ${all.every((b) => b.done)
+        ? `<div class="empty">${icon('trophy')}<div>Every badge earned</div></div>` : ''}
+    </div>
+  </section>`;
+}
+
+
 /* ---------------- messages ----------------
 
    Two things live here now. The announcements from management, which is
@@ -5189,7 +5661,7 @@ function decideApplication(id, verdict) {
    whoever has the rank to use them. */
 const MENU_SECTIONS = [
   { label: 'Operation', items: ['dashboard', 'pending', 'uploads'] },
-  { label: 'Record',    items: ['profile', 'messages'] },
+  { label: 'Record',    items: ['profile', 'stats', 'achievements', 'messages'] },
   { label: 'Client',    items: ['settings', 'about'] },
 ];
 
@@ -5632,7 +6104,7 @@ function viewAbout() {
 /* navigation grouped by purpose rather than one flat list */
 const NAV_GROUPS = [
   { label: 'Operation', items: ['dashboard', 'livemap', 'pending', 'uploads'] },
-  { label: 'Record',    items: ['logbook', 'profile', 'leaderboard'] },
+  { label: 'Record',    items: ['logbook', 'profile', 'stats', 'achievements', 'leaderboard'] },
   { label: 'Crew',      items: ['messages', 'chats', 'convoy'] },
   /* staff only: without this the company controls were reachable on a phone
      and nowhere at all on the desktop */
@@ -7052,6 +7524,8 @@ const VIEWS = {
   messages: viewMessages,
   chats: viewChats,
   leaderboard: viewLeaderboard,
+  stats: viewStats,
+  achievements: viewAchievements,
   pending: viewPending,
   uploads: viewUploads,
   settings: viewSettings,
@@ -8082,25 +8556,34 @@ function isStaff() { return (ROLE_LEVELS[myRole()] || 0) > 1; }
 
 /* The platform's rank ladder, kept in step with RANKS in script.js. The
    driver record carries the rank the company actually awarded, so that is
-   what the client shows; distance is only a fallback for a record that
-   predates the field. */
+   what the client shows; the conditions are only a fallback for a record
+   that predates the field.
+
+   It used to hold distance alone, and a fallback on distance alone PROMOTES
+   people the website has not: the platform also requires convoys attended
+   and an attendance figure. A client that hands somebody Senior Driver and a
+   website that does not is worse than a client that says nothing. */
 const RANK_LADDER = [
-  { km: 0,      name: 'Recruit' },
-  { km: 2500,   name: 'Trainee Driver' },
-  { km: 10000,  name: 'Junior Driver' },
-  { km: 25000,  name: 'Driver' },
-  { km: 50000,  name: 'Senior Driver' },
-  { km: 100000, name: 'Professional Driver' },
-  { km: 175000, name: 'Elite Driver' },
-  { km: 275000, name: 'Veteran Driver' },
-  { km: 400000, name: 'GMN Captain' },
+  { i: 0, km: 0,      convoys: 0,   att: 0,  abbr: 'RCT', name: 'Recruit',             color: '#8b98ab' },
+  { i: 1, km: 2500,   convoys: 1,   att: 50, abbr: 'TRN', name: 'Trainee Driver',      color: '#9fb4cc' },
+  { i: 2, km: 10000,  convoys: 4,   att: 60, abbr: 'JNR', name: 'Junior Driver',       color: '#5eb0e8' },
+  { i: 3, km: 25000,  convoys: 10,  att: 65, abbr: 'DRV', name: 'Driver',              color: '#b9e87a' },
+  { i: 4, km: 50000,  convoys: 20,  att: 70, abbr: 'SNR', name: 'Senior Driver',       color: '#3ecf8e' },
+  { i: 5, km: 100000, convoys: 40,  att: 75, abbr: 'PRO', name: 'Professional Driver', color: '#8b7cf0' },
+  { i: 6, km: 175000, convoys: 65,  att: 80, abbr: 'ELT', name: 'Elite Driver',        color: '#d99b2b' },
+  { i: 7, km: 275000, convoys: 90,  att: 85, abbr: 'VET', name: 'Veteran Driver',      color: '#8bd62b' },
+  { i: 8, km: 400000, convoys: 130, att: 90, abbr: 'CPT', name: 'GMN Captain',         color: '#9db8ff' },
 ];
 function rankNameFor(d) {
   const i = d && d.rankIdx;
   if (Number.isFinite(i) && RANK_LADDER[i]) return RANK_LADDER[i].name;
-  const km = (d && d.km) || 0;
+  /* every condition, not distance alone - see the ladder above */
+  const r = { km: (d && d.km) || 0, convoys: (d && d.convoys) || 0,
+    attendance: Number.isFinite(d && +d.attendance) ? +d.attendance : 100 };
   let name = RANK_LADDER[0].name;
-  RANK_LADDER.forEach((r) => { if (km >= r.km) name = r.name; });
+  RANK_LADDER.forEach((R) => {
+    if (r.km >= R.km && r.convoys >= R.convoys && r.attendance >= R.att) name = R.name;
+  });
   return name;
 }
 
