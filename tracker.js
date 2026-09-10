@@ -130,7 +130,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.0.4';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.0.5';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -1609,8 +1609,13 @@ const TileMap = {
       this.trailLine.setLatLngs(pts);
     }
 
-    /* truck */
-    if (live && live.game === gameKey) {
+    /* truck.
+
+       `live.world` is checked, not just the game. A frame with neither
+       field set matches `live.game === gameKey` when both are undefined -
+       undefined equals undefined - and the very next line reads
+       live.world.x and throws, taking the whole map draw with it. */
+    if (live && live.world && live.game && live.game === gameKey) {
       const ll = this.latLngFor(gameKey, live.world.x, live.world.z);
       if (ll) {
         if (!this.marker) {
@@ -3285,6 +3290,13 @@ const Store = {
     /* An identity from a build that shipped sample data has no sign-in behind
        it. Clearing it sends the driver to the sign-in screen, which is where
        they should have been all along. */
+    /* Telemetry belongs to a session, not to the store. It was written out
+       with everything else and read back at boot, so a client that had been
+       driving came up believing it had a position - from a game that is not
+       running and a run that ended hours ago. Nothing downstream can tell
+       that frame from a live one. */
+    this.db.live = null;
+
     const d = this.db.driver;
     if (d && !d.authed) {
       console.info('[GMN] clearing a leftover identity (' + (d.gmnId || '?') + ') — sign in again');
@@ -3322,6 +3334,96 @@ const Store = {
     this.db.activity.unshift({ at: new Date().toISOString(), tag, msg });
     this.db.activity = this.db.activity.slice(0, 200);
     this.save();
+  },
+};
+
+/* ============================================================
+   WHAT THE WEBSITE KNOWS ABOUT THIS DRIVER
+   ------------------------------------------------------------
+   The photo, the name, the country and the rank all live on the
+   driver's row in Supabase, which is what the website reads and
+   writes. The client read that row at SIGN-IN and never again.
+
+   That is once, and a remembered sign-in never signs in: restore()
+   rebuilds the driver from the account kept on this machine and
+   touches no network at all. So a driver who set their photo on
+   the website after the last full sign-in - which is everybody,
+   because you sign in before you go and set a photo - watched the
+   app go on showing their initials forever, with nothing anywhere
+   saying why.
+
+   This pulls the row on startup and every fifteen minutes after,
+   and folds what changed into the local record.
+
+   IT NEVER BLANKS ANYTHING. A field that comes back null or empty
+   leaves what is already there, because "the column is missing",
+   "the read was refused by a policy" and "the driver cleared it"
+   are indistinguishable from here - and of those three, only one
+   means the photo should go. Clearing a photo on the website
+   clears it there; it is not worth deleting somebody's face over
+   a query that half-failed.
+   ============================================================ */
+const ProfileSync = {
+  at: 0,
+  busy: false,
+  EVERY_MS: 15 * 60 * 1000,
+
+  async refresh(force) {
+    if (this.busy) return;
+    if (!Auth.signedIn()) return;
+    if (!force && this.at && Date.now() - this.at < this.EVERY_MS) return;
+
+    const sb = window.gmnSupabase;
+    const d = Store.db.driver;
+    if (!sb || !d || !d.gmnId) return;
+
+    this.busy = true;
+    try {
+      const res = await sb.from('drivers').select('*')
+        .eq('driver_code', d.gmnId).maybeSingle();
+
+      /* An error, or no row, is not news about the driver - it is news
+         about the connection. Nothing is written on either. */
+      if (!res || res.error || !res.data) return;
+      this.at = Date.now();
+
+      const row = res.data;
+      let changed = false;
+
+      /* The photo. Kept in the app's own store as well as on the record,
+         because the record is rebuilt from scratch on every sign-in and
+         this copy is not. */
+      const photo = avatarSrc(row.avatar);
+      if (photo && photo !== d.avatar) {
+        d.avatar = photo;
+        keepAvatar(d.gmnId, photo);
+        changed = true;
+        Store.log('ok', 'Profile photo picked up from your Gaming Nation account');
+      }
+
+      /* Everything else worth showing, and only when it says something.
+         An empty string overwriting a real name is the same mistake as a
+         blanked photo, one field along. */
+      const take = (key, value) => {
+        const v = typeof value === 'string' ? value.trim() : value;
+        if (v === null || v === undefined || v === '') return;
+        if (d[key] === v) return;
+        d[key] = v;
+        changed = true;
+      };
+      take('name', row.full_name);
+      take('country', row.country);
+      take('rank', row.rank);
+      take('role', row.role);
+
+      if (changed) { Store.save(); render(); }
+    } catch (e) {
+      /* offline, or Supabase not configured on this build. The app works
+         without it and says nothing, because there is nothing a driver
+         could do about it. */
+    } finally {
+      this.busy = false;
+    }
   },
 };
 
@@ -3828,7 +3930,11 @@ function avatarFace(d, cls) {
      was the least reliable place to read it from, and a driver who had
      set a photo watched it turn back into initials on the next launch.
      This copy belongs to the app and nothing that syncs can reach it. */
-  const src = own || keptAvatar(d && d.id);
+  /* Either name for the code. A roster row calls it `id`; the signed-in
+     driver record calls it `gmnId`, and reading only `id` meant the one
+     person whose photo this app keeps a copy of - the driver using it -
+     was the one person it never found it for. */
+  const src = own || keptAvatar(d && (d.id || d.gmnId));
 
   const inner = src
     ? `<img class="avatar-img" src="${esc(src)}" alt="${esc((d && (d.name || d.id)) || 'Driver')}"
@@ -4945,7 +5051,8 @@ function viewProfile() {
         <div class="lg b7">${esc(d.name)}</div>
         <div class="t2 sm mt-4">${esc(rec ? Career.rank(rec).name : d.rank)}
           · <span class="mono">${esc(d.gmnId)}</span>${
-          rec && rec.country ? ' · ' + esc(rec.country) : ''}</div>
+          (rec && rec.country) || d.country
+            ? ' · ' + esc((rec && rec.country) || d.country) : ''}</div>
         <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
       </div>
     </div>
@@ -5767,14 +5874,15 @@ function viewSupport() {
     </div>
   </section>
 
-  <section class="card">
-    <div class="card-head"><span class="label">What the client reports about itself</span></div>
-    <div class="card-body">
-      <pre class="diagbox">${esc(Support.diagnosis())}</pre>
-      <div class="t3 xs mt-8">A technical report carries this with it, so nobody has to
-        ask you to read it out.</div>
-    </div>
-  </section>`;
+  ${/* A card here showed the client's own diagnosis - version, game,
+        telemetry, what the adapter last said. It was a wall of diagnostic
+        text on a screen a driver opens when something is already wrong,
+        and it told them nothing they could act on.
+
+        It has not gone anywhere useful: a technical report still carries
+        it, and the form shows it before it is sent, which is the moment
+        it means something and the moment transparency about what is being
+        sent actually matters. */''}`;
 }
 
 
@@ -6918,66 +7026,10 @@ function viewSettings() {
   ${viewHead('Settings', 'Client configuration on this machine',
     `<button class="btn btn-sm btn-primary" data-act="save-settings">${icon('check')}Save</button>`)}
 
-  ${/* Who is signed in, and the way out. Both were reachable only from the
-        menu, which is not where anybody looks for an account. Nothing here
-        is editable: the driver record belongs to the platform, and a second
-        place to change a name is a second name to reconcile. */''}
-  <section class="card">
-    <div class="card-head"><span class="label">Account</span></div>
-    <div class="card-body">
-      <div class="row gap-14 wrap">
-        ${avatarFace(d, 'lg me')}
-        <div class="grow" style="min-width:170px">
-          <div class="lg b7">${esc(d.name)}</div>
-          <div class="t2 sm mt-4"><span class="mono">${esc(d.gmnId)}</span>
-            ${rec.country ? ' · ' + esc(rec.country) : ''}</div>
-          <div class="t3 xs mt-4">${esc(Career.rank(rec).name)} ·
-            joined ${esc(fmt.date(d.joined))}</div>
-        </div>
-      </div>
-      <div class="row gap-8 wrap mt-16">
-        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">
-          ${icon('link')}Change it on the platform</button>
-        <button class="btn btn-sm" data-act="nav" data-view="support">
-          ${icon('lifebuoy')}Support</button>
-        <button class="btn btn-sm btn-danger" data-act="logout">${icon('logout')}Sign out</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="card-head"><span class="label">Crew</span></div>
-    <div class="card-body">
-      ${toggle('shareLocation', 'Show my truck on the crew map',
-        'Pushes your position while you drive. Off means the map goes quiet — '
-        + 'deliveries, sessions and your record are unaffected.')}
-      ${toggle('doNotDisturb', 'Do not disturb',
-        'Incoming calls are answered busy straight away, which is what the caller '
-        + 'already gets when you are on another call. Messages still arrive.')}
-      ${toggle('chatSound', 'Sound on a new message',
-        'A short note when a message lands while the client is open.')}
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="card-head"><span class="label">Appearance</span></div>
-    <div class="card-body">
-      <div class="setting-row">
-        <div>
-          <div class="b6">Theme</div>
-          <div class="t3 xs mt-4">${s.theme === 'auto'
-            ? 'Following Windows, and it keeps following it.'
-            : s.theme === 'light' ? 'Light.' : 'Dark, the way the client ships.'}</div>
-        </div>
-        <div class="seg">
-          ${[['dark', 'Dark'], ['light', 'Light'], ['auto', 'Match Windows']].map(([v, l]) => `
-            <button class="${(s.theme || 'dark') === v ? 'on' : ''}"
-              data-act="set-theme" data-v="${v}">${l}</button>`).join('')}
-        </div>
-      </div>
-    </div>
-  </section>
-
+  ${/* The games first. This is the one card a driver opens Settings FOR -
+        every other card here is something they set once and forget, and
+        the paths, the launch buttons and the profile all live in this one.
+        It sat fourth, under three cards about the client itself. */''}
   <section class="card">
     <div class="card-head"><span class="label">Game</span></div>
     <div class="card-body">
@@ -7058,6 +7110,66 @@ function viewSettings() {
               + 'You can also do it by hand.'}</div>
         </div>
         <button class="btn btn-sm" data-act="calibrate">${icon('target')}Do it by hand</button>
+      </div>
+    </div>
+  </section>
+
+  ${/* Who is signed in, and the way out. Both were reachable only from the
+        menu, which is not where anybody looks for an account. Nothing here
+        is editable: the driver record belongs to the platform, and a second
+        place to change a name is a second name to reconcile. */''}
+  <section class="card">
+    <div class="card-head"><span class="label">Account</span></div>
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        ${avatarFace(d, 'lg me')}
+        <div class="grow" style="min-width:170px">
+          <div class="lg b7">${esc(d.name)}</div>
+          <div class="t2 sm mt-4"><span class="mono">${esc(d.gmnId)}</span>
+            ${rec.country || d.country ? ' · ' + esc(rec.country || d.country) : ''}</div>
+          <div class="t3 xs mt-4">${esc(Career.rank(rec).name)} ·
+            joined ${esc(fmt.date(d.joined))}</div>
+        </div>
+      </div>
+      <div class="row gap-8 wrap mt-16">
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">
+          ${icon('link')}Change it on the platform</button>
+        <button class="btn btn-sm" data-act="nav" data-view="support">
+          ${icon('lifebuoy')}Support</button>
+        <button class="btn btn-sm btn-danger" data-act="logout">${icon('logout')}Sign out</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Crew</span></div>
+    <div class="card-body">
+      ${toggle('shareLocation', 'Show my truck on the crew map',
+        'Pushes your position while you drive. Off means the map goes quiet — '
+        + 'deliveries, sessions and your record are unaffected.')}
+      ${toggle('doNotDisturb', 'Do not disturb',
+        'Incoming calls are answered busy straight away, which is what the caller '
+        + 'already gets when you are on another call. Messages still arrive.')}
+      ${toggle('chatSound', 'Sound on a new message',
+        'A short note when a message lands while the client is open.')}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Appearance</span></div>
+    <div class="card-body">
+      <div class="setting-row">
+        <div>
+          <div class="b6">Theme</div>
+          <div class="t3 xs mt-4">${s.theme === 'auto'
+            ? 'Following Windows, and it keeps following it.'
+            : s.theme === 'light' ? 'Light.' : 'Dark, the way the client ships.'}</div>
+        </div>
+        <div class="seg">
+          ${[['dark', 'Dark'], ['light', 'Light'], ['auto', 'Match Windows']].map(([v, l]) => `
+            <button class="${(s.theme || 'dark') === v ? 'on' : ''}"
+              data-act="set-theme" data-v="${v}">${l}</button>`).join('')}
+        </div>
       </div>
     </div>
   </section>
@@ -9956,6 +10068,12 @@ function startServices() {
   /* Whether this copy is the one the website is offering. Asked once a
      boot; the answer is remembered for six hours. */
   Updates.check();
+
+  /* And what the website knows about this driver - the photo above all,
+     which is set there and was only ever read at sign-in. */
+  ProfileSync.refresh(true);
+  clearInterval(startServices.profileTimer);
+  startServices.profileTimer = setInterval(() => ProfileSync.refresh(), 5 * 60 * 1000);
 
   GamePaths.fill();
 

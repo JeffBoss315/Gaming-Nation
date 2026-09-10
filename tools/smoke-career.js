@@ -193,8 +193,14 @@ app.whenReady().then(async () => {
       'Community Contributor');
 
     /* ---- the strip is honest when it knows nothing ---- */
+    /* conn.gmn is set explicitly, not assumed. The scratch profile is a
+       directory that survives between runs, so the LAST run's "connected"
+       was still in the store and this read Online on the second run and
+       after - a test that passed once and then quietly stopped testing
+       anything. */
     const strip = await run(`(() => {
       Store.db.job = null; Store.db.live = null; Telemetry.mode = 'sim';
+      Store.db.conn.gmn = 'offline';
       return driverStripHTML();
     })()`);
     check('with no telemetry the strip says so, not a guess',
@@ -241,6 +247,82 @@ app.whenReady().then(async () => {
       avatar: 'https://192.168.1.9:7040/files/a.png' })`);
     check('an address Discord cannot reach falls back to initials',
       lan.indexOf('data:image/png') === 0, 'drawn, not a broken link');
+
+    /* ---- what the website knows about this driver ----
+       The photo is set on the website and lives on the driver's Supabase
+       row. The client read that row at SIGN-IN and never again - and a
+       remembered sign-in never signs in, so a photo set after the last
+       full sign-in never arrived. Which is everybody: you sign in, then
+       you go and set a photo.
+
+       Supabase is stubbed, so this never touches the real project. */
+    const PIC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
+    const sync = await run(`(async () => {
+      /* A whole render happens inside refresh(), and the strip test above
+         left a deliberately minimal live frame - enough for the strip,
+         not enough for the map, which reads live.world.x. Cleared here
+         rather than made complete: this section is about the profile. */
+      Store.db.live = null; Store.db.job = null;
+      Store.db.driver = Object.assign(Store.db.driver || {},
+        { gmnId: 'GMN-TEST', name: 'Test Driver', authed: true, avatar: '', country: '' });
+
+      let asked = null;
+      window.gmnSupabase = {
+        from(table) {
+          return { select: () => ({ eq: (col, val) => {
+            asked = table + '.' + col + '=' + val;
+            return { maybeSingle: async () => ({ error: null, data: {
+              driver_code: 'GMN-TEST', full_name: 'Test Driver',
+              country: 'Kenya', avatar: ${JSON.stringify(PIC)},
+            } }) };
+          } }) };
+        },
+      };
+      ProfileSync.at = 0;
+      await ProfileSync.refresh(true);
+      return { asked, avatar: Store.db.driver.avatar, country: Store.db.driver.country,
+        kept: localStorage.getItem('gmn.trk.avatar.GMN-TEST') };
+    })()`);
+    check('it asks for this driver’s own row', sync.asked === 'drivers.driver_code=GMN-TEST',
+      sync.asked || 'ASKED NOTHING');
+    check('the photo set on the website arrives', sync.avatar === PIC,
+      sync.avatar ? 'picked up' : 'STILL BLANK');
+    check('and is kept where a sign-in cannot wipe it', sync.kept === PIC,
+      sync.kept ? 'copied to the app’s own store' : 'NOT KEPT');
+    check('the country comes with it', sync.country === 'Kenya', sync.country || 'blank');
+
+    /* A failed read must not look like a driver who deleted their photo. */
+    const held = await run(`(async () => {
+      window.gmnSupabase = { from: () => ({ select: () => ({ eq: () => ({
+        maybeSingle: async () => ({ error: { message: 'policy' }, data: null }),
+      }) }) }) };
+      ProfileSync.at = 0;
+      await ProfileSync.refresh(true);
+      return Store.db.driver.avatar;
+    })()`);
+    check('a refused read does not wipe the photo', held === PIC,
+      held ? 'still there' : 'THE PHOTO WAS DELETED');
+
+    const blanked = await run(`(async () => {
+      window.gmnSupabase = { from: () => ({ select: () => ({ eq: () => ({
+        maybeSingle: async () => ({ error: null, data: { driver_code: 'GMN-TEST',
+          avatar: null, full_name: '', country: '' } }),
+      }) }) }) };
+      ProfileSync.at = 0;
+      await ProfileSync.refresh(true);
+      return { avatar: Store.db.driver.avatar, name: Store.db.driver.name };
+    })()`);
+    check('nor does a row that answers with nothing',
+      blanked.avatar === PIC && blanked.name === 'Test Driver',
+      blanked.avatar ? 'photo and name held' : 'BLANKED');
+
+    /* And the photo has to reach the screen. avatarFace looked the kept
+       copy up by d.id; the signed-in driver record calls it gmnId, so the
+       one person whose photo this app keeps was the one it never found. */
+    const drawn = await run(`avatarFace(Store.db.driver, 'lg me')`);
+    check('the avatar on screen is the photo, not initials',
+      drawn.indexOf('avatar-img') > -1 && drawn.indexOf(PIC) > -1,
+      drawn.indexOf('avatar-img') > -1 ? 'drawn as an image' : 'STILL INITIALS');
 
     check('the renderer logged no errors', errors.length === 0,
       errors.length ? errors.slice(0, 2).join(' | ') : 'none');
