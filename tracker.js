@@ -2095,11 +2095,6 @@ const GameWatch = {
 
   start() {
     this.stop();
-    if (!Store.db.settings.autoDetect) {
-      this.supported = false;
-      Store.log('info', 'Automatic game detection is switched off in Settings');
-      return;
-    }
     this.supported = !!(Launcher.api() && Launcher.api().gameRunning);
     if (this.supported) {
       const secs = clamp(Number(Store.db.settings.watchSec) || 4, 2, 60);
@@ -3109,7 +3104,6 @@ function seed() {
     chats: [],
     settings: {
       profileName: '',
-      autoDetect: true,
       autoSubmit: false,
       captureScreenshot: true,
       notifications: true,
@@ -3812,10 +3806,15 @@ const GameProfiles = {
 
 const GameIcons = {
   pending: false,
+  again: false,
 
   async refresh() {
     const D = window.gmnDesktop;
-    if (!D || !D.gameIcon || this.pending) return;
+    if (!D || !D.gameIcon) return;
+    /* asked again while busy: remember it, rather than dropping the ask.
+       A path detected mid-refresh would otherwise wait for the next boot
+       to get its icon. */
+    if (this.pending) { this.again = true; return; }
     const s = Store.db.settings;
     const want = { ets2: s.ets2Exe, ats: s.atsExe, tmp: s.tmpExe };
     const have = s.gameIcons || (s.gameIcons = {});
@@ -3839,11 +3838,75 @@ const GameIcons = {
     } finally {
       this.pending = false;
     }
+    if (this.again) { this.again = false; this.refresh(); }
   },
 
   of(kind) {
     const g = Store.db.settings.gameIcons;
     return (g && g[kind]) || null;
+  },
+};
+
+/* ============================================================
+   WHERE THE GAMES ARE
+   ------------------------------------------------------------
+   Settings has a Detect button beside each game, and that button
+   was the only thing that ever ran the search. So a driver who
+   had just installed the client met launch tiles wearing a
+   warning badge, and clicking one dropped them into Settings to
+   press a button the client was perfectly able to press itself.
+
+   It presses it itself now. Same search, same answer, nobody
+   asked. What keeps that from being rude:
+
+     A path somebody set by hand is theirs. We only fill a blank -
+     or replace one whose file is no longer there, because a tile
+     pointing at a game that has moved cannot start anything, and
+     GameProfiles already treats a vanished choice the same way.
+
+     Finding nothing changes nothing. The old value stays, so a
+     drive that is merely unplugged comes back rather than being
+     quietly blanked.
+
+     Not finding a game is silent. Most drivers own one of the
+     two, and a warning every boot about the one they never
+     bought is noise that teaches people to ignore warnings.
+   ============================================================ */
+const GamePaths = {
+  looking: false,
+
+  async fill() {
+    const D = window.gmnDesktop;
+    if (!D || !D.autoDetect || this.looking) return;
+
+    const s = Store.db.settings;
+    const stale = [];
+    for (const kind of ['ets2', 'ats', 'tmp']) {
+      const have = String(s[Launcher.pathKey(kind)] || '').trim();
+      if (!have) { stale.push(kind); continue; }
+      if (D.exists && !(await D.exists(have).catch(() => true))) stale.push(kind);
+    }
+    if (!stale.length) return;
+
+    this.looking = true;
+    let found = 0;
+    try {
+      for (const kind of stale) {
+        const had = String(s[Launcher.pathKey(kind)] || '').trim();
+        let hit = null;
+        try { hit = await D.autoDetect(kind); } catch (e) { hit = null; }
+        /* nothing found leaves the old value alone - an unplugged drive
+           comes back, and a blanked setting does not */
+        if (!hit || hit === had) continue;
+        s[Launcher.pathKey(kind)] = hit;
+        Store.log('ok', (had ? Launcher.label(kind) + ' moved - now at '
+          : 'Found ' + Launcher.label(kind) + ' - ') + hit);
+        found++;
+      }
+    } finally {
+      this.looking = false;
+    }
+    if (found) { Store.save(); render(); GameIcons.refresh(); }
   },
 };
 
@@ -5437,13 +5500,16 @@ function viewSettings() {
             : 'Built-in schematic'}</div></div>
         <button class="btn btn-sm" data-act="tile-source">${icon('map')}Configure</button>
       </div>
-      ${toggle('autoDetect', 'Detect the game automatically',
-               Launcher.api()
-                 ? 'Watch for Euro Truck Simulator 2 and American Truck Simulator opening and closing, and start tracking on its own.'
-                 : 'Start tracking as soon as the telemetry link answers. The desktop app can also watch the game process itself.')}
-      <div class="t3 xs mt-8">Live position needs the SCS telemetry plugin in
-        <span class="mono">&lt;game&gt;/bin/win_x64/plugins/</span> plus the telemetry server app.
-        Endpoint in use: <span class="mono">${esc(Telemetry.endpoint())}</span></div>
+      ${/* A "Detect the game automatically" switch stood here, defaulted on,
+            and under it a paragraph telling drivers to put the SCS telemetry
+            plugin into <game>/bin/win_x64/plugins/ and run a telemetry
+            server. The client installs that plugin and starts and watches
+            that server itself, so the paragraph was work already done, and
+            the switch only ever offered to make the client worse at its job.
+
+            Detection is simply how the client works now. The per-game
+            Browse and Detect buttons above remain, for the driver who wants
+            to point at a particular copy by hand. */''}
 
       ${/* Lining the map up by hand. It is almost never needed - two jobs do
             it on their own from the cities the game names - so it lives here
@@ -7421,7 +7487,6 @@ function handle(act, t) {
       t.setAttribute('aria-checked', String(!!db.settings[k]));
       Store.save();
       if (k === 'startWithWindows' || k === 'minimiseToTray' || k === 'startMinimized') Launcher.syncOsPreferences();
-      if (k === 'autoDetect') { GameWatch.start(); render(); }
       return;
     }
     case 'save-settings': {
@@ -8264,6 +8329,10 @@ function boot() {
 /* nothing polls, tracks or reports until a driver is behind the client */
 function startServices() {
   const job = Store.db.job;
+
+  /* Where the games are, worked out rather than asked for. Ahead of the
+     icons, which are read out of those very executables. */
+  GamePaths.fill();
 
   /* Read once, kept in the store, and only re-read when a path changes -
      so this costs nothing on the loads where nothing has moved. */
