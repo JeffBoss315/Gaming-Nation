@@ -37,6 +37,32 @@ app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1200, height: 900, show: false });
 
+  /* Keep the company service out of this.
+
+     The store planted below is the whole fixture, and the platform is built
+     to prefer a service running beside it: discoverLocalService() finds one
+     on 127.0.0.1:7040 and everything after that reads the company from
+     there, which overwrites the fixture before a single check has run. The
+     owner's own machine is the one most likely to be hosting that service —
+     the installed app hosts it — so this failed exactly where the suite is
+     most likely to be run, and the failure said "the owner lost their
+     history" when nothing was wrong with the migration at all.
+
+     Refused at the network layer rather than by setting GMN_SERVICE, which
+     would only point the same code at a different address.
+
+     The filter matches every http(s) request and picks the service out by
+     port in the callback, because a URL pattern cannot carry one: a port
+     written into the pattern does not narrow it, it makes it match nothing
+     that was wanted and the page itself never finishes loading. */
+  win.webContents.session.webRequest.onBeforeRequest(
+    { urls: ['*://*/*'] },
+    (details, cb) => {
+      let service = false;
+      try { service = new URL(details.url).port === '7040'; } catch (e) { /* not a URL we can read */ }
+      cb({ cancel: service });
+    });
+
   /* Load once for the origin, plant the old store, then load again so the
      migration meets it on the way in — which is when it really runs. */
   await win.loadFile(path.join(ROOT, 'login.html'));

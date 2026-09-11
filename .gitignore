@@ -30,6 +30,22 @@ hll-*.jsonl*
 gmn-*.json*
 gmn-*.jsonl*
 
+# The same records under a name the rules above cannot see.
+#
+# A company file is wherever GMN_COMPANY_FILE points, and the smoke tests
+# each name their own — so a run leaves .card-demo.json and
+# .discord-test-company.json beside the project, thirty kilobytes each of
+# real driver rows and their email addresses, matching none of the globs
+# above because nothing about them starts with gmn-. They sat in git
+# status as untracked, which is the same one `git add -A` away that the
+# note above was written about. gmn-files/ is the attachment store the
+# service writes when nothing tells it to use a temp directory.
+.*-company.json*
+.*-demo.json*
+.*-demo-s.json*
+.smoke-*.json*
+gmn-files/
+
 # and any backup at all, whatever it was taken from
 *.bak
 

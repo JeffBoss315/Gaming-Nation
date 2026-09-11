@@ -135,6 +135,30 @@ else console.log('  (capacitor cli missing, skipping sync)');
 /* gradle needs to know where the SDK is */
 fs.writeFileSync(path.join(ANDROID, 'local.properties'), 'sdk.dir=' + sdk.replace(/\\/g, '\\\\') + '\n');
 
+/* ---------- stamp the build number into the native project ----------
+
+   The APK was copied out as Gaming-Nation-Tracker-<version>.apk while the
+   manifest inside it still said versionName "1.0", versionCode 1 — the
+   Capacitor defaults, never touched since the project was created. So the
+   filename was the only place the version existed: Android's own app info
+   read 1.0 for every release we ever shipped, and a store upload would be
+   refused for reusing versionCode 1.
+
+   Written from package.json here rather than kept by hand in the gradle
+   file, so it cannot drift again. */
+const gradleFile = path.join(ANDROID, 'app', 'build.gradle');
+if (exists(gradleFile)) {
+  const parts = String(pkg.version).split('.').map((n) => parseInt(n, 10) || 0);
+  /* monotonic while minor and patch stay under 100: 1.1.6 -> 10106 */
+  const code = parts[0] * 10000 + parts[1] * 100 + parts[2];
+  const before = fs.readFileSync(gradleFile, 'utf8');
+  const after = before
+    .replace(/versionCode\s+\d+/, 'versionCode ' + code)
+    .replace(/versionName\s+"[^"]*"/, 'versionName "' + pkg.version + '"');
+  if (after !== before) fs.writeFileSync(gradleFile, after);
+  console.log('\n> build number  versionName ' + pkg.version + ', versionCode ' + code);
+}
+
 console.log('\n> assembling APK');
 run(gradleCmd, ['assembleDebug', '--no-daemon', '--console=plain'], ANDROID, {
   JAVA_HOME: jdk, ANDROID_HOME: sdk, ANDROID_SDK_ROOT: sdk,

@@ -8,7 +8,7 @@
 
      node_modules/electron/dist/electron.exe tools/smoke-errors.js . [page]
 */
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
 /* resolved, not taken as given: 'npm run smoke:*' passes '.', and a relative
@@ -123,6 +123,36 @@ const WALK = `(async (skip) => {
   }
   return out;
 })(${JSON.stringify(SKIP)})`;
+
+/* The pages are loaded with the real preload but without the shell that
+   registers what it bridges, so every desktop capability the client reached
+   for had nothing behind it. The process watch polls 'game:running' on a
+   timer, so the main process logged
+
+     Error occurred in handler for 'game:running': No handler registered
+
+   every few seconds for the whole walk — hundreds of lines that pushed the
+   report this tool exists to print off the top of the output, and buried the
+   one problem it had found.
+
+   Answered with the shape each caller expects, the same way
+   tools/smoke-update-check.js does. Nothing here is under test: these are
+   the machine's capabilities, not the client's code. */
+const STUBS = {
+  'service:status': () => ({ running: false }),
+  'service:start': () => ({ error: 'not in this harness' }),
+  'service:stop': () => ({ ok: true }),
+  'service:discordGet': () => ({ set: false }),
+  'game:running': () => ({ ok: false }),
+  'game:autoDetect': () => null,
+  'game:profiles': () => [],
+  'game:icon': () => null,
+  'game:mods': () => ({ ok: false }),
+  'app:latest': () => ({ error: 'not in this harness' }),
+  'telemetry:adapter': () => ({ running: false, reason: 'not in this harness' }),
+  'fs:exists': () => false,
+};
+Object.keys(STUBS).forEach((ch) => ipcMain.handle(ch, STUBS[ch]));
 
 app.whenReady().then(async () => {
   let problems = 0;
