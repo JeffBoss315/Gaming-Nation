@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.5';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.6';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -6980,6 +6980,211 @@ const Convoys = {
   },
 };
 
+/* ---------------- putting a convoy on the schedule ----------------
+
+   The app could show convoys and sign a driver on to one, and that was
+   all: publishing one meant opening the website. An event manager sitting
+   in the client with the crew already on the road had to go somewhere else
+   to say where they were going.
+
+   It writes the same record the platform writes - the same fields, the
+   same 'scheduled' status, the same empty `registered` list - into the
+   same company record, because there is one schedule and both ends read
+   it. A shape of its own would be a second kind of convoy that only one
+   screen understood.
+
+   THE DISTANCE IS REAL GEOGRAPHY. The platform estimates it from its
+   schematic at about 3.1 km per unit; this client has the cities' actual
+   coordinates, because the map needs them, so it measures the route on the
+   globe instead. The two disagree by a few percent on a long run. That is
+   the client being right rather than the client being different, and it is
+   said here so nobody later "fixes" it back. */
+const CONVOY_TYPES = [
+  ['convoy',    'Official Convoy',   ''],
+  ['community', 'Community Convoy',  'info'],
+  ['meeting',   'Driver Meeting',    'violet'],
+  ['training',  'Training Session',  'ok'],
+];
+
+const NewConvoy = {
+  /* every city the game knows, for the pickers */
+  cities(game) {
+    return Object.keys(geoFor(game === 'ats' ? 'ats' : 'ets2')).sort();
+  },
+
+  /* Real kilometres along the stops, in order. A route with fewer than two
+     places is not a route and has no distance - a meeting at HQ is not a
+     drive. */
+  distance(game, stops) {
+    const geo = geoFor(game === 'ats' ? 'ats' : 'ets2');
+    let km = 0;
+    for (let i = 1; i < stops.length; i++) {
+      const a = geo[stops[i - 1]], b = geo[stops[i]];
+      if (!a || !b) return 0;
+      km += haversineKm(a, b);
+    }
+    return Math.round(km);
+  },
+
+  open() {
+    if (!can('events.manage')) { toast('You do not have the rank for that', 'err'); return; }
+
+    const game = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+    const list = this.cities(game);
+    const roster = Auth.roster().filter((d) => d && d.accountStatus !== 'suspended');
+    const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+
+    /* a fortnight out, at eight in the evening - the slot a VTC convoy
+       actually runs in, rather than "now", which is never right */
+    const when = new Date();
+    when.setDate(when.getDate() + 14);
+    when.setHours(20, 0, 0, 0);
+    const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 16);
+
+    modal({
+      title: 'Put a convoy on the schedule',
+      body: `
+        <datalist id="cvCities">${list.map((c) =>
+          `<option value="${esc(c)}">`).join('')}</datalist>
+
+        <div class="field"><label for="cvName">Name</label>
+          <input class="input" id="cvName" maxlength="80" placeholder="Friday Night Haul"></div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvType">Type</label>
+            <select class="select" id="cvType">
+              ${CONVOY_TYPES.map(([v, l]) =>
+                `<option value="${v}">${esc(l)}</option>`).join('')}
+            </select></div>
+          <div class="field grow"><label for="cvDate">Departs</label>
+            <input class="input" id="cvDate" type="datetime-local" value="${esc(local)}"></div>
+        </div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvFrom">Start</label>
+            <input class="input" id="cvFrom" list="cvCities" placeholder="Calais"></div>
+          <div class="field grow"><label for="cvTo">Destination</label>
+            <input class="input" id="cvTo" list="cvCities" placeholder="Berlin"></div>
+        </div>
+
+        <div class="field mt-12"><label for="cvVia">Stops on the way (optional)</label>
+          <input class="input" id="cvVia" placeholder="Brussels, Cologne — separated by commas"></div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvServer">Server</label>
+            <input class="input" id="cvServer" maxlength="40" placeholder="Simulation 1"></div>
+          <div class="field" style="max-width:120px"><label for="cvSlots">Slots</label>
+            <input class="input" id="cvSlots" type="number" min="2" max="200" value="30"></div>
+        </div>
+
+        <div class="field mt-12"><label for="cvLeader">Convoy leader</label>
+          <select class="select" id="cvLeader">
+            ${roster.map((d) => `<option value="${esc(d.id)}"${
+              String(d.id) === me ? ' selected' : ''}>${esc(d.name || d.id)}</option>`).join('')}
+          </select></div>
+
+        <div class="field mt-12"><label for="cvDesc">Anything else (optional)</label>
+          <textarea class="input" id="cvDesc" rows="2"
+            placeholder="Livery, voice channel, anything the crew should know."></textarea></div>
+
+        <div class="t3 xs mt-12">It goes on the company schedule, so it appears on the
+          website and in every driver's client. Distance is measured along the stops.</div>`,
+      foot: `<button class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary" data-act="convoy-create">${icon('check')}Publish</button>`,
+    });
+  },
+
+  create() {
+    if (!can('events.manage')) { toast('You do not have the rank for that', 'err'); return; }
+
+    const val = (id) => String((($('#' + id) || {}).value) || '').trim();
+    const name = val('cvName');
+    if (!name) { toast('A convoy needs a name', 'warn'); return; }
+
+    const game = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+    const geo = geoFor(game);
+    const type = val('cvType') || 'convoy';
+    const row = CONVOY_TYPES.find((t) => t[0] === type) || CONVOY_TYPES[0];
+    const isDrive = type === 'convoy' || type === 'community';
+
+    const from = val('cvFrom');
+    const to = val('cvTo');
+    const via = val('cvVia').split(',').map((x) => x.trim()).filter(Boolean);
+
+    /* A city the game does not have is a typo, and a typo in a route puts
+       the convoy nowhere on the map. Named, so it can be corrected. */
+    const unknown = [from, to].concat(via).filter((c) => c && !geo[c]);
+    if (isDrive && unknown.length) {
+      toast('Not on the ' + mapFor(game).short + ' map: ' + unknown.join(', '), 'warn');
+      return;
+    }
+    if (isDrive && (!from || !to)) {
+      toast('A convoy needs somewhere to start and somewhere to end', 'warn');
+      return;
+    }
+
+    const when = new Date(val('cvDate') || Date.now());
+    if (!Number.isFinite(when.getTime())) { toast('That date does not read', 'warn'); return; }
+
+    const path = isDrive ? [from].concat(via, [to]) : [];
+    const km = this.distance(game, path);
+
+    const hq = Auth.hqDb();
+    if (!hq) { toast('The company record is not reachable', 'err'); return; }
+    hq.events = hq.events || [];
+
+    const leader = val('cvLeader');
+    const event = {
+      id: 'EV-' + Date.now().toString(36).toUpperCase(),
+      name,
+      type,
+      typeLabel: row[1],
+      tone: row[2],
+      status: 'scheduled',
+      date: when.toISOString(),
+      /* the crew gathers before it rolls; the platform uses the same half hour */
+      meetTime: new Date(when.getTime() - 30 * 60000).toISOString(),
+      start: isDrive ? from : 'GMN HQ',
+      dest: isDrive ? to : 'GMN HQ',
+      path,
+      distance: km,
+      /* 65 km/h average, convoy pace - the platform's own figure */
+      duration: km ? Math.round(km / 65 * 60) : 60,
+      maxSlots: clamp(Number(val('cvSlots')) || 30, 2, 200),
+      leaderId: leader,
+      server: val('cvServer'),
+      dlc: 'Base map',
+      meetPoint: isDrive ? from + ' — company car park' : 'Discord · Briefing Room',
+      departPoint: isDrive ? from + ' — city exit' : '—',
+      description: val('cvDesc') || (isDrive
+        ? 'A Gaming Nation convoy from ' + from + ' to ' + to + '.'
+        : 'A Gaming Nation ' + row[1].toLowerCase() + '.'),
+      instructions: [
+        'Arrive at the meeting point at least 30 minutes before departure.',
+        'Full GMN livery is required. Trailer attached before the briefing.',
+        'Hold a minimum 60 m gap. No overtaking inside the convoy.',
+        'Follow convoy control on Discord voice at all times.',
+      ],
+      /* The leader is on it from the moment it exists - they are leading it,
+         and a sheet that says 0 signed on when somebody is running it reads
+         as nobody being interested. */
+      registered: leader ? [{ driverId: leader, state: 'registered' }] : [],
+    };
+
+    hq.events.unshift(event);
+    if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+
+    Store.log('ok', 'Convoy published — ' + name
+      + (km ? ' (' + fmt.km(km) + ')' : ''));
+    closeModals();
+    toast('On the schedule', 'ok');
+    state.convoySel = event.id;
+    state.view = 'convoy';
+    render();
+  },
+};
+
 function convoyDetailHTML(e) {
   const signed = Convoys.signedOn(e);
   const live = e.status === 'live';
@@ -7087,7 +7292,8 @@ function viewConvoy() {
   if (!events.length) {
     return `
     ${viewHead('Convoys', 'Nothing on the schedule',
-      `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+      `${can('events.manage') ? `<button class="btn btn-sm btn-primary" data-act="convoy-new">${icon('plus')}New convoy</button>` : ''}
+       <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
     <section class="card"><div class="card-body"><div class="empty">${icon('route')}
       <div>No convoys scheduled</div>
       <div class="t3 xs">Convoys published on the Gaming Nation platform appear here,
@@ -7099,7 +7305,8 @@ function viewConvoy() {
   ${viewHead('Convoys',
     mine.length ? 'You are on ' + mine.length + ' of ' + events.length
       : events.length + ' coming up',
-    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+    `${can('events.manage') ? `<button class="btn btn-sm btn-primary" data-act="convoy-new">${icon('plus')}New convoy</button>` : ''}
+     <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
 
   <div class="split">
     <div class="split-list">${events.map(row).join('')}</div>
@@ -9307,6 +9514,8 @@ function handle(act, t) {
       Theme.apply();
       render();
       return;
+    case 'convoy-new': NewConvoy.open(); return;
+    case 'convoy-create': NewConvoy.create(); return;
     case 'convoy-open': state.convoySel = t.dataset.id; render(); return;
     case 'convoy-join': Convoys.toggle(t.dataset.id); return;
     case 'convoy-chat':

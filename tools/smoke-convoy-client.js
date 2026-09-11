@@ -146,6 +146,82 @@ app.whenReady().then(async () => {
       (await run(`((Auth.hqDb().events || []).find((x) => x.id === 'EV-FULL').registered || []).length`)) === 2,
       'still 2 — nobody was squeezed in');
 
+    /* ---- putting one on the schedule ----
+       The app could show convoys and sign a driver on; publishing one
+       meant opening the website. It writes the SAME record the platform
+       writes, into the same company record, because there is one schedule
+       and both ends read it. A shape of its own would be a second kind of
+       convoy that only one screen understood. */
+    const made = await run(`(async () => {
+      /* an event manager, not an ordinary driver */
+      const hq = Auth.hqDb();
+      hq.drivers[0].role = 'event_manager';
+      Auth.saveHqDb(hq);
+      Store.db.driver.role = 'event_manager';
+
+      NewConvoy.open();
+      document.querySelector('#cvName').value = 'Midweek Run';
+      document.querySelector('#cvFrom').value = 'Calais';
+      document.querySelector('#cvTo').value = 'Berlin';
+      document.querySelector('#cvVia').value = 'Brussels, Cologne';
+      document.querySelector('#cvServer').value = 'Simulation 1';
+      document.querySelector('#cvSlots').value = '24';
+      document.querySelector('#cvLeader').value = 'GMN-ME';
+      NewConvoy.create();
+
+      const e = (Auth.hqDb().events || []).find((x) => x.name === 'Midweek Run');
+      return e ? {
+        status: e.status, path: e.path, km: e.distance, slots: e.maxSlots,
+        leader: e.leaderId, typeLabel: e.typeLabel, server: e.server,
+        signed: (e.registered || []).map((r) => r.driverId + ':' + r.state),
+        meetsBefore: new Date(e.date) - new Date(e.meetTime),
+        rules: (e.instructions || []).length,
+      } : null;
+    })()`);
+    check('an event manager can publish a convoy', !!made,
+      made ? 'Midweek Run is on the schedule' : 'NOTHING WAS WRITTEN');
+    if (made) {
+      check('with every stop in order',
+        made.path.join(' > ') === 'Calais > Brussels > Cologne > Berlin',
+        made.path.join(' > '));
+      check('and a distance measured along them',
+        made.km > 700 && made.km < 1200, made.km + ' km');
+      check('scheduled, not live', made.status === 'scheduled', made.status);
+      check('the leader is on the sheet from the start',
+        made.signed.join() === 'GMN-ME:registered', made.signed.join() || 'nobody');
+      check('the crew gathers half an hour before',
+        made.meetsBefore === 30 * 60000, (made.meetsBefore / 60000) + ' min');
+      check('and it carries the rules for the day', made.rules === 4, made.rules + ' rules');
+    }
+
+    /* A typo in a city puts the convoy nowhere on the map, so it is caught
+       and named rather than written. */
+    const typo = await run(`(() => {
+      const before = (Auth.hqDb().events || []).length;
+      NewConvoy.open();
+      document.querySelector('#cvName').value = 'Nowhere Run';
+      document.querySelector('#cvFrom').value = 'Calais';
+      document.querySelector('#cvTo').value = 'Berlinn';
+      NewConvoy.create();
+      const after = (Auth.hqDb().events || []).length;
+      closeModals();
+      return { before, after };
+    })()`);
+    check('a city the game does not have is refused', typo.after === typo.before,
+      typo.before + ' before, ' + typo.after + ' after');
+
+    /* and an ordinary driver cannot publish at all */
+    const denied = await run(`(() => {
+      const hq = Auth.hqDb(); hq.drivers[0].role = 'driver'; Auth.saveHqDb(hq);
+      Store.db.driver.role = 'driver';
+      const before = (Auth.hqDb().events || []).length;
+      NewConvoy.create();
+      return { before, after: (Auth.hqDb().events || []).length,
+        opened: !!document.querySelector('#cvName') };
+    })()`);
+    check('an ordinary driver cannot publish one',
+      denied.after === denied.before, denied.before + ' before, ' + denied.after + ' after');
+
     /* ---- the crew room opens itself ----
        The Chats screen draws the crew room as selected the moment it is
        shown. Looking selected is not the same as being open: send()
