@@ -81,10 +81,28 @@ app.whenReady().then(async () => {
     const bar = await run('launchBarHTML()');
     for (const [kind, label] of [['ets2', 'EURO TRUCK'],
                                  ['ats', 'AMERICAN TRUCK'],
-                                 ['tmp', 'TRUCKERS']]) {
+                                 ['tmp', 'MULTIPLAYER']]) {
       check('a tile for ' + kind,
         bar.indexOf('data-kind="' + kind + '"') > -1 && bar.indexOf(label) > -1,
         bar.indexOf('data-kind="' + kind + '"') > -1 ? label : 'MISSING');
+    }
+
+    /* The third launcher is not one program. TruckersMP and TrucksBook are
+       different companies doing different jobs and the search looks for
+       both, so a driver running one was shown the other's name - the
+       settings field said "TruckersMP launcher" over a path ending in
+       TB Client.exe. It is named after the file that is set. */
+    for (const [exe, want] of [
+      ['C:/Program Files (x86)/TrucksBook Client/TB Client.exe', 'TrucksBook Client'],
+      ['C:/Program Files/TruckersMP/TruckersMP.exe', 'TruckersMP launcher'],
+      ['', 'TruckersMP or TrucksBook'],
+    ]) {
+      const got = await run(`(() => {
+        Store.db.settings.tmpExe = ${JSON.stringify(exe)};
+        return tmpLabel();
+      })()`);
+      check('  ' + (exe.split('/').pop() || 'nothing set') + ' reads as ' + want,
+        got === want, got);
     }
 
     /* ---------------- a fresh machine ---------------- */

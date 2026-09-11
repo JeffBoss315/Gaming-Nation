@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.3';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.4';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -2039,13 +2039,39 @@ function saveTileSource() {
    tray. In a browser those calls are absent, so every one of them
    degrades to an explanation rather than a dead button.
    ============================================================ */
+/* The third launcher is not one program. TruckersMP and TrucksBook are
+   different companies doing different jobs, the auto-detect looks for
+   both, and a driver who runs one was being shown the other's name -
+   "TruckersMP launcher" over a path ending in TB Client.exe.
+
+   So it is named after the file that is actually set. With nothing set
+   there is nothing to name it after, and it says what the slot is for
+   rather than picking a side. */
+function tmpLabel() {
+  const exe = String((Store.db.settings && Store.db.settings.tmpExe) || '').toLowerCase();
+  if (exe.indexOf('tb client') > -1 || exe.indexOf('trucksbook') > -1) {
+    return 'TrucksBook Client';
+  }
+  if (exe.indexOf('truckersmp') > -1) return 'TruckersMP launcher';
+  return 'TruckersMP or TrucksBook';
+}
+
+/* and the two words the launch tile puts on two lines */
+function tmpTileWords() {
+  const name = tmpLabel();
+  if (name === 'TrucksBook Client') return ['TRUCKSBOOK', 'Client'];
+  if (name === 'TruckersMP launcher') return ['TRUCKERS', 'Multiplayer'];
+  return ['MULTIPLAYER', 'Not set'];
+}
+
 const Launcher = {
   api() { return (window.gmnDesktop && window.gmnDesktop.isDesktop) ? window.gmnDesktop : null; },
 
   label(kind) {
-    return kind === 'tmp' ? 'TruckersMP launcher'
-      : kind === 'ats' ? 'American Truck Simulator' : 'Euro Truck Simulator 2';
+    if (kind === 'tmp') return tmpLabel();
+    return kind === 'ats' ? 'American Truck Simulator' : 'Euro Truck Simulator 2';
   },
+
   pathKey(kind) { return kind === 'tmp' ? 'tmpExe' : kind === 'ats' ? 'atsExe' : 'ets2Exe'; },
 
   desktopOnly(what) {
@@ -2177,7 +2203,7 @@ const GameWatch = {
 
     if (this.tmpRunning !== !!seen.tmp) {
       this.tmpRunning = !!seen.tmp;
-      Store.log('info', 'TruckersMP ' + (this.tmpRunning ? 'started' : 'closed'));
+      Store.log('info', tmpLabel() + ' ' + (this.tmpRunning ? 'started' : 'closed'));
       render();
     }
 
@@ -3229,7 +3255,7 @@ function seed() {
       pollRate: 400,            /* ms between telemetry polls — fast enough to read as live */
       ets2Exe: '',              /* eurotrucks2.exe */
       atsExe: '',               /* amtrucks.exe */
-      tmpExe: '',               /* TruckersMP launcher */
+      tmpExe: '',               /* TruckersMP or TrucksBook - see tmpLabel() */
       autoStartTracking: true,  /* arm the link as soon as the game is launched */
       jobUpdateSec: 10,         /* how often a running job is written to disk */
       heartbeatSec: 15,         /* how often we tell GMN we are alive */
@@ -4608,7 +4634,7 @@ function launchBarHTML() {
       <span class="lt-mark">${GameIcons.of('tmp')
         ? '<img src="' + esc(GameIcons.of('tmp')) + '" alt="">'
         : icon('users')}</span>
-      <span class="lt-text"><span class="lt-1">TRUCKERS</span><span class="lt-2">Multiplayer</span></span>
+      <span class="lt-text"><span class="lt-1">${esc(tmpTileWords()[0])}</span><span class="lt-2">${esc(tmpTileWords()[1])}</span></span>
       ${tmpReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
     </button>
 
@@ -7243,10 +7269,10 @@ function viewSettings() {
     <div class="card-body">
       ${exePickerHTML('ets2', 'Euro Truck Simulator 2 (eurotrucks2.exe)', s.ets2Exe)}
       ${exePickerHTML('ats', 'American Truck Simulator (amtrucks.exe)', s.atsExe)}
-      ${exePickerHTML('tmp', 'TruckersMP launcher (optional)', s.tmpExe)}
+      ${exePickerHTML('tmp', tmpLabel() + ' (optional)', s.tmpExe)}
       <div class="row gap-8 wrap mb-16">
         <button class="btn" data-act="launch-game" data-kind="ets2">${icon('play')}Launch ETS2</button>
-        <button class="btn" data-act="launch-game" data-kind="tmp">${icon('users')}Launch TruckersMP</button>
+        <button class="btn" data-act="launch-game" data-kind="tmp">${icon('users')}Launch ${esc(tmpLabel())}</button>
       </div>
       ${toggle('autoStartTracking', 'Start tracking after launching the game',
                'Arm the telemetry link as soon as the game is started from here.')}
