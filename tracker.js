@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.4';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.5';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -4644,12 +4644,12 @@ function launchBarHTML() {
 
     <button class="launch-tile" data-act="open-gmn" data-href="login.html#/dashboard">
       <span class="lt-mark">${icon('grid')}</span>
-      <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Dashboard</span></span>
+      <span class="lt-text"><span class="lt-1">MY GMN</span><span class="lt-2">Dashboard</span></span>
     </button>
 
     <button class="launch-tile" data-act="open-gmn" data-href="login.html#/rankings">
       <span class="lt-mark">${icon('trophy')}</span>
-      <span class="lt-text"><span class="lt-1">MY GN</span><span class="lt-2">Ranking</span></span>
+      <span class="lt-text"><span class="lt-1">MY GMN</span><span class="lt-2">Ranking</span></span>
     </button>
   </div>`;
 }
