@@ -146,6 +146,41 @@ app.whenReady().then(async () => {
       (await run(`((Auth.hqDb().events || []).find((x) => x.id === 'EV-FULL').registered || []).length`)) === 2,
       'still 2 — nobody was squeezed in');
 
+    /* ---- the crew room opens itself ----
+       The Chats screen draws the crew room as selected the moment it is
+       shown. Looking selected is not the same as being open: send()
+       refuses while Messages.open is null, and the history only loads for
+       the thread that is open. A driver saw the room highlighted and
+       empty, typed, pressed Send, and nothing happened - no message, no
+       error, nothing. */
+    const chat = await run(`(() => {
+      const opened = [];
+      Messages.on = () => true;                       /* pretend a service */
+      Messages.openThread = (id) => { opened.push(String(id)); Messages.open = String(id); };
+      Messages.open = null; Messages.roomTried = false; Messages.threads = [];
+
+      viewChats();                                    /* first paint */
+      const first = opened.slice();
+      viewChats(); viewChats();                       /* and two more */
+      return { first, total: opened.length, open: Messages.open };
+    })()`);
+    check('showing the chats screen opens the crew room',
+      chat.first[0] === '#fleet', chat.first[0] || 'NOTHING WAS OPENED');
+    check('so the composer has a thread to send to', chat.open === '#fleet', chat.open || 'null');
+    check('and it is asked for once, not on every repaint',
+      chat.total === 1, chat.total + ' open(s) across three paints');
+
+    const down = await run(`(() => {
+      Messages.on = () => false;                      /* the service is down */
+      Messages.open = null; Messages.roomTried = false;
+      let asked = 0;
+      Messages.openThread = () => { asked++; };
+      viewChats(); viewChats();
+      return asked;
+    })()`);
+    check('a service that is down is not re-asked every paint', down === 0,
+      down + ' attempt(s)');
+
     check('the renderer logged no errors', errors.length === 0,
       errors.length ? errors.slice(0, 2).join(' | ') : 'none');
   } catch (e) {

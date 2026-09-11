@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.2';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.3';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -6566,6 +6566,9 @@ function viewMessages() {
    typed on a phone at a services and one typed at a desk are in the same
    place, in order. */
 function viewChats() {
+  /* opens the crew room if nothing is open - see Messages.ensureRoom */
+  Messages.ensureRoom();
+
   const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
   const onCall = RoomCall.live || RoomCall.joining;
   const waiting = RoomCall.known.length;
@@ -8060,6 +8063,7 @@ const Messages = {
   reset() {
     this.threads = [];
     this.open = null;
+    this.roomTried = false;
     this.history = [];
     this.members = 0;
     this.error = null;
@@ -8097,6 +8101,23 @@ const Messages = {
       this.error = null;
       render();
     } catch (e) { /* the fleet loop reports the link being down */ }
+  },
+
+  /* The Chats screen draws the crew room as the selected one the moment it
+     opens. It has to actually BE open, not merely look it: send() refuses
+     while nothing is open, and the history only ever loads for the thread
+     that is. Before this a driver opened Chats, saw the room highlighted
+     and empty, typed a message, pressed Send, and nothing happened at all -
+     no error, no message, nothing.
+
+     Tried once. A service that is down must not be re-asked on every
+     repaint, and the flag clears when the conversation list is reset -
+     which is what a sign-out, a sign-in and a service change all do. */
+  roomTried: false,
+  ensureRoom() {
+    if (this.open || this.roomTried || !this.on()) return;
+    this.roomTried = true;
+    this.openThread(FLEET_ROOM);
   },
 
   async openThread(withId) {
