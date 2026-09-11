@@ -3,6 +3,7 @@
    and reads the resulting screens back out. */
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 /* Registration goes through Supabase Auth. Without a stand-in this probe
    signs up against the LIVE project on every run — leaving a real Auth user
@@ -16,7 +17,24 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 /* A probe must never touch the profile the real app uses — it signs in, writes
    records and would leave them behind. Everything below happens in a scratch
    profile that is thrown away with the run. */
-app.setPath('userData', path.join(app.getPath('temp'), 'gmn-smoke-' + path.basename(__filename, '.js')));
+/* A SCRATCH PROFILE THAT IS ACTUALLY SCRATCH.
+
+   This directory survived between runs, and it carried a driver code from
+   before the company was renamed - an account under HLL-1001 with no
+   driver row to match. The owner could not be signed in, the run crashed
+   on the first step, and it had nothing to do with the code being tested:
+   a genuinely fresh profile seeds GMN-001 and works.
+
+   Worse than failing, it could pass. A profile left in the right shape by
+   an earlier run makes a broken build look fine, and one left in the wrong
+   shape makes a good build look broken. Neither is a test.
+
+   So it is removed first, every run. Electron holds these files open while
+   it runs, which is why deleting it by hand between runs did not stick. */
+const PROFILE = path.join(app.getPath('temp'), 'gmn-smoke-' + path.basename(__filename, '.js'));
+try { fs.rmSync(PROFILE, { recursive: true, force: true }); }
+catch (e) { console.warn('could not clear ' + PROFILE + ': ' + e.message); }
+app.setPath('userData', PROFILE);
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 950, show: false });
