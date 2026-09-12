@@ -37,6 +37,7 @@
     "smoke:errors": "node tools/run-electron.js tools/smoke-errors.js .",
     "smoke:company": "node tools/run-electron.js tools/smoke-company.js .",
     "prune": "node tools/prune-builds.js",
+    "prune:releases": "node tools/prune-releases.js",
     "smoke:messaging": "node tools/smoke-messaging.js",
     "smoke:svcauth": "node tools/smoke-service-auth.js",
     "smoke:dmweb": "node tools/run-electron.js tools/smoke-dm-web.js .",

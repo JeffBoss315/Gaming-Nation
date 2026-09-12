@@ -406,10 +406,13 @@ behave exactly as they always have, on public STUN.
 ### Builds and old versions
 
 ```bash
-npm run dist       # Windows installer + portable, then prunes
-npm run android    # the APK, then prunes
-npm run prune      # tidy up on its own
+npm run dist            # Windows installer + portable, then prunes
+npm run android         # the APK, then prunes
+npm run prune           # tidy up on its own
 npm run prune -- --dry-run
+
+npm run prune:releases  # the same tidy-up on GitHub Releases
+npm run prune:releases -- --dry-run
 ```
 
 Every build ends by removing the previous version. `release/` used to keep
@@ -421,6 +424,25 @@ carrying a different version number is removed once the new build succeeds.
 
 It only touches files whose names carry a version it can read, and only in
 those two directories. Anything it cannot parse is left alone.
+
+`npm run prune:releases` does the same on the other side of the wire, and is
+the one to run **after** publishing a GitHub Release. That is where the
+downloads page actually sends a driver, so a pile of old releases there is a
+pile of answers to "which one am I supposed to have".
+
+It keeps **two** — the current version and the one before it — where the
+local prune keeps only one. The difference is deliberate: a local installer
+can be rebuilt from its tag in a couple of minutes, while a published release
+is the only build a driver can reach, and the client now tells everybody to
+upgrade the moment `version.json` moves. A release that turns out broken
+needs somewhere to fall back to that is still downloadable. `--keep=N`
+overrides it.
+
+**The tags are never deleted.** Only the release and its installers go; the
+tag stays pointing at its commit, so what any past version was built from is
+still checkable. It also refuses to delete anything at all unless the version
+in `package.json` is already published — pruning everything older than a
+release that does not exist is how you end up with no downloads.
 
 **Building on Windows:** electron-builder cannot write into `dist/` while a
 copy of the app is running, and this project lives under OneDrive, which
