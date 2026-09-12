@@ -37,6 +37,15 @@
   --danger:#fb6a80;
   --violet:#a78bfa;
 
+  /* The driver's own truck on the map. Deliberately not --accent: the trail
+     line behind it is that same green, so the pin and the history it had
+     just drawn were one colour and the truck disappeared into its own line
+     the moment it stopped moving. Amber is the one hue the map does not
+     already spend - cities are white, crew pins cyan or grey, the region
+     seams each their own. Same value as --warn today, kept separate because
+     they mean different things and only one of them is a warning. */
+  --me:#f7b32b;
+
   /* The same five as channels, so a translucent status tint is derived
      from its colour rather than being a second, drifting copy of it. */
   --ok-rgb:46,224,160;
@@ -535,9 +544,9 @@ body.can-install .install-cta{display:inline-flex}
 .leaflet-tooltip-top:before{border-top-color:var(--line-2)}
 
 /* the truck pin, rotated to the live heading */
-.truck-pin-inner{width:28px;height:28px;display:grid;place-items:center;
+.truck-pin-inner{width:34px;height:34px;display:grid;place-items:center;
   transition:transform .5s ease-out}
-.truck-pin-inner svg{width:22px;height:22px;fill:var(--accent);
+.truck-pin-inner svg{width:28px;height:28px;fill:var(--me);
   stroke:#0a0c0f;stroke-width:1.4;filter:drop-shadow(0 0 3px rgba(0,0,0,.8))}
 
 /* ---------- other drivers on the map ---------- */
@@ -631,16 +640,10 @@ body.can-install .install-cta{display:inline-flex}
   object-fit:cover;border-radius:50%;
 }
 
-/* This copy is behind the one the website is offering. Said in the two
-   places the build number already appears, in the colour the client uses
-   for "this wants attention" and not the one it uses for "this is
-   broken": an old client still works, it is just old. */
-.rail-old{
-  display:inline-block;margin-left:6px;padding:1px 5px;border-radius:99px;
-  background:color-mix(in srgb,var(--warn) 20%,transparent);
-  color:var(--warn);font-size:8.5px;font-weight:800;letter-spacing:.08em;
-  text-transform:uppercase;vertical-align:1px;
-}
+/* .rail-old was the "OUTDATED" pill beside the build number under the
+   driver's name. Both are gone - the status bar says it now, in the colour
+   the client uses for "this wants attention" rather than "this is broken",
+   because an old client still works, it is just old. */
 .sb-item.warn{color:var(--warn)}
 .sb-item.warn:hover{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
 
@@ -1991,14 +1994,6 @@ body.can-install .install-cta{display:inline-flex}
 .dm-offline .grow{min-width:0}
 .dm-offline-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
 
-/* the build, under the driver chip at the foot of the rail */
-.rail-build{
-    padding:6px 12px 10px;
-    text-align:center;
-    font-size:11px;
-    letter-spacing:.03em;
-    color:var(--text-3);
-}
 
 /* a launch tile wearing the game's own icon rather than a glyph */
 .lt-mark img{
@@ -2048,6 +2043,7 @@ body.can-install .install-cta{display:inline-flex}
   --warn:#96600a;
   --danger:#c62a45;
   --violet:#5f42c4;
+  --me:#96600a;
   --ok-rgb:11,143,96;
   --info-rgb:11,127,150;
   --warn-rgb:150,96,10;

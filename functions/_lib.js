@@ -23,7 +23,7 @@
    key here pointed at an object no longer in the bucket. Split into a
    version and a stem so a release moves one line, and tools/scan.js now
    fails the build if it stops matching the download page. */
-export const RELEASE_VERSION = '1.1.6';
+export const RELEASE_VERSION = '1.1.8';
 const OBJECT = (suffix) => `Gaming-Nation-Tracker-${RELEASE_VERSION}-${suffix}`;
 
 export const BUILDS = {

@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.1.6';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.1.8';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -180,17 +180,50 @@ const APP_VERSION = 'V1.1.6';   /* kept in step with package.json - scan.js fail
    apart, solve the transform for good — so a driver never has to do
    anything but drive.
    ============================================================ */
+/* Where the game world sits, before anybody has lined anything up.
+
+   The truck was drawn only once this transform had been SOLVED on this
+   machine, from two jobs in cities far enough apart. Until that happened
+   the live map drew the roads, the cities and the region seams - and then
+   nothing at all where the driver was. No pin, no nearest city, "no
+   position" in the status bar, and a Line up button as the only hint that
+   any of it was connected. A driver with the game running, telemetry live
+   and a world X/Z on screen was looking at an empty continent.
+
+   It does not have to be learned per-machine to be useful, because the base
+   ETS2 world is the same world for every player. These numbers put Hamburg
+   at the world origin, and they land every sample taken here on the right
+   road. A solved transform still wins the moment one exists - this is the
+   starting point, not the answer.
+
+   ATS gets no entry: nothing here has measured that world, and inventing
+   numbers for it would put the pin somewhere confidently wrong, which is
+   worse than the honest blank. An ATS driver lines up the way everybody
+   used to, and the map now says so instead of going quiet. */
+const WORLD_GEO_DEFAULT = {
+  ets2: { sx: 0.000175828, ox: 9.99, sz: -0.000107084, oz: 53.55, estimate: true },
+};
+
 const Calib = {
   all() {
     const s = Store.db.settings;
     s.worldGeo = s.worldGeo || {};
     return s.worldGeo;
   },
-  get(game) {
+
+  /* what this client worked out for itself, if anything */
+  learned(game) {
     const c = this.all()[game === 'ats' ? 'ats' : 'ets2'];
     return (c && typeof c.sx === 'number' && typeof c.sz === 'number') ? c : null;
   },
+  get(game) {
+    return this.learned(game) || WORLD_GEO_DEFAULT[game === 'ats' ? 'ats' : 'ets2'] || null;
+  },
+  /* ready: a pin can be placed at all. exact: it is this machine's own fit
+     rather than the built-in estimate. The map needs to tell them apart -
+     one decides whether anything is drawn, the other what the button says. */
   ready(game) { return !!this.get(game); },
+  exact(game) { return !!this.learned(game); },
 
   /* game metres -> [lat, lon] */
   toGeo(game, x, z) {
@@ -1620,8 +1653,12 @@ const TileMap = {
     const deg = -(heading || 0) * 360;
     return L.divIcon({
       className: 'truck-pin',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
+      /* iconAnchor is half of iconSize, which is what puts the middle of
+         the arrow on the fix rather than its top-left corner. Both move
+         together with the glyph size in .truck-pin-inner - grow one alone
+         and the pin quietly starts pointing at somewhere you are not. */
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
       html: '<div class="truck-pin-inner" style="transform:rotate(' + deg.toFixed(1) + 'deg)">'
         + '<svg viewBox="0 0 24 24"><path d="M12 2 L18 20 L12 16.5 L6 20 Z"/></svg></div>',
     });
@@ -1632,7 +1669,7 @@ const TileMap = {
     if (!this.map) return;
     const db = Store.db;
     const live = db.live;
-    gameKey = gameKey || (live && live.game) || db.settings.game || 'ets2';
+    gameKey = gameKey || liveMapKey();
 
     /* trail */
     if (this.trailLine) {
@@ -1652,7 +1689,7 @@ const TileMap = {
        field set matches `live.game === gameKey` when both are undefined -
        undefined equals undefined - and the very next line reads
        live.world.x and throws, taking the whole map draw with it. */
-    if (Telemetry.onRoad() && live && live.world && live.game && live.game === gameKey) {
+    if (Telemetry.onRoad() && live && live.world && live.game && live.game === baseGameFor(gameKey)) {
       const ll = this.latLngFor(gameKey, live.world.x, live.world.z);
       if (ll) {
         if (!this.marker) {
@@ -1663,7 +1700,7 @@ const TileMap = {
         }
         this.marker.bindTooltip(
           Store.db.driver.name + ' — ' + live.speed + ' km/h ' + headingLabel(live.heading),
-          { direction: 'top', offset: [0, -12] });
+          { direction: 'top', offset: [0, -18] });
         if (this.following) this.map.setView(ll, this.map.getZoom(), { animate: true });
       }
     } else if (this.marker) {
@@ -1782,7 +1819,7 @@ const TileMap = {
     this.fleetLayer.clearLayers();
     const db = Store.db;
     if (!db.settings.showFleet) return;
-    const gameKey = (Telemetry.mode === 'live' && db.live && db.live.game) || db.settings.game || 'ets2';
+    const gameKey = liveMapKey();
 
     /* Our own row comes back from the company service like everybody
        else's, and `self` is a flag this client sets on its own copy — the
@@ -1796,7 +1833,7 @@ const TileMap = {
     Fleet.drivers.forEach((d) => {
       if (d.self) return;                       /* our own pin is drawn separately */
       if (mine && d.id === mine) return;        /* and the service's copy of it */
-      if (d.game && d.game !== gameKey) return; /* other game, other map */
+      if (d.game && d.game !== baseGameFor(gameKey)) return; /* other game, other map */
       let ll = null;
       if (typeof d.lat === 'number' && typeof d.lon === 'number') {
         /* the game map is not in degrees — project before plotting */
@@ -2861,15 +2898,35 @@ const Siren = {
 };
 
 /* ---------- live map view ---------- */
+
+/* Which map the live view is drawing.
+
+   In one place because four callers need the same answer and they used to
+   disagree. viewLiveMap could settle on ProMods while the code that mounted
+   Leaflet asked settings.game and got ETS2 - so the header named one map and
+   the roads underneath were the other's.
+
+   Telemetry says 'ets2' whether or not a map mod is loaded; the game does not
+   know it has been modded. So the wider map is chosen from what the client
+   found on the machine, or from what the driver picked, rather than waited
+   for on the wire. */
+const MAP_VIEWS = ['ets2', 'promods', 'ats'];
+function liveMapKey() {
+  const db = Store.db;
+  const live = db.live;
+  /* the driver's own choice outranks anything detected: they can see which
+     world they are in, and this client cannot */
+  const pick = db.settings.mapView || 'auto';
+  if (MAP_VIEWS.indexOf(pick) > -1) return pick;
+  const base = (Telemetry.mode === 'live' && live && live.game) || db.settings.game || 'ets2';
+  return (base === 'ets2' && MapMods.usingProMods()) ? 'promods' : base;
+}
+
 function viewLiveMap() {
   const db = Store.db;
   const live = db.live;
   const detected = Telemetry.mode === 'live' && live && live.game;
-  /* Telemetry says 'ets2' whether or not ProMods is loaded - the game does
-     not know it has been modded. So the wider map is chosen here, from what
-     the client found on the machine, rather than waited for on the wire. */
-  const base = detected || db.settings.game || 'ets2';
-  const mapKey = (base === 'ets2' && MapMods.usingProMods()) ? 'promods' : base;
+  const mapKey = liveMapKey();
   const M = mapFor(mapKey);
   const src = Telemetry.mode === 'live' ? 'Live telemetry'
     : db.conn.ets2 === 'running' ? 'Simulated' : 'No signal';
@@ -2881,9 +2938,11 @@ function viewLiveMap() {
   const onLeaflet = gameMode || worldMode || useTiles;
   const tileCal = useTiles ? TileMap.cal(mapKey) : null;
   const tilePts = tileCal && tileCal.points ? tileCal.points.length : 0;
-  /* one transform serves the game map, the schematic and real-world tiles */
-  const calibrated = useTiles ? tilePts >= 2 : Calib.ready(mapKey);
-  const calPts = Calib.points(mapKey).length;
+  /* one transform serves the game map, the schematic and real-world tiles.
+     `placed` decides whether a pin can be drawn at all; `exact` whether it
+     came from this machine's own fit or the built-in estimate. */
+  const placed = useTiles ? tilePts >= 2 : Calib.ready(mapKey);
+  const exact = useTiles ? tilePts >= 2 : Calib.exact(mapKey);
 
   return `
   ${viewHead('Live map',
@@ -2893,12 +2952,22 @@ function viewLiveMap() {
       ${icon('wifi')}${db.settings.liveTelemetry ? 'Live on' : 'Live off'}</button>
     ${useTiles ? `<button class="btn btn-sm ${TileMap.following ? 'btn-primary' : ''}" id="followBtn" data-act="follow-toggle">
       ${icon('target')}${TileMap.following ? 'Following' : 'Follow'}</button>` : ''}
-    ${detected
-      ? `<span class="pill ok">${icon('check')}${esc(M.short)} detected</span>`
-      : `<button class="btn btn-sm" data-act="map-game" data-v="${mapKey === 'ets2' ? 'ats' : 'ets2'}">
-          ${icon('refresh')}Show ${mapKey === 'ets2' ? 'ATS' : 'ETS2'}</button>`}
-    <button class="btn btn-sm ${calibrated ? '' : 'btn-primary'}" data-act="${useTiles ? 'tile-calibrate' : 'calibrate'}">
-      ${icon('target')}${calibrated ? 'Calibrate' : 'Line up'}</button>
+    ${/* One button per map, ProMods its own rather than something ETS2 turns
+          into behind your back. The old control was a single toggle that
+          swapped between the two base games and hid itself the moment
+          telemetry named one - which left no way at all to say "I am on
+          ProMods", because the game never reports that it has been modded.
+
+          Detection still picks the opening map; these say which one is on
+          screen and let the driver overrule it. */''}
+    <div class="row gap-4">
+      ${MAP_VIEWS.map((k) => `<button class="btn btn-sm ${mapKey === k ? 'btn-primary' : ''}"
+        data-act="map-view" data-v="${k}" title="Draw the ${esc(mapFor(k).label)} map"
+        >${esc(mapFor(k).short)}${detected === baseGameFor(k) && k !== 'promods'
+          ? ' ' + icon('check') : ''}</button>`).join('')}
+    </div>
+    <button class="btn btn-sm ${exact ? '' : 'btn-primary'}" data-act="${useTiles ? 'tile-calibrate' : 'calibrate'}">
+      ${icon('target')}${!placed ? 'Line up' : exact ? 'Calibrate' : 'Fine-tune'}</button>
     <button class="btn btn-sm ${db.settings.showFleet ? 'btn-primary' : ''}" data-act="fleet-toggle">
       ${icon('users')}Fleet ${Fleet.drivers.filter((d) => !d.self).length}</button>
     <button class="btn btn-sm" data-act="tile-source">${icon('map')}Map</button>`)}
@@ -2933,6 +3002,10 @@ function viewLiveMap() {
   <section class="card">
     <div class="card-head">
       <span class="label">Position</span>
+      ${/* Says so rather than quietly being a few hundred metres out. Not a
+            banner - the panel that used to explain this state was removed for
+            good reason - just the one word, where the reading is. */''}
+      ${placed && !exact ? `<span class="label" style="color:var(--text-3)">approximate</span>` : ''}
       <span class="label">${live ? esc(headingLabel(live.heading)) + ' · ' + live.speed + ' km/h' : 'no fix'}</span>
     </div>
     <div class="card-body" id="mapCard">${onLeaflet
@@ -2966,8 +3039,7 @@ function viewLiveMap() {
 function liveMapInner() {
   const db = Store.db;
   const live = db.live;
-  const detected = Telemetry.mode === 'live' && live && live.game;
-  const mapKey = detected || db.settings.game || 'ets2';
+  const mapKey = liveMapKey();
   const M = mapFor(mapKey);
   const job = db.job;
 
@@ -3010,20 +3082,20 @@ function liveMapInner() {
 
   /* the truck */
   let marker = '';
-  if (Telemetry.onRoad() && live && live.game === mapKey && live.map &&
+  if (Telemetry.onRoad() && live && live.game === baseGameFor(mapKey) && live.map &&
       Number.isFinite(live.map.x) && Number.isFinite(live.map.z)) {
     const deg = -(live.heading || 0) * 360;
     marker = `<g transform="translate(${live.map.x.toFixed(1)},${live.map.z.toFixed(1)})" id="truckMarker">
-      <circle r="13" fill="var(--accent)" opacity=".16"/>
-      <circle r="6.5" fill="var(--accent)" stroke="var(--bg)" stroke-width="1.6"/>
+      <circle r="13" fill="var(--me)" opacity=".16"/>
+      <circle r="6.5" fill="var(--me)" stroke="var(--bg)" stroke-width="1.6"/>
       <g transform="rotate(${deg.toFixed(1)})">
-        <path d="M0 -11 L4.4 4 L0 1.2 L-4.4 4 Z" fill="var(--accent)" stroke="var(--bg)" stroke-width="1"/>
+        <path d="M0 -11 L4.4 4 L0 1.2 L-4.4 4 Z" fill="var(--me)" stroke="var(--bg)" stroke-width="1"/>
       </g>
       <title>${esc(Store.db.driver.name)} — ${live.speed} km/h ${esc(headingLabel(live.heading))}</title>
     </g>`;
   }
   if (db.settings.showFleet) {
-    marker += Fleet.drivers.filter((d) => !d.self && (!d.game || d.game === mapKey))
+    marker += Fleet.drivers.filter((d) => !d.self && (!d.game || d.game === baseGameFor(mapKey)))
       .map((d) => {
         const geo = typeof d.lat === 'number' && typeof d.lon === 'number'
           ? [d.lat, d.lon] : (typeof d.x === 'number' && Calib.toGeo(mapKey, d.x, d.z));
@@ -3127,7 +3199,10 @@ function paintLiveMap() {
 function openCalibrate() {
   const db = Store.db;
   const live = db.live;
-  const mapKey = (Telemetry.mode === 'live' && live && live.game) || db.settings.game || 'ets2';
+  /* the map that is on screen, so a driver on ProMods is offered the cities
+     ProMods adds. Either way the sample is stored against the world it came
+     from, which Calib keys by game rather than by view. */
+  const mapKey = liveMapKey();
   const M = mapFor(mapKey);
   const pts = Calib.points(mapKey);
 
@@ -3262,7 +3337,8 @@ function seed() {
       startMinimized: false,
       sirenEnabled: true,       /* audible alert over the limit */
       sirenSpeedLimit: 95,
-      game: 'ets2',             /* ets2 | ats */
+      game: 'ets2',             /* ets2 | ats - the world, as telemetry names it */
+      mapView: 'auto',          /* auto | ets2 | promods | ats - which map to draw */
       mapSource: 'game',        /* game (ETS2/ATS road network) | world (real tiles) | tiles (own pyramid) | schematic */
       tileUrl: '',              /* {z}/{x}/{y} template, for mapSource 'tiles' */
       worldTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -3783,8 +3859,16 @@ const Updates = {
   /* What to say in the status bar, which is where a driver's eye already
      goes for the build number. */
   chip() {
+    /* The build number belongs in all four of these, not three.
+
+       It used to be dropped exactly when the client was behind - the chip
+       became "Outdated - 1.1.7 is out" and the one number a driver needs in
+       order to say what they are running disappeared from the screen. That
+       was survivable while the rail repeated it under their name; the rail
+       does not any more, so this is the only place left that carries it. */
     if (this.state === 'behind') {
-      return { cls: 'warn', text: 'Outdated · ' + this.latest + ' is out',
+      return { cls: 'warn',
+        text: 'build ' + APP_VERSION + ' · Outdated · ' + this.latest + ' is out',
         title: 'This client is ' + APP_VERSION + '. The website is offering '
           + this.latest + '. Click to open the download page.' };
     }
@@ -7541,10 +7625,13 @@ function viewSettings() {
       <div class="setting-row mt-12">
         <div>
           <div class="t2">Map position</div>
-          <div class="t3 xs mt-4">${Calib.ready(s.game === 'ats' ? 'ats' : 'ets2')
+          <div class="t3 xs mt-4">${Calib.exact(s.game === 'ats' ? 'ats' : 'ets2')
             ? 'Lined up. Your position is exact on every map.'
-            : 'Lines itself up from the cities the game names — two jobs is enough. '
-              + 'You can also do it by hand.'}</div>
+            : Calib.ready(s.game === 'ats' ? 'ats' : 'ets2')
+              ? 'Running on the built-in estimate — close enough to put you on the right '
+                + 'road. Two jobs in cities well apart make it exact on their own.'
+              : 'Lines itself up from the cities the game names — two jobs is enough. '
+                + 'You can also do it by hand.'}</div>
         </div>
         <button class="btn btn-sm" data-act="calibrate">${icon('target')}Do it by hand</button>
       </div>
@@ -7771,6 +7858,12 @@ function navHTML() {
   }).join('');
 }
 
+/* The build number used to be repeated here, under the driver's own name,
+   with an "outdated" badge beside it. It has gone: the status bar already
+   carries the version along the bottom edge, and when the client is behind
+   that one is a BUTTON that opens the download page, where this was only
+   ever text. Two copies of the same warning, the nearer one doing nothing
+   when pressed, is the copy worth removing. */
 function railFootHTML() {
   const d = Store.db.driver;
   return `<button class="driver-chip" data-act="driver-menu">
@@ -7780,13 +7873,7 @@ function railFootHTML() {
       <span class="t3 xs mono">${esc(d.gmnId)}</span>
     </span>
     ${icon('chevron', 'chev')}
-  </button>
-  ${/* Which build this is, where somebody looking at their own name will
-        see it. It was only ever in the status bar and on the About screen,
-        and the version there had been V1.0.0 for two releases - so the one
-        place it was written down was quietly wrong. */''}
-  <div class="rail-build">Build ${esc(APP_VERSION)}${Updates.behind()
-    ? ' <span class="rail-old">outdated</span>' : ''}</div>`;
+  </button>`;
 }
 
 /* connection state lives along the bottom edge, not in the header */
@@ -9361,9 +9448,7 @@ function bindViewForms() {
   /* Leaflet has to be attached after its container exists in the document */
   const host = $('#leafletMap');
   if (host) {
-    const db = Store.db;
-    const key = (Telemetry.mode === 'live' && db.live && db.live.game) || db.settings.game || 'ets2';
-    TileMap.mount(host, key);
+    TileMap.mount(host, liveMapKey());
   } else {
     TileMap.destroy();
   }
@@ -9541,14 +9626,20 @@ function handle(act, t) {
       Store.save(); render();
       return;
     }
-    case 'map-game':
-      db.settings.game = t.dataset.v;
-      Store.log('info', 'Map switched to ' + mapFor(t.dataset.v).label);
+    case 'map-view': {
+      const view = t.dataset.v;
+      db.settings.mapView = view;
+      /* ProMods is a view of the ETS2 world, so the game the rest of the app
+         deals in - the fleet list, the heartbeat, the logbook - stays the one
+         telemetry actually names. Only the drawing changes. */
+      db.settings.game = baseGameFor(view);
+      Store.log('info', 'Map switched to ' + mapFor(view).label);
       /* otherwise the fleet list keeps showing the other map's runs until the
          next heartbeat comes round */
       Fleet.step();
       Store.save(); render();
       return;
+    }
     case 'calibrate': openCalibrate(); return;
     case 'tile-source': openTileSource(); return;
     case 'cal-reset':

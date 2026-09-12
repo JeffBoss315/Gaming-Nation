@@ -478,6 +478,14 @@ const MAP_PROMODS = gameMap('promods', 'Euro Truck Simulator 2 · ProMods', 'Pro
 const MAPS = { ets2: MAP_ETS2, ats: MAP_ATS, promods: MAP_PROMODS };
 const mapFor = (key) => MAPS[key] || MAP_ETS2;
 
+/* ProMods is a VIEW of the ETS2 world, not a game of its own - telemetry
+   arrives labelled 'ets2' whichever of the two is on screen. So anything
+   asking "did this position come from the world this map draws?" has to
+   compare the world, not the view. Comparing the view is why picking the
+   ProMods map used to hide your own truck: live.game was 'ets2', the map
+   key was 'promods', and the pin was dropped as belonging to another game. */
+const baseGameFor = (key) => (key === 'promods' ? 'ets2' : key);
+
 function nearestCity(mapKey, mx, mz) {
   const cities = mapFor(mapKey).cities;
   let best = null, bestD = Infinity;

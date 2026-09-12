@@ -17,6 +17,20 @@
 name = "gaming-nation"
 pages_build_output_dir = "www"
 
+# The download gate under functions/ is a Pages Function, and a Function is
+# a Worker: it will not publish without a compatibility date. Deploying with
+# none of this set fails at the very last step, after the assets have already
+# uploaded, with
+#
+#   Failed to publish your Function.
+#   Uncaught Error: No such module "node:stream".
+#
+# which names a module nothing here imports - the built bundle has no `node:`
+# reference in it at all. That is the runtime's way of saying it was handed a
+# Worker with no date and no flags, not a complaint about our code.
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
 # ------------------------------------------------------------------
 # The client installers
 #
