@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Where this site actually lives. Everything that has to name a host —",
+    "the canonical link, the social cards, the JSON-LD, robots.txt and",
+    "sitemap.xml — is generated from siteUrl by tools/build-www.js.",
+    "",
+    "Leave siteUrl empty until you control the address. A canonical URL",
+    "pointing at a host you do not own tells Google that the real version",
+    "of the page is over there, and it will rank that instead of yours.",
+    "With this empty the build simply writes no canonical, which is",
+    "correct: no canonical is far better than a wrong one.",
+    "",
+    "Set it to whatever you publish on, with no trailing slash, e.g.",
+    "  https://gaming-nation.pages.dev  (Cloudflare Pages, free)",
+    "  https://gaming-nation.netlify.app (Netlify, free)",
+    "  https://www.gamingnation.com      (a domain you bought)"
+  ],
+  "siteUrl": "https://gaming-nation.pages.dev",
+  "name": "Gaming Nation",
+  "shortName": "GN",
+  "description": "The digital headquarters of the Gaming Nation fleet. Convoys, dispatch, live fleet tracking, driver rankings and achievements, in one command centre.",
+  "tagline": "One community. Endless games. Convoys, dispatch and a live fleet across Euro Truck Simulator 2 and American Truck Simulator.",
+  "locale": "en_GB"
+}

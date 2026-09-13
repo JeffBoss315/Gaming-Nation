@@ -1,0 +1,6 @@
+{
+    "liveServer.settings.port": 5502,
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.server.launchMode": "Standard",
+    "java.import.gradle.version": "8.14.3"
+}

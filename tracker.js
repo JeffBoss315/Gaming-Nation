@@ -1,0 +1,10765 @@
+/* ============================================================
+   GMN WORLD GAMING NATION TRUCKER — driver client
+   Watches the game, records deliveries, syncs them to Gaming Nation.
+   Part 1 — utilities, icons, data, store
+   ============================================================ */
+'use strict';
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const uid = (p) => p + '-' + Math.random().toString(36).slice(2, 8);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const randI = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+
+const fmt = {
+  n: (v) => Number(v || 0).toLocaleString('en-GB'),
+  km: (v) => Number(Math.round(v) || 0).toLocaleString('en-GB') + ' km',
+  eur: (v) => '€' + Number(Math.round(v) || 0).toLocaleString('en-GB'),
+  pct: (v) => Math.round(v) + '%',
+  clock: (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  hm: (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+  date: (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+  dt: (d) => fmt.date(d) + ' ' + fmt.hm(d),
+  dur: (min) => {
+    const h = Math.floor(min / 60), m = Math.round(min % 60);
+    return (h ? h + 'h ' : '') + m + 'm';
+  },
+  rel: (d) => {
+    const diff = Date.now() - new Date(d).getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3.6e6) return Math.round(diff / 60000) + ' min ago';
+    if (diff < 8.64e7) return Math.round(diff / 3.6e6) + ' h ago';
+    return Math.round(diff / 8.64e7) + ' d ago';
+  },
+};
+
+/* ---------------- icons ---------------- */
+const P = {
+  /* these are used across the client; a missing name silently falls back to
+     the info glyph, which reads as the wrong icon rather than as an error */
+  /* Calling. Taken from the website set unchanged, because the two ends
+     ring each other and a driver should not meet a different phone
+     glyph depending on which one they are looking at. */
+  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>',
+  micOff:'<path d="M3 3l18 18"/><path d="M9.5 4.9A3 3 0 0 1 15 6v4"/><path d="M9 9.4V11a3 3 0 0 0 4.3 2.7"/><path d="M5.5 11.5a6.5 6.5 0 0 0 9.9 5.6"/><path d="M18.4 13.6a6.5 6.5 0 0 0 .1-2.1"/><path d="M12 18v3"/>',
+  phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M10.5 5.4h3"/><path d="M10.8 18.6h2.4"/>',
+  phoneOff:'<path d="M10.7 5.6A15.5 15.5 0 0 1 13 5.3"/><path d="M3 3l18 18"/><path d="M8.4 8.4l-2 1.2a1.6 1.6 0 0 0-.6 2l1 2.2a15.6 15.6 0 0 0 4.4 4.4l2.2 1a1.6 1.6 0 0 0 2-.6l1.2-2"/><path d="M18.6 13.8l.8-1.4a1.6 1.6 0 0 0-.6-2l-2-1.2"/>',
+  users:'<circle cx="9" cy="8" r="3.2"/><path d="M2.5 20v-1.1A4.6 4.6 0 0 1 7.1 14.3h3.8A4.6 4.6 0 0 1 15.5 19v1"/><path d="M16.5 5.3a3.2 3.2 0 0 1 0 5.9M18 14.4a4.6 4.6 0 0 1 3.5 4.5V20"/>',
+  bell:'<path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15z"/><path d="M10 19.5a2 2 0 0 0 4 0"/>',
+  bolt:'<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/>',
+  map:'<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/>',
+  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/>',
+  /* The reveal control on the password field promised an eye and drew a
+     magnifying glass, because there was no eye to draw. */
+  eye:'<path d="M1.6 12S5.3 5.5 12 5.5 22.4 12 22.4 12 18.7 18.5 12 18.5 1.6 12 1.6 12z"/>'
+    + '<circle cx="12" cy="12" r="3"/>',
+  eyeOff:'<path d="M3 3l18 18"/>'
+    + '<path d="M10.6 6.2A9.9 9.9 0 0 1 12 5.5c6.7 0 10.4 6.5 10.4 6.5a18 18 0 0 1-3.4 4.2"/>'
+    + '<path d="M6.5 7.8A17.6 17.6 0 0 0 1.6 12S5.3 18.5 12 18.5a9.9 9.9 0 0 0 3.9-.8"/>'
+    + '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  route:'<path d="M6 19a3 3 0 0 1 0-6h12a3 3 0 0 0 0-6H8"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/>',
+  shield:'<path d="M12 3l7.5 3v5.6c0 4.6-3.1 8.2-7.5 9.4-4.4-1.2-7.5-4.8-7.5-9.4V6z"/><path d="M9.2 12.2l2 2 3.6-3.9"/>',
+  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+  userPlus:'<circle cx="9" cy="8" r="3.4"/><path d="M2.5 20v-1.2A4.8 4.8 0 0 1 7.3 14h3.4a4.8 4.8 0 0 1 4.8 4.8V20"/><path d="M18 8v6M15 11h6"/>',
+  target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  book:'<path d="M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h8M8 11h6"/>',
+  user:'<circle cx="12" cy="8" r="3.4"/><path d="M5 20v-1.2A4.8 4.8 0 0 1 9.8 14h4.4A4.8 4.8 0 0 1 19 18.8V20"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>',
+  chat:'<path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8.5 12h7M8.5 9h4"/>',
+  ticket:'<path d="M4 8.5V6.5h16v2a2.6 2.6 0 0 0 0 5.2v3.8H4v-3.8a2.6 2.6 0 0 0 0-5.2z"/><path d="M12 7v3M12 13.5v3.5"/>',
+  activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  megaphone:'<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/>',
+  medal:'<circle cx="12" cy="14" r="6"/><path d="M8.2 8.5 5 2h5l2.5 5M15.8 8.5 19 2h-5"/>',
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  lifebuoy:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="M5.6 5.6l3.8 3.8M14.6 14.6l3.8 3.8M18.4 5.6l-3.8 3.8M9.4 14.6l-3.8 3.8"/>',
+  trophy:'<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11"/><path d="M12 14v3M8.5 20h7l-.6-2.4H9.1z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5.3l3.4 2"/>',
+  upload:'<path d="M12 20V9M7.5 12.5 12 8l4.5 4.5"/><path d="M4.5 4.5h15"/>',
+  settings:'<circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.4.7z"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r="1"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+  truck:'<path d="M2 7h11v9H2z"/><path d="M13 10h4.5l3.5 3.5V16h-8z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  play:'<path d="M7 4.8 19 12 7 19.2z"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+  check:'<path d="M4.5 12.5 9.5 17.5 19.5 6.5"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  refresh:'<path d="M20 11a8 8 0 0 0-14-4.5L3.5 9"/><path d="M4 13a8 8 0 0 0 14 4.5L20.5 15"/><path d="M3.5 4.5V9H8M20.5 19.5V15H16"/>',
+  send:'<path d="M21 3 10.5 13.5M21 3l-7 18-3.5-7.5L3 10z"/>',
+  link:'<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.4-2.4a4 4 0 1 0-5.7-5.7L11.5 6.8"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.4 2.4a4 4 0 1 0 5.7 5.7l1.4-1.4"/>',
+  alert:'<path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4.4"/><circle cx="12" cy="17.3" r="1"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  image:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>',
+  pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
+  flag:'<path d="M5 21V4"/><path d="M5 5h10.5l-1.3 3.2L15.5 12H5z"/>',
+  arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  box:'<path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
+  gauge:'<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4.2-4.6"/><circle cx="12" cy="17" r="1.4"/>',
+  fuel:'<rect x="4" y="4" width="9" height="16" rx="2"/><path d="M13 9h3.5a2 2 0 0 1 2 2v5a1.8 1.8 0 0 0 3.5 0V9l-2.5-2.5"/>',
+  wrench:'<path d="M15 3.5a5.5 5.5 0 0 0-5 7.6L3.6 17.5a2 2 0 0 0 2.8 2.8l6.4-6.3A5.5 5.5 0 0 0 20 8.5l-3 1.7-2.5-1.4-.1-2.9z"/>',
+  trash:'<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  wifi:'<path d="M2.5 9a15 15 0 0 1 19 0"/><path d="M6 12.5a10 10 0 0 1 12 0"/><path d="M9.5 16a5 5 0 0 1 5 0"/><circle cx="12" cy="19.5" r="1.2"/>',
+  chevron:'<path d="M9 6l6 6-6 6"/>',
+  cpu:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/>',
+  download:'<path d="M12 3v11M7.5 10 12 14.5 16.5 10"/><path d="M4.5 19.5h15"/>',
+};
+function icon(n, cls = '') {
+  return `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || P.info}</svg>`;
+}
+
+/* The Gaming Nation emblem — gmn.jpg, the company's own artwork and the source
+   every icon in this client is derived from. Used where the company's face
+   belongs and nowhere else, so it keeps meaning "Gaming Nation" rather than
+   becoming decoration. The artwork is square; the box is square and crops
+   rather than stretches. */
+function gmnEmblem(size = 'md', cls = '') {
+  return `<span class="gmn-emblem ${esc(size)} ${esc(cls)}">
+    <img src="gmn.jpg" alt="Gaming Nation" width="1254" height="1254" loading="lazy">
+  </span>`;
+}
+
+/* Gaming Nation mark used in the sidebar */
+function brandLogo() {
+  /* Cropped to the truck: the full lock-up's wordmark is illegible at 30px,
+     and the name is already spelled out beside it. */
+  return `<img src="icons/mark.png" alt="Gaming Nation" class="brand-img">`;
+}
+
+/* ---------------- reference data ---------------- */
+const APP_VERSION = 'V1.1.9';   /* kept in step with package.json - scan.js fails if it drifts */
+
+/* The map itself — cities, roads, regions, projection — lives in
+   map-data.js, shared with the web platform. */
+
+
+
+/* ============================================================
+   LIVE TELEMETRY + POSITION
+   ------------------------------------------------------------
+   Reads the real game through the SCS telemetry SDK, exposed over
+   HTTP by a local telemetry server (the community "ETS2/ATS
+   Telemetry Server" — plugin DLL in <game>/bin/win_x64/plugins,
+   server listening on :25555). If that endpoint is not answering
+   the client falls back to the built-in simulator so the app is
+   still usable, and says which one it is using.
+
+   The server's payload is the same shape for both games:
+     game.gameName            "ETS2" | "ATS"
+     truck.placement.x/z      world position, metres
+     truck.placement.heading  0..1, 0 = north, increasing west
+     truck.speed              km/h
+     job.sourceCity/destinationCity/cargo/income
+     navigation.estimatedDistance   metres remaining
+   ============================================================ */
+
+
+
+/* ============================================================
+   WHERE THE TRUCK IS
+   ------------------------------------------------------------
+   The game reports the truck in its own metres. Turning that into a
+   place on a map needs one linear transform per game — and it only
+   needs solving once, because every map format is derived from it:
+
+     game metres  ->  real lat/lon  ->  whichever map is on screen
+
+   That is the whole point of keeping a single transform. Calibrating
+   on the road map used to leave the tile map wrong and the game map
+   wrong again, because each mode kept its own.
+
+   It calibrates itself. Every job the game hands out names the city
+   it starts in and the city it ends in, and the truck is standing in
+   those cities at those moments. Two of those samples, far enough
+   apart, solve the transform for good — so a driver never has to do
+   anything but drive.
+   ============================================================ */
+/* Where the game world sits, before anybody has lined anything up.
+
+   The truck was drawn only once this transform had been SOLVED on this
+   machine, from two jobs in cities far enough apart. Until that happened
+   the live map drew the roads, the cities and the region seams - and then
+   nothing at all where the driver was. No pin, no nearest city, "no
+   position" in the status bar, and a Line up button as the only hint that
+   any of it was connected. A driver with the game running, telemetry live
+   and a world X/Z on screen was looking at an empty continent.
+
+   It does not have to be learned per-machine to be useful, because the base
+   ETS2 world is the same world for every player. These numbers put Hamburg
+   at the world origin, and they land every sample taken here on the right
+   road. A solved transform still wins the moment one exists - this is the
+   starting point, not the answer.
+
+   ATS gets no entry: nothing here has measured that world, and inventing
+   numbers for it would put the pin somewhere confidently wrong, which is
+   worse than the honest blank. An ATS driver lines up the way everybody
+   used to, and the map now says so instead of going quiet. */
+const WORLD_GEO_DEFAULT = {
+  ets2: { sx: 0.000175828, ox: 9.99, sz: -0.000107084, oz: 53.55, estimate: true },
+};
+
+const Calib = {
+  all() {
+    const s = Store.db.settings;
+    s.worldGeo = s.worldGeo || {};
+    return s.worldGeo;
+  },
+
+  /* what this client worked out for itself, if anything */
+  learned(game) {
+    const c = this.all()[game === 'ats' ? 'ats' : 'ets2'];
+    return (c && typeof c.sx === 'number' && typeof c.sz === 'number') ? c : null;
+  },
+  get(game) {
+    return this.learned(game) || WORLD_GEO_DEFAULT[game === 'ats' ? 'ats' : 'ets2'] || null;
+  },
+  /* ready: a pin can be placed at all. exact: it is this machine's own fit
+     rather than the built-in estimate. The map needs to tell them apart -
+     one decides whether anything is drawn, the other what the button says. */
+  ready(game) { return !!this.get(game); },
+  exact(game) { return !!this.learned(game); },
+
+  /* game metres -> [lat, lon] */
+  toGeo(game, x, z) {
+    const c = this.get(game);
+    if (!c) return null;
+    const lat = c.oz + z * c.sz;
+    const lon = c.ox + x * c.sx;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return [lat, lon];
+  },
+
+  /* two samples give scale and offset on each axis */
+  solve(points) {
+    if (!points || points.length < 2) return null;
+    /* use the widest-apart pair, which is the most accurate fit available */
+    let best = null, bestSpread = 0;
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const a = points[i], b = points[j];
+        const spread = Math.min(Math.abs(b.wx - a.wx), Math.abs(b.wz - a.wz));
+        if (spread > bestSpread) { bestSpread = spread; best = [a, b]; }
+      }
+    }
+    if (!best) return null;
+    const [a, b] = best;
+    const dwx = b.wx - a.wx, dwz = b.wz - a.wz;
+    /* two samples in nearly the same place say nothing about scale */
+    if (Math.abs(dwx) < 2000 || Math.abs(dwz) < 2000) return null;
+    const sx = (b.lon - a.lon) / dwx;
+    const sz = (b.lat - a.lat) / dwz;
+    if (!Number.isFinite(sx) || !Number.isFinite(sz) || sx === 0 || sz === 0) return null;
+    return {
+      sx, ox: a.lon - a.wx * sx,
+      sz, oz: a.lat - a.wz * sz,
+      points: points.slice(-6),
+      at: new Date().toISOString(),
+    };
+  },
+
+  points(game) {
+    const c = this.all()[game === 'ats' ? 'ats' : 'ets2'];
+    return (c && c.points) ? c.points.slice() : [];
+  },
+
+  /* record "the truck was here, and here is where that really is" */
+  addSample(game, sample, why) {
+    const key = game === 'ats' ? 'ats' : 'ets2';
+    const store = this.all();
+    const points = this.points(game);
+
+    /* a sample from the same spot adds nothing */
+    if (points.some((p) => Math.hypot(p.wx - sample.wx, p.wz - sample.wz) < 1500)) return false;
+    points.push(sample);
+
+    const solved = this.solve(points);
+    if (solved) {
+      store[key] = solved;
+      Store.log('ok', 'Map position calibrated from ' + (why || 'two known places')
+        + ' — the truck is now placed for real');
+      toast('Map calibrated', 'ok', 'Your position is now accurate on every map');
+    } else {
+      store[key] = Object.assign({}, store[key], { points });
+      Store.log('info', 'Position reference taken at ' + (sample.city || 'a known place')
+        + ' — one more, further away, completes the calibration');
+    }
+    Store.save();
+    return !!solved;
+  },
+
+  /* a city named by the game is a place we know the real coordinates of */
+  sampleFromCity(game, cityName, world, why) {
+    if (!cityName || !world) return false;
+    const geo = geoFor(game);
+    const name = matchCity(game, cityName);
+    if (!name) return false;
+    const [lat, lon] = geo[name];
+    return this.addSample(game, {
+      wx: world.x, wz: world.z, lat, lon, city: name,
+    }, why);
+  },
+
+  reset(game) {
+    delete this.all()[game === 'ats' ? 'ats' : 'ets2'];
+    Store.save();
+  },
+};
+
+/* the game writes city names its own way; match them to the table loosely */
+function matchCity(game, raw) {
+  const geo = geoFor(game);
+  if (geo[raw]) return raw;
+  const norm = (s) => String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const want = norm(raw);
+  if (!want) return null;
+  for (const name in geo) if (norm(name) === want) return name;
+  for (const name in geo) if (norm(cityLabel(name)) === want) return name;
+  /* "Frankfurt am Main" against "Frankfurt", and the other way round */
+  for (const name in geo) {
+    const n = norm(name);
+    if (n.length > 3 && (want.startsWith(n) || n.startsWith(want))) return name;
+  }
+  return null;
+}
+
+/* Solve scale+offset from two calibration samples. */
+function solveCalibration(points) {
+  if (!points || points.length < 2) return null;
+  const a = points[points.length - 2], b = points[points.length - 1];
+  const dwx = b.wx - a.wx, dwz = b.wz - a.wz;
+  if (Math.abs(dwx) < 1 || Math.abs(dwz) < 1) return null;   /* too close to solve */
+  const sx = (b.mx - a.mx) / dwx;
+  const sz = (b.mz - a.mz) / dwz;
+  return { sx, ox: a.mx - a.wx * sx, sz, oz: a.mz - a.wz * sz, points: points.slice(-2) };
+}
+
+const COMPASS = ['N', 'NW', 'W', 'SW', 'S', 'SE', 'E', 'NE'];
+const headingLabel = (h) => COMPASS[Math.round((h % 1) * 8) % 8];
+
+/* ---------- telemetry source ---------- */
+const Telemetry = {
+  mode: 'off',              /* off | live | sim */
+  lastError: null,
+  lastFrame: null,
+  poll: null,
+  consecutiveFailures: 0,
+  diagnostics: null,      /* the adapter's own account of itself — see diagnose() */
+  adapter: null,          /* what the desktop shell says about the adapter process */
+  diagnosedAt: 0,
+
+  /* IS THIS TRUCK ON THE ROAD RIGHT NOW?
+
+     A pin on the map is a claim that somebody is there at this moment,
+     and the map was drawing one whenever db.live merely existed. One
+     frame - a driver who started the game, was seen once, and closed it -
+     left a pin sitting on the map at 0 km/h with their name on it for the
+     rest of the session, and the crew had no way to tell it from somebody
+     genuinely parked in a lay-by.
+
+     Two conditions, because either alone lies. The link being "live" says
+     the poll is running, not that anything answered it; a frame's age says
+     the last answer was recent, but a frame kept from before the link
+     dropped is recent-ish for a while after it did. */
+  FRESH_MS: 15000,
+  onRoad() {
+    const live = Store.db.live;
+    if (this.mode !== 'live' || !live) return false;
+    const at = new Date(live.at || 0).getTime();
+    return Number.isFinite(at) && (Date.now() - at) < this.FRESH_MS;
+  },
+
+  endpoint() {
+    const s = Store.db.settings;
+    let host = (s.telemetryHost || '127.0.0.1').trim()
+      .replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+    /* "localhost" is not a synonym for this machine here, it is a way to
+       fail. The adapter binds 127.0.0.1 — that literal IPv4 address — while
+       Windows resolves localhost to ::1 first, and nothing is listening
+       there. Measured against the running adapter:
+
+         127.0.0.1   answers in 0.10s
+         localhost   answers in 0.22s
+         [::1]       refuses, and takes 2.04s to say so
+
+       fetchFrame() aborts at 1500ms. So when the IPv6 attempt is the one
+       that happens, the poll gives up BEFORE it ever reaches IPv4 — the
+       adapter is running, answering, and the client calls it timed out.
+
+       Rewritten rather than only defaulted, so an install that already has
+       "localhost" saved in its settings is fixed without anybody having to
+       go and change it. A real host — a PC's LAN address, from a phone —
+       passes through untouched. */
+    if (/^(localhost|\[?::1\]?)$/i.test(host)) host = '127.0.0.1';
+
+    const port = (s.telemetryPort || '25555').trim();
+    const game = s.game === 'ats' ? 'ats' : 'ets2';
+    return 'http://' + host + ':' + port + '/api/' + game + '/telemetry';
+  },
+
+  /* Where the adapter says what it can and cannot see.
+
+     The frame endpoint can only say "not connected". This one says why —
+     which memory maps exist, which is being read, which were found but not
+     understood, and where the plugin DLL has to go. It is the difference
+     between a dead end and something a driver can act on. */
+  diagnosticsUrl() {
+    return this.endpoint().replace(/\/api\/(ets2|ats)\/telemetry$/, '/api/diagnostics');
+  },
+
+  async diagnose() {
+    /* The desktop shell owns the adapter process and knows the one thing the
+       HTTP endpoint can never say: that there is nothing listening because
+       the adapter is not running at all. Ask it first — that answer beats
+       anything the fetch below can return. */
+    const D = window.gmnDesktop;
+    if (D && D.adapterStatus) {
+      try { this.adapter = await D.adapterStatus(); }
+      catch (e) { this.adapter = null; }
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    try {
+      const res = await fetch(this.diagnosticsUrl(), { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      this.diagnostics = body;
+      return body;
+    } catch (e) {
+      clearTimeout(timer);
+      /* An adapter too old to have this endpoint 404s, which is not an
+         error worth showing — it just means there is nothing more to say. */
+      this.diagnostics = null;
+      return null;
+    }
+  },
+
+  /* one poll of the real server; resolves null when it is not there */
+  async fetchFrame() {
+    const url = this.endpoint();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1500);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return this.normalise(await res.json());
+    } catch (e) {
+      clearTimeout(timer);
+      this.lastError = e.name === 'AbortError' ? 'timed out' : e.message;
+      return null;
+    }
+  },
+
+  /* map the server payload onto the shape the app uses */
+  normalise(raw) {
+    const t = raw.truck || {};
+    const p = t.placement || {};
+    const j = raw.job || {};
+    const g = raw.game || {};
+    const n = raw.navigation || {};
+    return {
+      at: Date.now(),
+      connected: g.connected !== false,
+      paused: !!g.paused,
+      game: (g.gameName || '').toUpperCase().indexOf('ATS') > -1 ? 'ats' : 'ets2',
+      truck: {
+        make: t.make || '', model: t.model || '',
+        speed: Math.max(0, Math.round(t.speed || 0)),
+        fuel: t.fuelCapacity ? clamp((t.fuel / t.fuelCapacity) * 100, 0, 100) : null,
+        damage: t.wearEngine != null
+          ? clamp(Math.max(t.wearEngine, t.wearTransmission || 0, t.wearCabin || 0,
+              t.wearChassis || 0, t.wearWheels || 0) * 100, 0, 100)
+          : null,
+        odometer: t.odometer || 0,
+        engineOn: !!t.engineOn,
+      },
+      pos: { x: p.x || 0, y: p.y || 0, z: p.z || 0, heading: p.heading || 0 },
+      cargoLoaded: !!(raw.trailer && raw.trailer.attached),
+
+      /* The game's own onJob flag decides this when the adapter sends one.
+         The string test stays for telemetry servers that do not report it —
+         but it is no longer the only thing standing between an empty truck
+         and a fabricated delivery. */
+      job: (j.onJob || j.cargo || j.destinationCity) ? {
+        cargo: j.cargo || '', income: j.income || 0,
+        from: j.sourceCity || '', to: j.destinationCity || '',
+        fromCompany: j.sourceCompany || '', toCompany: j.destinationCompany || '',
+        remainingKm: n.estimatedDistance ? Math.round(n.estimatedDistance / 1000) : null,
+
+        /* the run's real length, straight from the game, instead of the
+           longest "distance remaining" this client happened to observe */
+        plannedKm: j.plannedDistanceKm ? Math.round(j.plannedDistanceKm) : null,
+        weight: j.cargoMass ? +(j.cargoMass / 1000).toFixed(1) : 0,
+        cargoDamage: j.cargoDamage != null ? clamp(j.cargoDamage * 100, 0, 100) : null,
+        delivered: !!j.delivered,
+        cancelled: !!j.cancelled,
+      } : null,
+      speedLimit: n.speedLimit || null,
+    };
+  },
+
+  start() {
+    this.stop();
+    const rate = Math.max(250, Number(Store.db.settings.pollRate || 400));
+    this.poll = setInterval(() => this.step(), rate);
+    this.step();
+  },
+  stop() {
+    if (this.poll) { clearInterval(this.poll); this.poll = null; }
+  },
+
+  async step() {
+    const db = Store.db;
+    if (!db.settings.liveTelemetry) return;
+
+    const frame = await this.fetchFrame();
+
+    if (!frame) {
+      this.consecutiveFailures++;
+      /* three misses before demoting, so a single dropped poll is ignored */
+      if (this.mode === 'live' && this.consecutiveFailures >= 3) {
+        this.mode = 'off';
+        db.conn.telemetry = 'searching';
+        /* Same reasoning as GameWatch.ended(): no frames means no idea what
+           the truck is doing, and the honest answer to that is nothing, not
+           whatever it was doing when the last frame landed. This is the path
+           where the game is still running and only the plugin went quiet. */
+        db.activityState = null;
+        Store.log('warn', 'Lost the telemetry server (' + this.lastError + ')');
+        /* on the desktop the process watch has the final say on whether the
+           game is really gone; in a browser this is the only signal there is */
+        GameWatch.ended('telemetry');
+        Store.save();
+        render();
+      }
+      return;
+    }
+
+    this.consecutiveFailures = 0;
+    if (this.mode !== 'live') {
+      this.mode = 'live';
+      db.conn.telemetry = 'live';
+      db.conn.link = 'connected';
+      Store.log('ok', 'Live telemetry connected — ' + mapFor(frame.game).label);
+      GameWatch.began(frame.game, 'telemetry');
+        /* a profile can be switched between sessions, and the game has just
+           told us it is running - so this is the moment to look again */
+        GameProfiles.detect();
+      Store.save();
+      render();
+    }
+    this.apply(frame);
+  },
+
+  /* fold a live frame into the app state */
+  apply(frame) {
+    const db = Store.db;
+    this.lastFrame = frame;
+
+    /* one transform, and every map format is derived from it */
+    const geo = Calib.toGeo(frame.game, frame.pos.x, frame.pos.z);
+    const ll = geo ? geoToGameLatLng(frame.game, geo[0], geo[1]) : null;
+    const mx = ll ? ll.lng : null;
+    const mz = ll ? -ll.lat : null;
+
+    db.live = {
+      at: frame.at,
+      game: frame.game,
+      world: { x: frame.pos.x, z: frame.pos.z },
+      map: (mx == null) ? null : { x: mx, z: mz },
+      geo,                                   /* [lat, lon], or null until calibrated */
+      truck: [frame.truck.make, frame.truck.model].filter(Boolean).join(' '),
+      heading: frame.pos.heading,
+      speed: frame.truck.speed,
+      speedLimit: frame.speedLimit,
+      near: (mx == null) ? null : nearestCity(frame.game, mx, mz),
+      paused: frame.paused,
+
+      /* These are properties of the truck, and the truck exists whether or
+         not a load is aboard. Keeping them on the job alone is why the fuel
+         and damage dials read "—" for a driver sitting in a running game
+         with nothing booked. */
+      fuel: frame.truck.fuel,
+      damage: frame.truck.damage,
+      odometer: frame.truck.odometer,
+      engineOn: frame.truck.engineOn,
+      cargoLoaded: frame.cargoLoaded,
+    };
+
+    /* Whether this position is one the base map can explain. It is the only
+       evidence anything has that a map mod is loaded rather than merely
+       sitting on the disk. */
+    if (mx != null) MapMods.seen(frame.game, mx, mz);
+
+    /* breadcrumb trail, thinned so it stays cheap to draw. The schematic
+       trail is in map units; the tile map needs raw world coords because its
+       transform is learned separately. */
+    db.trail = db.trail || [];
+    if (mx != null) {
+      const last = db.trail[db.trail.length - 1];
+      if (!last || Math.hypot(last[0] - mx, last[1] - mz) > 1.2) {
+        db.trail.push([+mx.toFixed(1), +mz.toFixed(1)]);
+        if (db.trail.length > 400) db.trail = db.trail.slice(-400);
+      }
+    }
+    db.worldTrail = db.worldTrail || [];
+    const lastW = db.worldTrail[db.worldTrail.length - 1];
+    if (!lastW || Math.hypot(lastW[0] - frame.pos.x, lastW[1] - frame.pos.z) > 40) {
+      db.worldTrail.push([Math.round(frame.pos.x), Math.round(frame.pos.z)]);
+      if (db.worldTrail.length > 600) db.worldTrail = db.worldTrail.slice(-600);
+    }
+
+    /* the driver record follows whatever they are actually driving */
+    const truckName = [frame.truck.make, frame.truck.model].filter(Boolean).join(' ');
+    if (truckName && db.driver && db.driver.truck !== truckName) {
+      db.driver.truck = truckName;
+      Store.log('info', 'Driving a ' + truckName);
+    }
+
+    this.syncJob(frame);
+    JobTracker.observe(frame);
+    this.deriveActivity(frame);
+    Siren.check(frame.truck.speed);
+
+    if (state.view === 'livemap') paintLiveMap();
+    else if (state.view === 'dashboard') { paintLiveJob(); paintLiveDrivers(); }
+
+    /* the screen follows every frame, but writing the run out is throttled to
+       the live job update interval — a full serialise every second is waste */
+    const every = (Number(db.settings.jobUpdateSec) || 10) * 1000;
+    if (this.savedAt == null || Date.now() - this.savedAt >= every) {
+      this.savedAt = Date.now();
+      Store.save();
+    }
+  },
+
+  /* a job starting or finishing is structural, so it is written out at once */
+  saveNow() { this.savedAt = Date.now(); Store.save(); },
+
+  /* a job appearing/disappearing in telemetry drives the run automatically */
+  syncJob(frame) {
+    const db = Store.db;
+
+    if (frame.job && !db.job) {
+      /* The game knows how long the run is. Falling back to "distance
+         remaining at the moment we noticed" made every progress bar wrong
+         for any job picked up after the truck had already set off. */
+      const km = frame.job.plannedKm || frame.job.remainingKm || 0;
+      db.job = {
+        id: 'JOB-' + randI(4300, 4999),
+        from: frame.job.from || (db.live.near ? db.live.near.city : '—'),
+        to: frame.job.to || '—',
+        cargo: frame.job.cargo || 'Cargo',
+        trailer: 'From game', weight: frame.job.weight || 0,
+        km: km || 1, drivenKm: 0,
+        income: frame.job.income || 0,
+        market: 'In-game job',
+        started: new Date().toISOString(),
+        speed: frame.truck.speed || 80,
+        damage: frame.truck.damage != null ? frame.truck.damage : 0,
+        fuel: frame.truck.fuel != null ? frame.truck.fuel : 100,
+        status: 'driving',
+        live: true,
+        odoKm: 0,
+        events: [],
+        avgSpeed: 0,
+        top: 0,
+        etaMin: null,
+      };
+      Store.log('ok', 'Job detected in game — ' + db.job.from + ' to ' + db.job.to +
+        (km ? ' (' + km + ' km to run)' : ''));
+      /* the truck is standing in the source city right now, and we know where
+         that city really is — a free calibration reference */
+      Calib.sampleFromCity(frame.game, frame.job.from, frame.pos, 'the city this job started in');
+      toast('Run detected: ' + db.job.from + ' → ' + db.job.to, 'ok');
+
+      /* the run begins the moment the game hands it out, so the company hears
+         about it now rather than on the next heartbeat */
+      JobTracker.reset(db.job.id);
+      JobTracker.note(db.job, 'pickup',
+        'Picked up ' + db.job.cargo + ' in ' + cityLabel(db.job.from), 'ok', 'box');
+      Fleet.emit('job.start',
+        db.driver.name + ' picked up ' + db.job.cargo + ' in ' + cityLabel(db.job.from)
+        + ' for ' + cityLabel(db.job.to), 'ok');
+      Fleet.pushNow();
+
+      this.saveNow();
+      render();
+      return;
+    }
+
+    if (frame.job && db.job && db.job.live) {
+      const j = db.job;
+      j.speed = frame.truck.speed || j.speed;
+      if (frame.truck.fuel != null) j.fuel = frame.truck.fuel;
+      if (frame.truck.damage != null) j.damage = frame.truck.damage;
+      if (frame.job.cargoDamage != null) j.cargoDamage = frame.job.cargoDamage;
+      if (frame.job.income) j.income = frame.job.income;
+      if (frame.job.weight) j.weight = frame.job.weight;
+      /* the game cancelled it; remember that, so the run is not filed as
+         delivered when it disappears from telemetry a frame later */
+      if (frame.job.cancelled) j.cancelled = true;
+
+      /* The planned length is the truth about how long this run is, and it
+         arrives with the job rather than being discovered by watching the
+         sat-nav. Progress still comes from distance remaining — the total
+         and the position along it are two different questions. */
+      if (frame.job.plannedKm) j.km = Math.max(frame.job.plannedKm, 1);
+
+      if (frame.job.remainingKm != null) {
+        /* with no planned length, the longest "remaining + driven" ever seen
+           is the best available estimate of the whole run */
+        if (!frame.job.plannedKm) {
+          j.km = Math.max(j.km, frame.job.remainingKm + j.drivenKm, 1);
+        }
+        j.drivenKm = clamp(j.km - frame.job.remainingKm, 0, j.km);
+      }
+      if (frame.job.to && j.to !== frame.job.to) j.to = frame.job.to;
+      return;
+    }
+
+    /* The game said this run was called off. Filing it as a delivery
+       because it then vanished from telemetry would pay for work nobody
+       did. */
+    if (!frame.job && db.job && db.job.live && db.job.cancelled) {
+      Store.log('warn', 'The game cancelled this job — not recording a delivery');
+      GameLink.cancelJob();
+      return;
+    }
+
+    /* job gone from telemetry while we were running one = delivered */
+    if (!frame.job && db.job && db.job.live) {
+      Store.log('ok', 'Job no longer in game — treating as delivered');
+      /* delivered, so the truck is standing in the destination city */
+      Calib.sampleFromCity(frame.game, db.job.to, frame.pos, 'the city this job ended in');
+      /* the game itself ended this run — the strongest evidence there is that
+         it was really delivered, and worth recording as such */
+      db.job.closedBy = 'telemetry';
+      GameLink.completeJob();
+    }
+  },
+
+  /* "on the road delivering" derived from live values, not guessed */
+  deriveActivity(frame) {
+    const db = Store.db;
+    const moving = frame.truck.speed >= 5;
+    const hasJob = !!frame.job;
+    let next;
+    if (frame.paused) next = 'paused';
+    else if (hasJob && moving) next = 'delivering';
+    else if (hasJob) next = 'stopped';
+    else if (moving) next = 'driving';
+    else next = 'idle';
+
+    if (db.activityState !== next) {
+      const before = db.activityState;
+      db.activityState = next;
+      const words = {
+        delivering: 'On the road delivering',
+        stopped: 'Stopped with a load aboard',
+        driving: 'Driving without a job',
+        paused: 'Game paused',
+        idle: 'Parked',
+      };
+      /* only worth a log line once the client has settled */
+      if (before) Store.log('info', words[next]);
+      /* rolling away, or pulling up, is exactly the sort of change the fleet
+         board should show at once rather than up to a heartbeat later */
+      if (before) Fleet.pushNow();
+    }
+  },
+};
+
+
+
+/* ============================================================
+   THE RUN, AS IT HAPPENS
+   ------------------------------------------------------------
+   Telemetry above says what the truck is doing right now. This
+   turns that into what the *run* is doing — the part a driver and
+   a dispatcher actually care about.
+
+   Three things it does that a raw frame cannot:
+
+   Distance that is real. The game reports how far is left to the
+   drop, which jumps about when a route is recalculated and says
+   nothing at all when the sat-nav is off. The odometer never lies,
+   so distance driven is integrated from it and the game's figure
+   is used only to know how long the run is.
+
+   An arrival time worth reading. Using current speed means the ETA
+   reads "never" at a red light and "twelve minutes" downhill. This
+   keeps a rolling average of the last stretch of actual movement,
+   which is what a driver would estimate with themselves.
+
+   A timeline. Everything notable that happens on a run — picked
+   up, quarter done, over the limit, took a knock, low on fuel,
+   delivered — is stamped and kept with the run, shown live on the
+   dashboard and pushed to the company as it happens.
+   ============================================================ */
+const JobTracker = {
+  samples: [],           /* rolling {at, speed} while actually moving */
+  lastOdo: null,
+  lastDamage: null,
+  jobId: null,
+  milestones: null,
+  warned: null,
+  SAMPLE_MS: 300000,     /* the last five minutes of driving is the estimate */
+
+  reset(jobId) {
+    this.jobId = jobId || null;
+    this.samples = [];
+    this.lastOdo = null;
+    this.lastDamage = null;
+    this.pushedPct = null;
+    this.milestones = new Set();
+    this.warned = {};
+    /* what the run can later be checked against */
+    this.frames = 0;
+    this.movingFrames = 0;
+    this.odoStart = null;
+    this.odoEnd = null;
+    this.firstAt = null;
+  },
+
+  /* ---- evidence ----
+     A delivery is a claim about money, so it travels with what the telemetry
+     actually saw rather than being taken on trust. None of this is a judgment
+     — it is the raw counts, and the platform decides what they mean. Keeping
+     the judging on the other side means a tampered client cannot mark its own
+     run as verified; the worst it can do is lie about the numbers, and the
+     numbers still have to agree with each other. */
+  evidence(job) {
+    const first = this.firstAt || (job.started ? new Date(job.started).getTime() : null);
+    return {
+      telemetry: this.frames > 0,
+      frames: this.frames,               /* telemetry frames seen on this run */
+      movingFrames: this.movingFrames,   /* how many of them had the truck moving */
+      odoStart: this.odoStart,
+      odoEnd: this.odoEnd,
+      odoKm: Math.round(job.odoKm || 0),  /* distance the odometer actually turned */
+      topSpeed: Math.round(job.top || 0),
+      avgSpeed: Math.round(job.avgSpeed || 0),
+      firstFrameAt: first ? new Date(first).toISOString() : null,
+      lastFrameAt: new Date().toISOString(),
+      sessionId: Sessions.id || null,
+      closedBy: job.closedBy || 'telemetry',
+      client: APP_VERSION,
+    };
+  },
+
+  /* km/h averaged over recent movement. Standstill is excluded on purpose:
+     a driver stopped at a weighbridge has not become slower, they have
+     stopped, and the arrival estimate should not collapse because of it. */
+  averageSpeed() {
+    const cut = Date.now() - this.SAMPLE_MS;
+    this.samples = this.samples.filter((s) => s.at >= cut);
+    const moving = this.samples.filter((s) => s.speed >= 5);
+    if (!moving.length) return null;
+    return moving.reduce((t, s) => t + s.speed, 0) / moving.length;
+  },
+
+  /* minutes to the drop, or null when there is nothing to base it on */
+  etaMinutes(job) {
+    if (!job) return null;
+    const left = Math.max(0, (job.km || 0) - (job.drivenKm || 0));
+    if (left <= 0) return 0;
+    /* the rolling average first, then whatever the run has averaged overall,
+       and only then the speed of the moment */
+    const avg = this.averageSpeed()
+      || (job.avgSpeed && job.avgSpeed > 5 ? job.avgSpeed : null)
+      || (job.speed >= 5 ? job.speed : null);
+    if (!avg) return null;
+    return left / avg * 60;
+  },
+
+  /* how far this run has actually been driven, in km */
+  drivenFromOdometer(frame) {
+    const odo = frame.truck.odometer;
+    if (!odo) return 0;
+    if (this.lastOdo == null) { this.lastOdo = odo; return 0; }
+    const step = odo - this.lastOdo;
+    this.lastOdo = odo;
+    /* a profile change, a teleport or a new game session resets the odometer;
+       an implausible jump is not distance driven */
+    if (!(step > 0) || step > 20) return 0;
+    return step;
+  },
+
+  /* called on every telemetry frame, live job or not */
+  observe(frame) {
+    const db = Store.db;
+    const job = db.job;
+
+    this.samples.push({ at: frame.at, speed: frame.truck.speed });
+    if (this.samples.length > 2000) this.samples = this.samples.slice(-1200);
+
+    if (!job || !job.live) {
+      if (this.jobId) this.reset(null);
+      return;
+    }
+    if (this.jobId !== job.id) this.reset(job.id);
+
+    /* --- what was actually seen, for the run to be checked against later --- */
+    this.frames++;
+    if (frame.truck.speed >= 5) this.movingFrames++;
+    if (this.firstAt == null) this.firstAt = frame.at;
+    if (frame.truck.odometer) {
+      if (this.odoStart == null) this.odoStart = Math.round(frame.truck.odometer);
+      this.odoEnd = Math.round(frame.truck.odometer);
+    }
+
+    /* --- distance --- */
+    const step = this.drivenFromOdometer(frame);
+    job.odoKm = (job.odoKm || 0) + step;
+
+    /* The game's own "distance remaining" is authoritative when the sat-nav
+       has a route; the odometer covers the case where it does not. */
+    if (frame.job && frame.job.remainingKm == null && job.km) {
+      job.drivenKm = clamp(job.odoKm, 0, job.km);
+    }
+
+    /* --- the estimate --- */
+    const avg = this.averageSpeed();
+    if (avg) job.avgSpeed = Math.round(avg);
+    job.etaMin = this.etaMinutes(job);
+    job.top = Math.max(job.top || 0, frame.truck.speed);
+
+    /* --- keep the rest of the company current ---
+       A heartbeat alone is not enough for a progress bar: between beats the
+       truck covers real ground and every other screen still shows where it
+       was. So a run that has actually moved on is pushed as it moves. One
+       percent is about a kilometre on a typical run, and Fleet.pushNow will
+       not send more than about once a second however often this fires. */
+    const pct = GameLink.progress(job);
+    if (this.pushedPct == null || Math.abs(pct - this.pushedPct) >= 1) {
+      this.pushedPct = pct;
+      Fleet.pushNow();
+    }
+
+    /* --- the timeline --- */
+    [25, 50, 75].forEach((m) => {
+      if (pct >= m && !this.milestones.has(m)) {
+        this.milestones.add(m);
+        this.note(job, 'milestone' + m, m + '% of the way to ' + cityLabel(job.to), 'info', 'flag');
+      }
+    });
+
+    const limit = Number(db.settings.sirenSpeedLimit) || 95;
+    if (frame.truck.speed > limit + 10 && !this.recently('speeding', 120000)) {
+      this.note(job, 'speeding', 'Over the limit — ' + frame.truck.speed + ' km/h', 'warn', 'alert');
+      Fleet.emit('job.speeding',
+        db.driver.name + ' is running at ' + frame.truck.speed + ' km/h', 'warn');
+    }
+
+    if (frame.truck.damage != null) {
+      if (this.lastDamage != null && frame.truck.damage - this.lastDamage > 1.5) {
+        this.note(job, 'damage', 'Took a knock — damage now '
+          + frame.truck.damage.toFixed(1) + '%', 'err', 'alert');
+        Fleet.emit('job.damage',
+          db.driver.name + ' took damage on the run to ' + cityLabel(job.to), 'warn');
+      }
+      this.lastDamage = frame.truck.damage;
+    }
+
+    if (frame.truck.fuel != null && frame.truck.fuel < 12 && !this.warned.fuel) {
+      this.warned.fuel = true;
+      this.note(job, 'fuel', 'Low on fuel — ' + Math.round(frame.truck.fuel) + '%', 'warn', 'alert');
+    }
+    if (frame.truck.fuel != null && frame.truck.fuel > 40) this.warned.fuel = false;
+  },
+
+  recently(kind, within) {
+    const job = Store.db.job;
+    if (!job || !job.events) return false;
+    const last = job.events.filter((e) => e.kind === kind).pop();
+    return !!last && Date.now() - new Date(last.at).getTime() < within;
+  },
+
+  /* One line on the run's own timeline. The kind is given rather than derived
+     from the wording — recently() is what stops a warning repeating every
+     frame it is true, and it can only work if the kind is stable. */
+  note(job, kind, text, level, glyph) {
+    job.events = job.events || [];
+    job.events.push({
+      kind: kind || 'note',
+      text, level: level || 'info', glyph: glyph || 'info',
+      at: new Date().toISOString(),
+      km: Math.round(job.drivenKm || 0),
+    });
+    if (job.events.length > 60) job.events = job.events.slice(-60);
+    Store.log(level === 'err' ? 'err' : level === 'warn' ? 'warn' : 'info', text);
+    if (state.view === 'dashboard') paintRunTimeline();
+  },
+};
+
+
+/* ============================================================
+   REAL-WORLD MAP + FLEET POSITIONS
+   ------------------------------------------------------------
+   ETS2's map is a compressed Europe and ATS is the western US, so
+   ordinary road tiles make a perfectly good backdrop: convert the
+   game's world metres to latitude/longitude and every driver lands
+   on a real map with real roads and city names.
+
+   The conversion is learned, not assumed. Park in a city, pick it
+   from the list, repeat once elsewhere — two correspondences solve
+   a linear fit, which is accurate enough across one game map to
+   place a truck on the right road.
+   ============================================================ */
+
+/* Real coordinates of the cities each game ships, used as calibration
+   anchors and to label the map. */
+/* ============================================================
+   Fleet — where everyone else is
+   ------------------------------------------------------------
+   Each client pushes its own position to the Gaming Nation fleet service and
+   pulls back everyone else's. Run fleet-server.js (no dependencies)
+   or point it at your own endpoint. With no server configured there
+   is nobody to show, and the view says so rather than inventing a crew.
+   ============================================================ */
+const Fleet = {
+  drivers: [],        /* [{id,name,game,x,z,heading,speed,job,at,self}] */
+  timer: null,
+  online: false,
+  lastError: null,
+
+  endpoint() {
+    const url = (Store.db.settings.fleetUrl || '').trim();
+    /* same rule as the company record: a page served by the service uses it */
+    return url ? url.replace(/\/$/, '') : defaultServiceUrl();
+  },
+  enabled() { return !!this.endpoint(); },
+
+  start() {
+    this.stop();
+    /* Two loops, doing different jobs. The heartbeat says "still here" often
+       enough that the service never expires us — but a driver's truck does not
+       wait for a heartbeat: anything that actually changes is pushed the moment
+       it happens (see pushNow). And the pull is now only a safety net, because
+       everyone else arrives down the live stream instead. */
+    const s = Store.db.settings;
+    const beat = Number(s.heartbeatSec) ? Number(s.heartbeatSec) * 1000 : Number(s.fleetRate) || 15000;
+    this.timer = setInterval(() => this.step(), Math.max(2000, beat));
+    Realtime.start();
+    this.step();
+  },
+  stop() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; }
+    Realtime.stop();
+  },
+
+  /* everything the rest of the company needs to draw this driver live */
+  frame() {
+    const db = Store.db;
+    const live = db.live;
+    if (!live) return null;
+    /* Location sharing off: nothing about where this truck is leaves the
+       machine. Deliveries and sessions go through emit(), which is a
+       different road, so the driver's record is untouched by this. */
+    if (!db.settings.shareLocation) return null;
+    const job = db.job;
+    return {
+      id: db.driver.gmnId,
+      name: db.driver.name,
+      game: live.game,
+      x: live.world.x, z: live.world.z,
+      lat: live.geo ? live.geo[0] : undefined,
+      lon: live.geo ? live.geo[1] : undefined,
+      heading: live.heading,
+      speed: live.speed,
+      state: db.activityState || 'idle',
+      truck: (live.truck || (db.driver && db.driver.truck) || ''),
+      /* which world this position is in, so the crew map does not draw a
+         driver in Australia somewhere in Belgium */
+      mapMod: MapMods.label() || undefined,
+      mapModState: MapMods.state() || undefined,
+      fuel: job && Number.isFinite(+job.fuel) ? +job.fuel : undefined,
+      damage: job && Number.isFinite(+job.damage) ? +job.damage : undefined,
+      job: job ? {
+        id: job.id,
+        from: job.from, to: job.to, cargo: job.cargo,
+        weight: job.weight || 0,
+        km: job.km, drivenKm: job.drivenKm,
+        progress: GameLink.progress(job),
+        etaMin: JobTracker.etaMinutes(job),
+        income: job.income || 0,
+      } : null,
+    };
+  },
+
+  /* Push straight away, but never more than a few times a second however
+     often it is called — a job update, a state change and a heartbeat can all
+     land in the same tick and there is no sense sending three. */
+  pushTimer: null,
+  pushQueued: false,
+  lastPush: 0,
+  MIN_PUSH_MS: 900,
+
+  pushNow() {
+    if (!this.enabled()) return;
+    const since = Date.now() - this.lastPush;
+    if (since < this.MIN_PUSH_MS) {
+      if (this.pushQueued) return;
+      this.pushQueued = true;
+      this.pushTimer = setTimeout(() => {
+        this.pushQueued = false;
+        this.pushNow();
+      }, this.MIN_PUSH_MS - since);
+      return;
+    }
+    this.lastPush = Date.now();
+    const body = this.frame();
+    if (!body) return;
+    fetch(this.endpoint() + '/api/fleet/position', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => { /* the stream's own state reports the outage */ });
+  },
+
+  /* tell the company something happened on this run. Fire and forget: a run
+     is never held up because the service is unreachable. */
+  emit(kind, text, level, extra) {
+    if (!this.enabled()) return;
+    const db = Store.db;
+    const job = db.job;
+    const body = Object.assign({
+      kind,
+      driverId: db.driver ? db.driver.gmnId : '',
+      driver: db.driver ? db.driver.name : '',
+      text: text || '',
+      level: level || 'info',
+      from: job ? job.from : '',
+      to: job ? job.to : '',
+      cargo: job ? job.cargo : '',
+      km: job ? job.km : 0,
+      income: job ? job.income : 0,
+      /* the console words its own notices, so it needs the facts and not
+         only our sentence */
+      jobId: job ? job.id : '',
+      /* Tracked on every frame since the run began and never sent anywhere.
+         A delivery card wants it, and nothing else knows it. */
+      top: job ? Math.round(job.top || 0) : 0,
+      avgSpeed: job ? Math.round(job.avgSpeed || 0) : 0,
+
+      /* Worked out here rather than by the service: the country comes from
+         the city table in map-data.js, which this page has loaded and the
+         service has no business requiring - it is a browser file that wants
+         Leaflet in scope. Null when the table cannot say, and the card then
+         shows no flag rather than a wrong one. */
+      fromCountry: job ? countryOfCity(
+        (db.live && db.live.game) || db.settings.game, job.from) : null,
+      toCountry: job ? countryOfCity(
+        (db.live && db.live.game) || db.settings.game, job.to) : null,
+      game: (db.live && db.live.game) || db.settings.game || 'ets2',
+
+      /* The driver's face, for the Discord card. The service does not link
+         to it, it uploads it alongside the card, so a data: URI is as good
+         as a URL here - see postToDiscord.
+
+         Only on the run events, though. This is tens of kilobytes on a
+         message that is otherwise a few hundred bytes, and session and
+         speeding notices never reach Discord at all. */
+      avatar: String(kind).indexOf('job.') === 0 ? cardAvatar(db.driver) : '',
+    }, extra || {});
+    fetch(this.endpoint() + '/api/fleet/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {});
+  },
+
+  /* merge a batch of drivers in, rather than replacing the list: the stream
+     sends only who moved, so anyone standing still must not vanish */
+  absorb(list, replace) {
+    const mine = Store.db.driver ? Store.db.driver.gmnId : null;
+    const by = new Map();
+    if (!replace) this.drivers.forEach((d) => by.set(d.id, d));
+    (list || []).forEach((d) => {
+      if (d && d.id) by.set(d.id, Object.assign({}, d, { self: d.id === mine }));
+    });
+    /* silence expires the same way it does on the service */
+    const cutoff = Date.now() - 95000;
+    this.drivers = Array.from(by.values()).filter((d) => !d.at || d.at > cutoff);
+    if (state.view === 'livemap') TileMap.drawFleet();
+    else if (state.view === 'dashboard') paintLiveDrivers();
+  },
+
+  async step() {
+    if (!this.enabled()) { this.drivers = []; return; }
+
+    this.pushNow();
+
+    /* With the stream up, everyone else is already arriving live and a pull
+       would only re-fetch what we have. Without it, this is the fallback. */
+    if (Realtime.status === 'live') { this.online = true; this.lastError = null; return; }
+
+    try {
+      const res = await fetch(this.endpoint() + '/api/fleet', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      this.absorb(data.drivers || [], true);
+      if (!this.online) {
+        this.online = true;
+        Store.log('ok', 'Fleet service connected — ' + this.drivers.length + ' driver(s) reporting');
+      }
+      this.lastError = null;
+    } catch (e) {
+      if (this.online) Store.log('warn', 'Lost the fleet service (' + e.message + ')');
+      this.online = false;
+      this.lastError = e.message;
+      this.drivers = [];
+    }
+    if (state.view === 'livemap') TileMap.drawFleet();
+  },
+
+};
+
+
+/* ============================================================
+   THE LIVE CHANNEL
+   ------------------------------------------------------------
+   One stream, held open to the company service, carrying every
+   change as it happens: another driver moving, a run starting or
+   landing, the shared record being written.
+
+   Before this the client asked "anything new?" every fifteen
+   seconds and the answer was usually no — which meant a truck on
+   the fleet map lagged reality by up to fifteen seconds, and a run
+   somebody finished took that long to appear. Now the service
+   pushes, and the wait is the length of the wire.
+
+   Server-sent events, not WebSockets: it is one ordinary GET, the
+   browser reconnects by itself, and it works through anything that
+   passes HTTP. If the browser has no EventSource at all, or the
+   stream will not stay up, the fleet loop above quietly goes back
+   to polling — the app never depends on this being available.
+   ============================================================ */
+const Realtime = {
+  es: null,
+  status: 'off',        /* off | connecting | live | retry */
+  events: [],           /* recent run events from across the company */
+  lastError: null,
+  attempts: 0,
+  retryTimer: null,
+  openedAt: 0,
+
+  supported() { return typeof EventSource !== 'undefined'; },
+  url() { return Fleet.endpoint(); },
+
+  start() {
+    this.stop();
+    const base = this.url();
+    if (!base) { this.status = 'off'; return; }
+    if (!this.supported()) {
+      this.status = 'off';
+      this.lastError = 'this browser cannot hold a live stream open';
+      return;
+    }
+
+    this.status = 'connecting';
+    let es;
+    /* The token rides on the query string, not a header: EventSource
+       cannot set one. It is the same token over the same connection and
+       it never leaves the service.
+
+       Without it the stream is anonymous, and an anonymous stream is one
+       the service cannot deliver a private message or a ringing call
+       down — it has no name to route to. That is precisely why messaging
+       never worked from the client: everything else here is a broadcast
+       and did not care. */
+    const token = (typeof ServiceAuth !== 'undefined' && ServiceAuth.on())
+      ? '?token=' + encodeURIComponent(ServiceAuth.token)
+      : '';
+
+    try { es = new EventSource(base + '/api/stream' + token); }
+    catch (e) { this.status = 'retry'; this.lastError = e.message; this.scheduleRetry(); return; }
+    this.es = es;
+
+    es.addEventListener('hello', (m) => {
+      const d = parse(m.data);
+      if (!d) return;
+      this.attempts = 0;
+      this.openedAt = Date.now();
+      const was = this.status;
+      this.status = 'live';
+      this.lastError = null;
+      Fleet.online = true;
+      Fleet.absorb(d.drivers, true);
+      this.events = (d.events || []).slice(-40);
+      if (was !== 'live') {
+        Store.log('ok', 'Live company link open — '
+          + (d.drivers || []).length + ' driver(s) on the road');
+      }
+      /* announce ourselves at once so everyone else sees us join */
+      Fleet.pushNow();
+      render();
+    });
+
+    es.addEventListener('fleet', (m) => {
+      const d = parse(m.data);
+      if (d) Fleet.absorb(d.drivers);
+    });
+
+    es.addEventListener('event', (m) => {
+      const d = parse(m.data);
+      if (d) this.onEvent(d);
+    });
+
+    es.addEventListener('company', (m) => {
+      const d = parse(m.data);
+      /* somebody wrote to the shared record — pull it now rather than in 20s */
+      if (d && Sync.on() && d.version !== Sync.version) Sync.pull();
+    });
+
+    /* A message, to this driver or to the crew room. */
+    es.addEventListener('dm', (m) => {
+      const d = parse(m.data);
+      if (d) Messages.arrive(d);
+    });
+
+    /* Everything about a call: ringing, the answer, the SDP, the ice, and
+       the two room announcements. One door, so Calls decides what belongs
+       to it and what belongs to the mesh. */
+    es.addEventListener('call', (m) => {
+      const d = parse(m.data);
+      if (d) Calls.signal(d);
+    });
+
+    /* Somebody arrived or left. Only the thread list cares, and only so
+       the dot next to a name is honest. */
+    es.addEventListener('presence', (m) => {
+      const d = parse(m.data);
+      if (!d) return;
+      const t = Messages.threads.find((x) => String(x.withId) === String(d.driverId));
+      if (t) { t.online = !!d.online; render(); }
+    });
+
+    es.onerror = () => {
+      /* EventSource retries by itself, but only while the socket is the
+         problem. A service that has gone away entirely never comes back on
+         its own, so the state is tracked here and the fleet loop takes over. */
+      if (this.status === 'live') Store.log('warn', 'Live company link dropped — falling back to polling');
+      this.status = 'retry';
+      this.lastError = 'the stream closed';
+      if (this.es && this.es.readyState === 2) this.scheduleRetry();
+      render();
+    };
+  },
+
+  scheduleRetry() {
+    clearTimeout(this.retryTimer);
+    /* back off, but never further than half a minute */
+    const wait = Math.min(30000, 2000 * Math.pow(1.7, Math.min(this.attempts++, 6)));
+    this.retryTimer = setTimeout(() => this.start(), wait);
+  },
+
+  stop() {
+    clearTimeout(this.retryTimer); this.retryTimer = null;
+    if (this.es) { try { this.es.close(); } catch (e) {} this.es = null; }
+    this.status = 'off';
+  },
+
+  /* Every event from across the company goes in the ticker. Only the ones a
+     driver would actually want interrupting them go on their console — a
+     crew of twenty, each drifting over the limit now and then, would
+     otherwise bury this driver's own run in other people's warnings. */
+  WORTH_LOGGING: ['job.start', 'job.delivered', 'job.cancelled'],
+
+  onEvent(ev) {
+    const mine = Store.db.driver && Store.db.driver.gmnId;
+    this.events.push(ev);
+    if (this.events.length > 40) this.events = this.events.slice(-40);
+
+    /* our own events are already on our own console */
+    if (ev.driverId && ev.driverId !== mine && ev.text
+        && this.WORTH_LOGGING.indexOf(ev.kind) > -1) {
+      if (ev.kind === 'job.delivered') toast(ev.text, 'ok');
+      Store.log('info', ev.text);
+    }
+    if (state.view === 'dashboard') paintLiveDrivers();
+  },
+};
+
+/* a half-written frame must never take the stream down with it */
+function parse(raw) {
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+
+/* ============================================================
+   GAME MAP
+   ------------------------------------------------------------
+   The ETS2 / ATS world drawn as a real map: the motorway network
+   between every city the games ship, pannable and zoomable, with
+   drivers plotted on top. Vector, not a picture — it scales
+   cleanly, needs no tile server and works with no connection.
+
+   Pixel-accurate road geometry would have to be rendered out of
+   the game's own map files, which cannot be redistributed here.
+   Point the client at a tile pyramid (Map -> My own tiles) if you
+   have one; this network is the shipped default.
+   ============================================================ */
+
+/* Trunk routes. Each pair is a road between two cities; the drawing
+   follows the city layout, so it reads like a motorway diagram. */
+
+
+
+
+/* the whole game map, with a little air around it */
+function gameBounds(gameKey) {
+  const b = mapFor(gameKey).bounds;
+  return [[-b.y1 - 12, b.x0 - 12], [-b.y0 + 12, b.x1 + 12]];
+}
+
+/* world metres -> the game map, using the same city calibration the
+   schematic view uses */
+
+/* ============================================================
+   TILE MAP
+   ------------------------------------------------------------
+   A real slippy map — pan, zoom, road tiles — with the truck
+   plotted live on top. Leaflet is vendored locally, so nothing is
+   fetched from a CDN and the app still starts with no connection.
+
+   The tile source is deliberately a setting rather than a
+   hard-coded URL: ETS2/ATS road tiles are generated from the game
+   files and whoever hosts them sets their own terms. Point it at
+   your own tiles (local folder or your server) or at a community
+   tile server you are allowed to use.
+
+   Because the geometry of an arbitrary tile pyramid is unknown,
+   the world -> map transform is learned rather than assumed: drive
+   somewhere, click where the truck actually is, do it twice, and
+   two correspondences solve scale and offset exactly.
+   ============================================================ */
+const TileMap = {
+  map: null,
+  tiles: null,
+  marker: null,
+  trailLine: null,
+  destMarker: null,
+  following: true,
+  calibrating: false,
+  container: null,
+
+  fleetLayer: null,
+  cityLayer: null,
+  roadLayer: null,
+
+  available() { return typeof L !== 'undefined'; },
+  mode() {
+    const s = Store.db.settings;
+    if (s.mapSource === 'game') return 'game';
+    if (s.mapSource === 'world') return 'world';
+    if (s.mapSource === 'tiles' && s.tileUrl && s.tileUrl.trim()) return 'tiles';
+    return 'schematic';
+  },
+  configured() { return this.mode() !== 'schematic'; },
+
+  /* position of a driver, whichever mode is active */
+  latLngFor(gameKey, x, z) {
+    const mode = this.mode();
+    /* a home-made tile pyramid has its own coordinate system and nothing
+       can be derived for it, so that one keeps a transform of its own */
+    if (mode === 'tiles') return this.worldToLatLng(gameKey, x, z);
+
+    const geo = Calib.toGeo(gameKey, x, z);
+    if (!geo) return null;
+    if (mode === 'world') return L.latLng(geo[0], geo[1]);
+    return geoToGameLatLng(gameKey, geo[0], geo[1]);   /* game and schematic */
+  },
+
+  /* transform learned from click samples, per game */
+  cal(gameKey) {
+    const c = Store.db.settings.tileCalibration || {};
+    return c[gameKey] || null;
+  },
+  worldToLatLng(gameKey, x, z) {
+    const c = this.cal(gameKey);
+    /* A half-finished calibration holds only its sample points — using it
+       would produce NaN and Leaflet throws on that. */
+    if (!c || typeof c.sx !== 'number' || typeof c.sz !== 'number') return null;
+    /* CRS.Simple takes (y, x) */
+    return L.latLng(c.oz + z * c.sz, c.ox + x * c.sx);
+  },
+
+  mount(el, gameKey) {
+    if (!this.available() || !el) return false;
+    this.destroy();
+    this.container = el;
+    this.currentGame = gameKey;
+    const s = Store.db.settings;
+
+    const mode = this.mode();
+    const world = mode === 'world';
+    const game = mode === 'game';
+
+    this.map = L.map(el, {
+      /* real road tiles are web-mercator; the game world and a home-made
+         pyramid are both flat planes */
+      crs: world ? L.CRS.EPSG3857 : L.CRS.Simple,
+      minZoom: world ? 3 : game ? -1 : (Number(s.tileMinZoom) || 0),
+      maxZoom: world ? 18 : game ? 5 : (Number(s.tileMaxZoom) || 8),
+      zoomSnap: game ? 0.25 : 1,
+      zoomControl: true,
+      attributionControl: true,
+      worldCopyJump: false,
+      /* SVG renderer: the canvas one keeps a queued redraw that fires after
+         the map is torn down, throwing on a released context */
+      preferCanvas: false,
+    });
+    /* the game map has its own palette; real tiles keep Leaflet's */
+    if (game) el.classList.add('game-map'); else el.classList.remove('game-map');
+
+    this.tiles = game ? null : world
+      ? L.tileLayer(s.worldTileUrl, {
+          minZoom: 3, maxZoom: 18, noWrap: true,
+          attribution: s.worldAttribution || '',
+          errorTileUrl: '',
+        }).addTo(this.map)
+      : L.tileLayer(s.tileUrl, {
+          minZoom: Number(s.tileMinZoom) || 0,
+          maxZoom: Number(s.tileMaxZoom) || 8,
+          tileSize: Number(s.tileSize) || 256,
+          noWrap: true,
+          tms: !!s.tileTms,
+          attribution: s.tileAttribution || '',
+          errorTileUrl: '',
+        }).addTo(this.map);
+
+    if (game) {
+      this.drawRoads(gameKey);
+      /* the zoom at which the whole map fits, whichever view we open at */
+      this.baseZoom = this.map.getBoundsZoom(gameBounds(gameKey));
+      /* labels are noise when the whole continent is on screen */
+      const syncLabels = () => {
+        if (!this.container) return;
+        /* measured against the zoom that fits the whole map, so the steps hold
+           whatever the extent and the window size are. Zoomed right out the
+           majors name the regions; the rest arrive as you close in. */
+        const base = this.baseZoom == null ? this.map.getZoom() : this.baseZoom;
+        const z = this.map.getZoom() - base;
+        /* With the whole continent on screen even the major names sit on
+           top of each other — Stockholm over Tallinn, Amsterdam over
+           Hamburg over Birmingham — and a name that cannot be read is not
+           information, it is just noise over the roads. So the widest view
+           is left to the region names, and the cities arrive as you close
+           in. This used to hold labels back only when zoomed out PAST the
+           fitted view, which is not a zoom anybody actually sits at. */
+        this.container.classList.toggle('hide-city-labels', z < 0.55);
+        this.container.classList.toggle('major-labels-only', z < 1.7);
+        /* the region names are set relative to the map, not the screen, so
+           they stay the same size against the roads at any zoom */
+        this.container.style.setProperty('--region-fs',
+          clamp(14 + z * 7, 12, 40).toFixed(1) + 'px');
+      };
+      this.map.on('zoomend', syncLabels);
+      setTimeout(syncLabels, 0);
+    }
+
+    let tileErrors = 0;
+    /* the game map has no tile layer at all */
+    if (this.tiles) this.tiles.on('tileerror', () => {
+      tileErrors++;
+      if (tileErrors === 8 && !this._warned) {
+        this._warned = true;
+        toast('Tiles are not loading — check the tile URL in Settings', 'warn');
+        Store.log('warn', 'Tile layer returned errors for ' + s.tileUrl);
+      }
+    });
+
+    /* start where we left off, else over the right part of the world */
+    const view = s.tileView;
+    if (view && view.mode === this.mode() && view.game === gameKey) {
+      this.map.setView([view.lat, view.lng], view.z);
+    } else if (game) {
+      this.map.fitBounds(gameBounds(gameKey), { padding: [6, 6] });
+    } else if (world) {
+      const home = MAP_HOME[gameKey] || MAP_HOME.ets2;
+      this.map.setView([home[0], home[1]], home[2]);
+    } else {
+      this.map.setView([0, 0], Number(s.tileMinZoom) || 2);
+    }
+
+    this.map.on('dragstart zoomstart', () => {
+      if (this.calibrating) return;
+      this.following = false;
+      const btn = $('#followBtn');
+      if (btn) { btn.classList.remove('btn-primary'); btn.textContent = 'Follow'; }
+    });
+    this.map.on('moveend', () => {
+      const c = this.map.getCenter();
+      Store.db.settings.tileView = {
+        lat: c.lat, lng: c.lng, z: this.map.getZoom(),
+        mode: this.mode(), game: this.currentGame,
+      };
+    });
+    this.map.on('click', (e) => this.onClick(e));
+
+    this.trailLine = L.polyline([], {
+      color: '#8bd62b', weight: 3, opacity: .85, lineJoin: 'round',
+    }).addTo(this.map);
+    this.fleetLayer = L.layerGroup().addTo(this.map);
+    this.cityLayer = L.layerGroup().addTo(this.map);
+    this.drawCities(gameKey);
+    this.drawFleet();
+
+    this.redraw(gameKey);
+    /* Leaflet needs a nudge when it is mounted into a freshly built panel */
+    setTimeout(() => { if (this.map) this.map.invalidateSize(); }, 60);
+    return true;
+  },
+
+  destroy() {
+    if (this.map) {
+      /* drop layers first, then listeners, then the map — removing the map
+         with live layers attached leaves pending redraws pointing at a
+         released renderer */
+      [this.trailLine, this.marker, this.destMarker, this.fleetLayer,
+       this.cityLayer, this.roadLayer, this.tiles].forEach((layer) => {
+        if (layer && this.map.hasLayer(layer)) this.map.removeLayer(layer);
+      });
+      this.map.off();
+      this.map.remove();
+      this.map = null;
+    }
+    this.tiles = this.marker = this.trailLine = this.destMarker = null;
+    this.fleetLayer = this.cityLayer = this.roadLayer = null;
+    this.baseZoom = null;      /* recomputed for whichever map mounts next */
+    this._warned = false;
+    /* `calibrating` and `following` are UI state, not map state: mount()
+       destroys and rebuilds on every render, which would otherwise cancel a
+       calibration the moment it started */
+  },
+
+  truckIcon(heading) {
+    const deg = -(heading || 0) * 360;
+    return L.divIcon({
+      className: 'truck-pin',
+      /* iconAnchor is half of iconSize, which is what puts the middle of
+         the arrow on the fix rather than its top-left corner. Both move
+         together with the glyph size in .truck-pin-inner - grow one alone
+         and the pin quietly starts pointing at somewhere you are not. */
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+      html: '<div class="truck-pin-inner" style="transform:rotate(' + deg.toFixed(1) + 'deg)">'
+        + '<svg viewBox="0 0 24 24"><path d="M12 2 L18 20 L12 16.5 L6 20 Z"/></svg></div>',
+    });
+  },
+
+  /* full redraw of everything derived from state */
+  redraw(gameKey) {
+    if (!this.map) return;
+    const db = Store.db;
+    const live = db.live;
+    gameKey = gameKey || liveMapKey();
+
+    /* trail */
+    if (this.trailLine) {
+      const pts = (db.worldTrail || [])
+        .map((p) => this.latLngFor(gameKey, p[0], p[1]))
+        .filter(Boolean);
+      this.trailLine.setLatLngs(pts);
+    }
+
+    /* truck.
+
+       Only while it is actually reporting - see Telemetry.onRoad(). A pin
+       is a claim about now, and this drew one from any frame the store
+       happened to be holding.
+
+       `live.world` is checked too, not just the game. A frame with neither
+       field set matches `live.game === gameKey` when both are undefined -
+       undefined equals undefined - and the very next line reads
+       live.world.x and throws, taking the whole map draw with it. */
+    if (Telemetry.onRoad() && live && live.world && live.game && live.game === baseGameFor(gameKey)) {
+      const ll = this.latLngFor(gameKey, live.world.x, live.world.z);
+      if (ll) {
+        /* esc, because this is set as HTML and a driver's name is theirs to
+           choose. The fleet labels have always escaped; this one did not. */
+        const label = esc((Store.db.driver && Store.db.driver.name) || 'You')
+          + ' — ' + live.speed + ' km/h ' + esc(headingLabel(live.heading));
+
+        if (!this.marker) {
+          this.marker = L.marker(ll, { icon: this.truckIcon(live.heading), zIndexOffset: 1000 }).addTo(this.map);
+          /* Bound ONCE. This used to be re-bound on every telemetry frame -
+             two and a half times a second - which threw the label away and
+             built it again for a reading that had not changed, and reset it
+             out from under the pointer whenever it was being hovered.
+
+             Permanent, because the crew's names already are: theirs floated
+             on the map while the driver's own appeared only if they thought
+             to hover their own truck, so the one pin you cannot look up was
+             your own. */
+          this.marker.bindTooltip(label, {
+            direction: 'top', offset: [0, -20], permanent: true,
+            className: 'me-label', interactive: false,
+          });
+        } else {
+          this.marker.setLatLng(ll);
+          this.marker.setIcon(this.truckIcon(live.heading));
+          /* just the text, so the element survives the frame */
+          this.marker.setTooltipContent(label);
+        }
+        if (this.following) this.map.setView(ll, this.map.getZoom(), { animate: true });
+      }
+    } else if (this.marker) {
+      this.map.removeLayer(this.marker);
+      this.marker = null;
+    }
+  },
+
+  /* cheap per-frame update */
+  update() {
+    if (!this.map) return;
+    this.redraw();
+  },
+
+  /* the motorway network, drawn beneath everything else */
+  drawRoads(gameKey) {
+    if (!this.map) return;
+    if (this.roadLayer) { this.map.removeLayer(this.roadLayer); this.roadLayer = null; }
+    const M = mapFor(gameKey);
+    const roads = ROADS[gameKey] || ROADS.ets2;
+    this.roadLayer = L.layerGroup().addTo(this.map);
+
+    /* Four passes, back to front, the way the games draw their own map:
+       a wide dark wash that gives the covered country some body, a casing,
+       the road itself, then the region seams on top. */
+    const pts = ([a, b]) => {
+      const pa = M.cities[a], pb = M.cities[b];
+      return (pa && pb) ? [gameLatLng(pa), gameLatLng(pb)] : null;
+    };
+
+    roads.forEach((r) => {
+      const p = pts(r); if (!p) return;
+      L.polyline(p, { color: '#161a1f', weight: 15, opacity: .5,
+        lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(this.roadLayer);
+    });
+    roads.forEach((r) => {
+      const p = pts(r); if (!p) return;
+      L.polyline(p, { color: '#31373f', weight: 3.2, opacity: .9,
+        lineCap: 'round', interactive: false }).addTo(this.roadLayer);
+    });
+    roads.forEach((r) => {
+      const p = pts(r); if (!p) return;
+      L.polyline(p, { color: '#9aa4b0', weight: 1.15, opacity: .95, lineCap: 'round' })
+        .bindTooltip(cityLabel(r[0]) + ' — ' + cityLabel(r[1]), { sticky: true })
+        .addTo(this.roadLayer);
+    });
+
+    this.drawRegions(gameKey);
+  },
+
+  /* the coloured seams between the game's map regions, plus their names */
+  drawRegions(gameKey) {
+    if (!this.roadLayer) return;
+    if (!Store.db.settings.showRegions) return;
+
+    regionsFor(gameKey).forEach((reg) => {
+      const line = reg.line.map(([lat, lon]) => geoToGameLatLng(gameKey, lat, lon));
+      /* a dark underlay keeps the colour readable over a pale road */
+      L.polyline(line, { color: '#0b0d10', weight: 6, opacity: .8,
+        lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(this.roadLayer);
+      L.polyline(line, { color: reg.color, weight: 2.6, opacity: .95,
+        lineCap: 'round', lineJoin: 'round' })
+        .bindTooltip(reg.name.replace('!', ''), { sticky: true })
+        .addTo(this.roadLayer);
+
+      const at = geoToGameLatLng(gameKey, reg.label[0], reg.label[1]);
+      L.marker(at, {
+        interactive: false,
+        icon: L.divIcon({
+          className: 'region-label', iconSize: [0, 0],
+          html: '<span style="color:' + reg.color + '">' + esc(reg.name) + '</span>',
+        }),
+      }).addTo(this.roadLayer);
+    });
+  },
+
+  /* city dots, so the game's stops are visible on a real map */
+  drawCities(gameKey) {
+    if (!this.cityLayer) return;
+    this.cityLayer.clearLayers();
+    const mode = this.mode();
+    if (mode === 'game') {
+      const M = mapFor(gameKey);
+      Object.keys(M.cities).forEach((name) => {
+        const ll = gameLatLng(M.cities[name]);
+        const major = cityTier(gameKey, name) === 1;
+        L.circleMarker(ll, {
+          radius: major ? 3.4 : 2.2,
+          color: '#0b0d10', weight: major ? 1.6 : 1.2,   /* dark rim lifts it off the road */
+          fillColor: major ? '#eef2f6' : '#c2cad3', fillOpacity: 1,
+          className: 'city-dot' + (major ? ' major' : ''),
+        }).bindTooltip(cityLabel(name), { direction: 'top', offset: [0, -8] }).addTo(this.cityLayer);
+        L.marker(ll, {
+          interactive: false,
+          icon: L.divIcon({
+            className: 'city-label' + (major ? ' major' : ''), iconSize: [0, 0],
+            html: '<span>' + esc(cityLabel(name)) + '</span>',
+          }),
+        }).addTo(this.cityLayer);
+      });
+      return;
+    }
+    if (mode !== 'world') return;
+    const geo = geoFor(gameKey);
+    Object.keys(geo).forEach((name) => {
+      const [lat, lon] = geo[name];
+      L.circleMarker([lat, lon], {
+        radius: 3, color: '#8bd62b', weight: 1, fillColor: '#8bd62b', fillOpacity: .55,
+      }).bindTooltip(cityLabel(name), { direction: 'top' }).addTo(this.cityLayer);
+    });
+  },
+
+  /* every driver currently reporting a position */
+  drawFleet() {
+    if (!this.fleetLayer) return;
+    this.fleetLayer.clearLayers();
+    const db = Store.db;
+    if (!db.settings.showFleet) return;
+    const gameKey = liveMapKey();
+
+    /* Our own row comes back from the company service like everybody
+       else's, and `self` is a flag this client sets on its own copy — the
+       service has never heard of it. So the id has to be checked too, or
+       the driver is drawn twice: once from live telemetry, once from their
+       own last heartbeat, in two different places, under the same name.
+       The fleet list on the dashboard has always checked both; the map
+       checked only the flag. */
+    const mine = db.driver ? db.driver.gmnId : null;
+
+    Fleet.drivers.forEach((d) => {
+      if (d.self) return;                       /* our own pin is drawn separately */
+      if (mine && d.id === mine) return;        /* and the service's copy of it */
+      if (d.game && d.game !== baseGameFor(gameKey)) return; /* other game, other map */
+      let ll = null;
+      if (typeof d.lat === 'number' && typeof d.lon === 'number') {
+        /* the game map is not in degrees — project before plotting */
+        ll = this.mode() === 'game'
+          ? geoToGameLatLng(gameKey, d.lat, d.lon)
+          : L.latLng(d.lat, d.lon);
+      } else if (typeof d.x === 'number') {
+        ll = this.latLngFor(gameKey, d.x, d.z);
+      }
+      if (!ll) return;
+
+      const hauling = d.state === 'delivering';
+      const deg = -(d.heading || 0) * 360;
+      /* NOT called `icon`: that is the name of the global that renders an
+         SVG glyph, and shadowing it here made the Message and Call buttons
+         below throw "icon is not a function" — which killed drawFleet()
+         entirely, so the whole fleet vanished from the map the moment a
+         driver had both a position and a working service. It survived
+         review because a pin has to actually draw to reach that line. */
+      const pinIcon = L.divIcon({
+        className: 'fleet-pin' + (hauling ? ' hauling' : ''),
+        iconSize: [22, 22], iconAnchor: [11, 11],
+        html: '<div class="fleet-pin-inner" style="transform:rotate(' + deg.toFixed(1) + 'deg)">'
+          + '<svg viewBox="0 0 24 24"><path d="M12 3 L17 19 L12 16 L7 19 Z"/></svg></div>'
+          + '<span class="fleet-pin-label">' + esc(d.name || d.id) + '</span>',
+      });
+      const job = d.job ? d.job.from + ' \u2192 ' + d.job.to + (d.job.cargo ? ' (' + d.job.cargo + ')' : '') : 'no load';
+      const truck = d.truck || 'Truck unavailable';
+      /* Reaching them from the pin.
+
+         Finding somebody on the map and then having to go and look their
+         name up on another screen to say anything to them is the long way
+         round for the commonest thing you would want to do with a map of
+         where everybody is. The popup lives inside #app, so the delegated
+         data-act handler picks these up with no binding of their own.
+
+         Left off when the service is unreachable: the map still draws
+         from the last frame it had, and a button that cannot work is
+         worse than no button. */
+      const reach = Messages.on()
+        ? '<div class="pin-reach">'
+          + '<button class="btn btn-sm" data-act="map-message" data-id="' + esc(d.id) + '">'
+          + icon('chat') + 'Message</button>'
+          + '<button class="btn btn-sm" data-act="map-call" data-id="' + esc(d.id) + '"'
+          + ' data-name="' + esc(d.name || d.id) + '">' + icon('phone') + 'Call</button>'
+          + '</div>'
+        : '';
+
+      const details = '<b>' + esc(d.name || d.id) + '</b>'
+        + '<br><span>Truck: ' + esc(truck) + '</span>'
+        + '<br><span>Job: ' + esc(job) + '</span>'
+        + '<br><span>Speed: ' + (d.speed || 0) + ' km/h</span>'
+        + reach;
+      L.marker(ll, { icon: pinIcon, title: d.name || d.id, keyboard: true })
+        .bindTooltip('<b>' + esc(d.name || d.id) + '</b>',
+          { direction: 'top', offset: [0, -10], permanent: true, className: 'fleet-name-label' })
+        .bindPopup(details, { closeButton: true, maxWidth: 260 })
+        .addTo(this.fleetLayer);
+    });
+  },
+
+  /* ---- click-to-calibrate ---- */
+  beginCalibration() {
+    if (!this.map) { toast('Open the map first', 'warn'); return; }
+    if (!Store.db.live) { toast('No live position — start the game first', 'warn'); return; }
+    this.calibrating = true;
+    this.following = false;
+    render();
+    toast('Click exactly where your truck is', 'info');
+  },
+  cancelCalibration() {
+    this.calibrating = false;
+    render();
+  },
+  onClick(e) {
+    if (!this.calibrating) return;
+    const db = Store.db;
+    const live = db.live;
+    if (!live) { this.calibrating = false; return; }
+    const gameKey = live.game;
+
+    db.settings.tileCalibration = db.settings.tileCalibration || {};
+    const existing = db.settings.tileCalibration[gameKey];
+    const points = (existing && existing.points ? existing.points.slice() : []);
+    points.push({ wx: live.world.x, wz: live.world.z, mx: e.latlng.lng, mz: e.latlng.lat });
+
+    const solved = solveCalibration(points);
+    if (solved) {
+      db.settings.tileCalibration[gameKey] = solved;
+      Store.log('ok', 'Tile map calibrated from two points');
+      toast('Map calibrated — the truck is now placed exactly', 'ok');
+      this.calibrating = false;
+      this.following = true;
+    } else {
+      db.settings.tileCalibration[gameKey] = { points };
+      toast('First point saved. Drive a good distance, then click again.', 'info');
+      this.calibrating = false;
+    }
+    Store.save();
+    render();
+  },
+
+};
+
+/* ---------- calibrating the real-world map ----------
+   Two cities is all it takes: we know where each city really is, and
+   telemetry says where the truck is in game metres when parked there. */
+/* ---------- fleet service ---------- */
+function openFleetSetup() {
+  const s = Store.db.settings;
+  modal({
+    title: 'Company service',
+    body: `
+      <p class="t2">One address ties every install together. Each client pushes its position
+        and its finished runs, and pulls back the rest of the company — the roster, the
+        logins, applications, support requests and the loads dispatched to you.</p>
+      <div class="field mt-12"><label for="flUrl">Company service address</label>
+        <input class="input" id="flUrl" value="${esc(s.fleetUrl || '')}"
+          placeholder="http://your-server:7040"></div>
+      <div class="t3 xs mt-8">Positions go out every
+        <b>${esc(String(s.heartbeatSec || 15))}s</b> — the heartbeat set in Settings.</div>
+      <!-- What the app already knows, said before it asks. Telling somebody
+           to run a terminal command is a poor answer from a program that is
+           carrying the service and can start it itself. -->
+      ${HostedService.can() ? `
+      <div class="t3 xs mt-8">
+        ${HostedService.status && HostedService.status.running
+          ? 'This app is running the service itself, on port '
+            + esc(String(HostedService.status.port || 7040))
+            + (HostedService.status.lan
+              ? ' — the rest of the crew can reach it here.'
+              : ' — this machine only. Open it to the network in Settings to let the crew in.')
+          : 'Leave this empty and the app starts the service it carries, on this '
+            + 'machine, by itself. Fill it in only to point at a server somewhere else.'}
+      </div>
+      ${HostedService.status && HostedService.status.running && HostedService.status.lanUrl
+        ? `<div class="t3 xs mt-8">The rest of the crew reach it at
+            <span class="mono">${esc(HostedService.status.lanUrl)}</span> — they put that
+            in Settings, or just open it in a browser.</div>`
+        : ''}` : `
+      <div class="t3 xs mt-8">
+        Run the bundled service with <span class="mono">npm run fleet</span> — it has no
+        dependencies. Point every driver's client at the same address. With no service
+        configured everything still works, but it stays on this machine — the map shows
+        only your own truck and a sign-up here never reaches anybody else.
+      </div>`}
+      <div class="t3 xs mt-8">Status: ${Fleet.enabled()
+        ? (Fleet.online ? '<span class="pill ok">connected</span>' : '<span class="pill err">' + esc(Fleet.lastError || 'not reachable') + '</span>')
+        : '<span class="pill warn">not configured</span>'}</div>`,
+    foot: `<button class="btn" data-close>Cancel</button>
+      ${HostedService.can() && HostedService.status && HostedService.status.running
+        ? `<button class="btn" data-act="host-service-stop"
+            title="Stop running the company service on this machine">${
+              icon('phoneOff')}Stop hosting</button>`
+        : ''}
+      <button class="btn btn-primary" data-act="fleet-save">${icon('check')}Save</button>`,
+  });
+}
+
+function saveFleetSetup() {
+  const s = Store.db.settings;
+  const url = $('#flUrl') ? $('#flUrl').value.trim() : '';
+  s.fleetUrl = url;
+  Store.log('info', url ? 'Fleet service set to ' + url : 'Fleet service cleared');
+  Store.save();
+  closeModals();
+  Fleet.start();
+  render();
+}
+
+/* ---------- tile source presets / editor ---------- */
+function openTileSource() {
+  const s = Store.db.settings;
+  modal({
+    title: 'Map tiles',
+    body: `
+      <div class="field"><label for="tsMode">Map</label>
+        <select class="select" id="tsMode">
+          <option value="game" ${s.mapSource === 'game' ? 'selected' : ''}>Game map (ETS2 / ATS road network)</option>
+          <option value="world" ${s.mapSource === 'world' ? 'selected' : ''}>Real-world road tiles</option>
+          <option value="tiles" ${s.mapSource === 'tiles' ? 'selected' : ''}>My own tile pyramid</option>
+          <option value="schematic" ${s.mapSource === 'schematic' ? 'selected' : ''}>Built-in schematic</option>
+        </select></div>
+      <div class="field"><label for="tsWorld">Road tile URL</label>
+        <input class="input" id="tsWorld" value="${esc(s.worldTileUrl || '')}"></div>
+      <p class="t2 mt-12">The settings below only apply to your own tile pyramid.</p>
+      <div class="field mt-12"><label for="tsUrl">Tile URL template</label>
+        <input class="input" id="tsUrl" value="${esc(s.tileUrl || '')}"
+          placeholder="https://your-host/tiles/{z}/{x}/{y}.png"></div>
+      <div class="row gap-8 wrap">
+        <div class="field" style="min-width:96px"><label for="tsMin">Min zoom</label>
+          <input class="input" id="tsMin" type="number" min="0" max="12" value="${esc(String(s.tileMinZoom ?? 0))}"></div>
+        <div class="field" style="min-width:96px"><label for="tsMax">Max zoom</label>
+          <input class="input" id="tsMax" type="number" min="0" max="14" value="${esc(String(s.tileMaxZoom ?? 8))}"></div>
+        <div class="field" style="min-width:110px"><label for="tsSize">Tile size</label>
+          <input class="input" id="tsSize" type="number" min="64" max="1024" step="64" value="${esc(String(s.tileSize ?? 256))}"></div>
+      </div>
+      <label class="check ${s.tileTms ? 'on' : ''}"><input type="checkbox" id="tsTms" ${s.tileTms ? 'checked' : ''}>
+        <span class="sm t2">Tiles are TMS (y axis counts from the bottom)</span></label>
+      <div class="field mt-12"><label for="tsAttr">Attribution</label>
+        <input class="input" id="tsAttr" value="${esc(s.tileAttribution || '')}" placeholder="Credit the tile source"></div>
+      <div class="t3 xs mt-12">
+        <b>Where tiles come from:</b> they are rendered from the game's own map files.
+        Generate your own from your installation, or use a community tile server you have
+        permission to use — please respect whoever hosts them. A local folder works too:
+        put tiles beside the app and use <span class="mono">tiles/{z}/{x}/{y}.png</span>,
+        which also keeps the map working offline.
+      </div>
+      <div class="t3 xs mt-8">Leave the URL empty to fall back to the built-in schematic map.</div>`,
+    foot: `<button class="btn" data-close>Cancel</button>
+      <button class="btn btn-primary" data-act="tile-save">${icon('check')}Save</button>`,
+  });
+}
+
+function saveTileSource() {
+  const s = Store.db.settings;
+  const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
+  const mode = g('tsMode') || 'game';
+  s.mapSource = mode;
+  if (g('tsWorld')) s.worldTileUrl = g('tsWorld');
+  s.tileUrl = g('tsUrl');
+  s.tileMinZoom = clamp(Number(g('tsMin')) || 0, 0, 12);
+  s.tileMaxZoom = clamp(Number(g('tsMax')) || 8, 0, 14);
+  s.tileSize = clamp(Number(g('tsSize')) || 256, 64, 1024);
+  s.tileTms = !!($('#tsTms') && $('#tsTms').checked);
+  s.tileAttribution = g('tsAttr');
+  if (mode === 'tiles' && !s.tileUrl) s.mapSource = 'schematic';
+  Store.log('info', 'Map set to ' + s.mapSource);
+  Store.save();
+  closeModals();
+  TileMap.destroy();
+  render();
+}
+
+
+/* ============================================================
+   GAME LAUNCHER + ALERTS
+   ------------------------------------------------------------
+   The desktop shell can find the games, start them and live in the
+   tray. In a browser those calls are absent, so every one of them
+   degrades to an explanation rather than a dead button.
+   ============================================================ */
+/* The third launcher is not one program. TruckersMP and TrucksBook are
+   different companies doing different jobs, the auto-detect looks for
+   both, and a driver who runs one was being shown the other's name -
+   "TruckersMP launcher" over a path ending in TB Client.exe.
+
+   So it is named after the file that is actually set. With nothing set
+   there is nothing to name it after, and it says what the slot is for
+   rather than picking a side. */
+function tmpLabel() {
+  const exe = String((Store.db.settings && Store.db.settings.tmpExe) || '').toLowerCase();
+  if (exe.indexOf('tb client') > -1 || exe.indexOf('trucksbook') > -1) {
+    return 'TrucksBook Client';
+  }
+  if (exe.indexOf('truckersmp') > -1) return 'TruckersMP launcher';
+  return 'TruckersMP or TrucksBook';
+}
+
+/* and the two words the launch tile puts on two lines */
+function tmpTileWords() {
+  const name = tmpLabel();
+  if (name === 'TrucksBook Client') return ['TRUCKSBOOK', 'Client'];
+  if (name === 'TruckersMP launcher') return ['TRUCKERS', 'Multiplayer'];
+  return ['MULTIPLAYER', 'Not set'];
+}
+
+const Launcher = {
+  api() { return (window.gmnDesktop && window.gmnDesktop.isDesktop) ? window.gmnDesktop : null; },
+
+  label(kind) {
+    if (kind === 'tmp') return tmpLabel();
+    return kind === 'ats' ? 'American Truck Simulator' : 'Euro Truck Simulator 2';
+  },
+
+  pathKey(kind) { return kind === 'tmp' ? 'tmpExe' : kind === 'ats' ? 'atsExe' : 'ets2Exe'; },
+
+  desktopOnly(what) {
+    modal({
+      title: what + ' needs the desktop app',
+      size: 'narrow',
+      body: `<p class="t2">A web page is not allowed to browse your drive or start programs.</p>
+        <p class="t2 mt-12">Install <b>Gaming Nation Trucker</b> for Windows and this works directly.
+          In the browser you can still paste the full path in by hand.</p>`,
+    });
+  },
+
+  async browse(kind) {
+    const api = this.api();
+    if (!api) { this.desktopOnly('Browsing for a file'); return; }
+    const picked = await api.pickFile({ title: 'Select ' + this.label(kind) });
+    if (!picked) return;
+    Store.db.settings[this.pathKey(kind)] = picked;
+    Store.log('ok', this.label(kind) + ' set to ' + picked);
+    Store.save();
+    render();
+  },
+
+  async autoDetect(kind) {
+    const api = this.api();
+    if (!api) { this.desktopOnly('Auto-detect'); return; }
+    toast('Looking for ' + this.label(kind) + '…', 'info');
+    const found = await api.autoDetect(kind);
+    if (!found) {
+      toast('Could not find it — use Browse', 'warn');
+      Store.log('warn', 'Auto-detect found no ' + this.label(kind));
+      return;
+    }
+    Store.db.settings[this.pathKey(kind)] = found;
+    Store.log('ok', 'Found ' + this.label(kind) + ': ' + found);
+    Store.save();
+    toast(this.label(kind) + ' found', 'ok');
+    render();
+  },
+
+  async launch(kind) {
+    const api = this.api();
+    const exe = Store.db.settings[this.pathKey(kind)];
+    if (!api) {
+      /* a page cannot start a program, and pretending it had would put a run
+         in the logbook that never happened */
+      this.desktopOnly('Launching a game');
+      return;
+    }
+    if (!exe) {
+      toast('Set the path first, in Settings', 'warn');
+      state.view = 'settings'; render();
+      return;
+    }
+    const res = await api.launch(exe);
+    if (res && res.error) {
+      toast('Could not launch: ' + res.error, 'err');
+      Store.log('err', 'Launch failed — ' + res.error);
+      return;
+    }
+    Store.log('ok', 'Launched ' + this.label(kind));
+    toast('Starting ' + this.label(kind) + '…', 'ok');
+    /* the game takes a while to come up; the telemetry poller finds it */
+    if (kind !== 'tmp' && Store.db.settings.autoStartTracking) {
+      Store.log('info', 'Tracking will start as soon as telemetry answers');
+      if (!Store.db.settings.liveTelemetry) {
+        Store.db.settings.liveTelemetry = true;
+        Telemetry.start();
+        Store.save();
+      }
+    }
+    render();
+  },
+
+  /* push the two OS-level preferences into the shell */
+  async syncOsPreferences() {
+    const api = this.api();
+    if (!api) return;
+    const s = Store.db.settings;
+    try {
+      await api.setAutoLaunch(!!s.startWithWindows, !!s.startMinimized);
+      await api.setTrayEnabled(!!s.minimiseToTray);
+    } catch (e) { console.warn('[GMN] could not apply OS preferences', e); }
+  },
+};
+
+/* ============================================================
+   GAME WATCH
+   ------------------------------------------------------------
+   Nobody tells the client the game has started — it works it out.
+
+   Two independent signals feed it. On the desktop the process list
+   says the moment the game opens and the moment it closes, before
+   and after telemetry can say anything. Everywhere, a telemetry
+   frame arriving proves the game is up and running.
+
+   Whichever notices first wins, and the transitions are owned here
+   so starting and stopping happen once, not once per signal.
+   ============================================================ */
+const GameWatch = {
+  timer: null,
+  running: false,        /* what we believe right now */
+  game: null,            /* ets2 | ats */
+  source: null,          /* process | telemetry */
+  tmpRunning: false,
+  supported: false,      /* the process list is a desktop-only signal */
+
+  start() {
+    this.stop();
+    this.supported = !!(Launcher.api() && Launcher.api().gameRunning);
+    if (this.supported) {
+      const secs = clamp(Number(Store.db.settings.watchSec) || 4, 2, 60);
+      this.timer = setInterval(() => this.poll(), secs * 1000);
+      this.poll();
+      Store.log('info', 'Watching for the game to start');
+    } else {
+      /* in a browser the telemetry link is the only thing that can tell us */
+      Store.log('info', 'Watching for the game through the telemetry link');
+    }
+  },
+  stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+
+  async poll() {
+    const api = Launcher.api();
+    if (!api || !api.gameRunning) return;
+    let seen;
+    try { seen = await api.gameRunning(); } catch (e) { return; }
+    if (!seen || !seen.ok) return;
+
+    if (this.tmpRunning !== !!seen.tmp) {
+      this.tmpRunning = !!seen.tmp;
+      Store.log('info', tmpLabel() + ' ' + (this.tmpRunning ? 'started' : 'closed'));
+      render();
+    }
+
+    const game = seen.ets2 ? 'ets2' : seen.ats ? 'ats' : null;
+    if (game) this.began(game, 'process');
+    else if (this.source === 'process') this.ended('process');
+  },
+
+  /* the game is up — called by the process watch and by live telemetry */
+  began(game, source) {
+    const db = Store.db;
+    if (this.running && this.game === game) { this.source = this.source || source; return; }
+
+    this.running = true;
+    this.game = game;
+    this.source = source;
+    db.conn.ets2 = 'running';
+    db.settings.game = game;
+
+    Store.log('ok', mapFor(game).label + ' started'
+      + (source === 'process' ? '' : ' — telemetry connected'));
+    toast(mapFor(game).short + ' detected', 'ok');
+
+    /* bring the telemetry link up so the run is tracked from the off */
+    if (db.settings.autoStartTracking && !db.settings.liveTelemetry) {
+      db.settings.liveTelemetry = true;
+      Telemetry.start();
+      Store.log('info', 'Tracking armed — waiting for the telemetry plugin');
+    }
+
+    /* the driver is at the wheel — open a session on the company record and
+       tell everyone, so the console shows them playing straight away */
+    Sessions.open(game);
+
+    Store.save();
+    render();
+  },
+
+  /* the game has gone */
+  ended(source) {
+    const db = Store.db;
+    if (!this.running) return;
+    /* telemetry dropping while the process is still up is a plugin hiccup,
+       not the game closing */
+    if (source === 'telemetry' && this.supported && this.source === 'process') return;
+
+    const was = this.game;
+    this.running = false;
+    this.game = null;
+    this.source = null;
+
+    db.conn.ets2 = 'stopped';
+    db.conn.telemetry = 'off';
+    db.conn.link = 'ready';
+    db.live = null;
+    Telemetry.mode = 'off';
+    Telemetry.lastFrame = null;
+
+    /* What the driver was doing is not what they are doing.
+
+       deriveActivity() only runs when a frame arrives, so the last state a
+       frame produced sits in the store for ever once frames stop. Close the
+       game while rolling and the client went on saying "Driving, no job" -
+       or worse, "On the road delivering" - with the game shut and nobody at
+       the wheel. It travels, too: fleetRows() reads this straight out and
+       pushes it to the company, so the rest of the crew saw a parked driver
+       out on the road. */
+    db.activityState = null;
+
+    /* a run that was live when the game closed is banked, not lost */
+    if (db.job && db.job.live) {
+      Store.log('warn', 'Game closed mid-run — the delivery is held in the queue');
+      db.job.status = 'paused';
+      db.job.live = false;
+    }
+    Store.log('info', (was ? mapFor(was).label : 'The game') + ' closed');
+    toast('Game closed', 'info');
+
+    /* close the sitting off, so the console stops showing them at the wheel */
+    Sessions.close();
+
+    Store.save();
+    render();
+  },
+};
+
+
+/* ============================================================
+   GAME SESSIONS
+   ------------------------------------------------------------
+   One sitting at the game: it opens when the client sees the game
+   come up and closes when it goes away. Written onto the shared
+   company record, so it is the company's history of who drove and
+   for how long — not something this browser happens to remember.
+
+   Each session accumulates what was done during it, which is what
+   makes it worth keeping: three hours logged in with nothing
+   delivered and three hours with six runs are different sittings,
+   and only the record can tell them apart.
+
+   A client that is killed mid-session leaves one open. That is why
+   the platform closes anything older than twelve hours rather than
+   trusting an end that may never come.
+   ============================================================ */
+const Sessions = {
+  id: null,
+
+  /* the session this client currently has open on the company record */
+  current() {
+    const hq = Auth.hqDb();
+    if (!hq || !Array.isArray(hq.sessions)) return null;
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    return hq.sessions.find((s) => s.driverId === me && !s.ended) || null;
+  },
+
+  open(game) {
+    const db = Store.db;
+    const me = db.driver && db.driver.gmnId;
+    if (!me) return;                      /* nobody signed in yet */
+    const hq = Auth.hqDb();
+    if (!hq) return;
+    hq.sessions = hq.sessions || [];
+
+    /* a client restarted while the game was already up must not open a second */
+    const open = hq.sessions.find((s) => s.driverId === me && !s.ended);
+    if (open) { this.id = open.id; return; }
+
+    const session = {
+      id: 'SES-' + Date.now().toString(36).toUpperCase(),
+      driverId: me,
+      driver: db.driver.name,
+      game: game || db.settings.game || 'ets2',
+      started: new Date().toISOString(),
+      ended: null,
+      jobs: 0, km: 0, earned: 0,
+    };
+    hq.sessions.unshift(session);
+    hq.sessions = hq.sessions.slice(0, 400);
+    this.id = session.id;
+
+    this.stampDriver(hq, me, { status: 'online', playing: true, game: session.game });
+    Auth.saveHqDb(hq);
+
+    Store.log('ok', 'Session started — ' + mapFor(session.game).label);
+    Fleet.emit('session.start',
+      db.driver.name + ' launched ' + mapFor(session.game).short, 'info',
+      { game: session.game });
+  },
+
+  close() {
+    const db = Store.db;
+    const me = db.driver && db.driver.gmnId;
+    if (!me) return;
+    const hq = Auth.hqDb();
+    if (!hq || !Array.isArray(hq.sessions)) return;
+
+    const session = hq.sessions.find((s) => s.driverId === me && !s.ended);
+    if (!session) return;
+
+    session.ended = new Date().toISOString();
+    session.minutes = Math.max(0, Math.round(
+      (new Date(session.ended) - new Date(session.started)) / 60000));
+    this.id = null;
+
+    this.stampDriver(hq, me, { status: 'online', playing: false, game: null });
+    Auth.saveHqDb(hq);
+
+    Store.log('info', 'Session ended — ' + fmt.dur(session.minutes)
+      + (session.jobs ? ', ' + session.jobs + ' run(s) delivered' : ', nothing delivered'));
+    Fleet.emit('session.end',
+      db.driver.name + ' finished a ' + fmt.dur(session.minutes) + ' session'
+      + (session.jobs ? ' — ' + session.jobs + ' run(s), ' + fmt.eur(session.earned) : ''),
+      'info');
+  },
+
+  /* a delivered run belongs to the sitting it was driven in */
+  credit(rec) {
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    if (!me) return;
+    const hq = Auth.hqDb();
+    if (!hq || !Array.isArray(hq.sessions)) return;
+    const session = hq.sessions.find((s) => s.driverId === me && !s.ended);
+    if (!session) return;
+    session.jobs = (session.jobs || 0) + 1;
+    session.km = (session.km || 0) + (rec.km || 0);
+    session.earned = (session.earned || 0) + (rec.income || 0);
+    Auth.saveHqDb(hq);
+  },
+
+  /* keep the roster's own view of the driver in step */
+  stampDriver(hq, id, patch) {
+    const d = (hq.drivers || []).find((x) => x.id === id);
+    if (!d) return;
+    Object.assign(d, patch, { lastSeen: new Date().toISOString() });
+  },
+};
+
+
+/* ============================================================
+   ONE COMPANY, ON THIS DEVICE TOO
+   ------------------------------------------------------------
+   The client reads the same records the platform writes. Pointed at
+   the Gaming Nation service it keeps them in step with every other
+   machine, so a phone sees the roster, the applications and the
+   support traffic rather than only what was typed into it.
+
+   The client is a reader here: it pulls, and pushes back only what
+   it owns — its driver's own record and anything staff did from the
+   admin screens.
+   ============================================================ */
+/* Where the company lives, when nobody has said.
+
+   A page served over http(s) was almost certainly served BY the company
+   service — it carries the websites as well as the API. So its own origin is
+   the right default, and a company set up that way needs no configuration at
+   all: open the site, and you are already joined up.
+
+   Two cases must not guess. A page opened from disk (file://) has no server
+   behind it, and the packaged phone app is served from its own internal
+   origin, which is the app itself and not anybody's company. Both of those
+   are asked for an address instead. */
+function defaultServiceUrl() {
+  /* The service says who it is; the page never guesses.
+
+     This used to answer with the page's own origin, on the reasoning that a
+     page served over http was served BY the Gaming Nation service. That stopped
+     being true — these pages are served by whatever is to hand, a dev server
+     on :5173, a static host, a file — and the cost was every legacy endpoint
+     firing at that host and 404ing on a loop.
+
+     fleet-server.js now sets window.GMN_SERVICE in the pages it serves, so a
+     company running the service is joined up with no configuration at all,
+     and a page served by anything else stays quiet. An address set by hand
+     in settings still overrides both. */
+  try {
+    if (typeof window !== 'undefined' && window.GMN_SERVICE) {
+      return String(window.GMN_SERVICE).replace(/\/$/, '');
+    }
+  } catch (e) { /* nothing to go on */ }
+
+  return '';
+}
+
+/* Where the company service listens when it is running beside you. */
+/* Where the service listens when it is running beside you.
+
+   Two spellings of the same machine, and the ORDER is the whole fix.
+   fleet-server.js binds 127.0.0.1 — that literal IPv4 address, unless it is
+   started with --lan. "localhost" on Windows resolves to ::1 first, and
+   nothing is listening there. So a client that only ever asked for
+   localhost could sit on the same machine as a running service, retry every
+   minute for ever, and never once reach it: the address it was asking for
+   had nothing on it.
+
+   Asking for the address the server actually binds, first, is what makes
+   the service found rather than typed in by hand. localhost is kept behind
+   it for anyone running the service somewhere that answers on that name and
+   not on 127.0.0.1. */
+const LOCAL_SERVICES = ['http://127.0.0.1:7040', 'http://localhost:7040'];
+
+/* the first candidate, for the code that names a single default */
+const LOCAL_SERVICE = LOCAL_SERVICES[0];
+
+/* Ask the machine this client is on whether the service is running.
+
+   One request, with a short deadline. If nothing answers, the client
+   carries on exactly as before and says nothing — not running the
+   service is the normal case, and a warning on every start for the
+   ordinary case is noise that teaches people to ignore warnings.
+
+   An address set by hand in Settings still wins: this only fills in
+   when nothing else has said where the service is. */
+async function discoverLocalService() {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (window.GMN_SERVICE) return false;
+    if ((Store.db.settings.fleetUrl || '').trim()) return false;
+    if (typeof fetch !== 'function') return false;
+
+    for (const base of LOCAL_SERVICES) {
+      const stop = new AbortController();
+      const bell = setTimeout(() => stop.abort(), 1200);
+
+      let ok = false;
+      try {
+        const res = await fetch(base + '/status',
+          { cache: 'no-store', signal: stop.signal });
+        ok = res.ok;
+      } catch (e) { ok = false; }
+      clearTimeout(bell);
+
+      if (!ok) continue;
+
+      window.GMN_SERVICE = base;
+      console.log('[GMN] company service found on ' + base);
+      return true;
+    }
+
+    return false;
+
+  } catch (e) {
+    return false;
+  }
+}
+
+const Sync = {
+  timer: null, pushTimer: null, version: 0,
+  status: 'off', lastError: null, applying: false,
+
+  url() {
+    const u = (Store.db.settings.fleetUrl || '').trim();
+    return u ? u.replace(/\/$/, '') : defaultServiceUrl();
+  },
+  configured() { return !!(Store.db.settings.fleetUrl || '').trim(); },
+  on() { return !!this.url(); },
+
+  start() {
+    this.stop();
+    if (!this.on()) { this.status = 'off'; return; }
+    this.pull();
+    this.timer = setInterval(() => this.pull(), 20000);
+  },
+  stop() {
+    clearInterval(this.timer); this.timer = null;
+    clearTimeout(this.pushTimer); this.pushTimer = null;
+  },
+
+  /* Either side can arrive as something other than a list — a service on a
+     different version, a hand-edited file, a half-written response. One bad
+     field used to throw here and take the whole update down with it, so the
+     rest of a good payload was thrown away too. */
+  mergeList(mine, theirs, stamp) {
+    const by = new Map();
+    const a = Array.isArray(theirs) ? theirs : [];
+    const b = Array.isArray(mine) ? mine : [];
+    a.forEach((x) => { if (x && x.id) by.set(x.id, x); });
+    b.forEach((x) => {
+      if (!x || !x.id) return;
+      const other = by.get(x.id);
+      if (!other) { by.set(x.id, x); return; }
+      const a = stamp ? new Date(x[stamp] || 0).getTime() : 0;
+      const b = stamp ? new Date(other[stamp] || 0).getTime() : 0;
+      by.set(x.id, a >= b ? x : other);
+    });
+    return Array.from(by.values());
+  },
+
+async pull() {
+
+  if (!this.on() || this.applying) return;
+
+  try {
+
+    const res = await fetch(
+      this.url() + '/api/company',
+      { cache: 'no-store' }
+    );
+
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status);
+    }
+
+    const body = await res.json();
+
+    this.version = body.version || 0;
+
+    const remote = body.data;
+
+    if (!remote) {
+      this.status = 'ok';
+      return;
+    }
+
+    this.applying = true;
+
+    const db = Auth.hqDb() || {
+      drivers: [],
+      applications: [],
+      assignments: [],
+      events: [],
+      jobs: [],
+      tickets: [],
+      activity: [],
+      notifications: []
+    };
+
+    /*
+     * Company service synchronization.
+     *
+     * IMPORTANT:
+     * Applications are NOT merged from the company service.
+     *
+     * Supabase public.applications is the authoritative source
+     * for recruitment applications.
+     *
+     * Applications.pull() is responsible for loading them.
+     */
+
+    db.drivers = this.mergeList(
+      db.drivers,
+      remote.drivers,
+      'lastSeen'
+    );
+
+    /*
+     * DO NOT merge remote applications here.
+     *
+     * Old code:
+     * db.applications = this.mergeList(
+     *   db.applications,
+     *   remote.applications,
+     *   'submitted'
+     * );
+     */
+
+    db.assignments = this.mergeList(
+      db.assignments,
+      remote.assignments,
+      'at'
+    );
+
+    db.tickets = this.mergeList(
+      db.tickets,
+      remote.tickets,
+      'updated'
+    );
+
+    db.events = this.mergeList(
+      db.events,
+      remote.events,
+      'date'
+    );
+
+    db.jobs = this.mergeList(
+      db.jobs,
+      remote.jobs,
+      'finished'
+    ).slice(0, 500);
+
+    db.activity = this.mergeList(
+      db.activity,
+      remote.activity,
+      'at'
+    ).slice(0, 200);
+
+    db.notifications = this.mergeList(
+      db.notifications,
+      remote.notifications,
+      'at'
+    ).slice(0, 300);
+
+    Auth.saveHqDb(db);
+
+    if (Array.isArray(remote.accounts)) {
+
+      const by = new Map();
+
+      remote.accounts.forEach((a) => {
+        if (a && a.driverId) {
+          by.set(a.driverId, a);
+        }
+      });
+
+      Auth.accounts().forEach((a) => {
+        if (
+          a &&
+          a.driverId &&
+          !by.has(a.driverId)
+        ) {
+          by.set(a.driverId, a);
+        }
+      });
+
+      try {
+        localStorage.setItem(
+          HQ_ACCOUNTS,
+          JSON.stringify(Array.from(by.values()))
+        );
+      } catch (e) {}
+
+    }
+
+    this.applying = false;
+    this.status = 'ok';
+    this.lastError = null;
+
+    /*
+     * The signed-in driver's own figures may have moved
+     * on another machine.
+     */
+    if (Store.db.driver) {
+
+      const rec = Auth.driverRecord(
+        Store.db.driver.gmnId
+      );
+
+      if (rec) {
+
+        Store.db.driver.rank = rankNameFor(rec);
+
+        Store.db.driver.role =
+          rec.role || 'driver';
+
+        Store.save();
+
+      }
+
+    }
+
+    /*
+     * Recruitment applications are loaded separately
+     * from Supabase, which is the source of truth.
+     */
+    if (
+      typeof Applications !== 'undefined' &&
+      typeof Applications.pull === 'function' &&
+      await Sync.signedIn()
+    ) {
+      await Applications.pull();
+    }
+
+    render();
+
+  } catch (e) {
+
+    this.applying = false;
+    this.status = 'error';
+    this.lastError = e.message;
+
+    console.error(
+      '[GMN] Company service pull failed:',
+      e
+    );
+
+  }
+
+},
+
+  push() {
+    if (!this.on()) return;
+    clearTimeout(this.pushTimer);
+    this.pushTimer = setTimeout(() => this.sendNow(), 900);
+  },
+
+  async sendNow() {
+    if (!this.on() || this.applying) return;
+    const db = Auth.hqDb();
+    if (!db) return;
+    const payload = Object.assign({}, db, { accounts: Auth.accounts() });
+    try {
+      const res = await fetch(this.url() + '/api/company', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: this.version, data: payload }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 409) { this.version = body.version || 0; await this.pull(); return; }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      this.version = body.version || this.version;
+      this.status = 'ok';
+    } catch (e) {
+      this.status = 'error';
+      this.lastError = e.message;
+    }
+  },
+};
+
+/* ---------- speed alert ----------
+   A two-tone siren synthesised on the fly, so no audio file has to be
+   shipped and it works offline. Only sounds once per overspeed, and
+   only while the driver is actually over the limit. */
+const Siren = {
+  ctx: null,
+  playing: false,
+  lastAt: 0,
+
+  audio() {
+    if (!this.ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      this.ctx = new Ctx();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    return this.ctx;
+  },
+
+  wail(seconds = 2.2) {
+    const ctx = this.audio();
+    if (!ctx || this.playing) return;
+    this.playing = true;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.06);
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    /* alternate two tones, the way a European two-tone horn does */
+    const step = 0.42;
+    for (let t = 0; t < seconds; t += step) {
+      osc.frequency.setValueAtTime((t / step) % 2 < 1 ? 660 : 880, ctx.currentTime + t);
+    }
+    osc.connect(gain);
+    osc.start();
+    gain.gain.setValueAtTime(0.16, ctx.currentTime + seconds - 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + seconds);
+    osc.stop(ctx.currentTime + seconds);
+    osc.onended = () => {
+      this.playing = false;
+      try { gain.disconnect(); } catch (e) {}
+    };
+  },
+
+  /* A message landing. Two soft notes, well under the siren, because this
+     says "somebody spoke" and the siren says "slow down". Sharing the audio
+     context means one resume() and one permission story for both. */
+  note() {
+    const ctx = this.audio();
+    if (!ctx) return;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.02);
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.09);
+    osc.connect(gain);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.26);
+    osc.stop(ctx.currentTime + 0.27);
+    osc.onended = () => { try { gain.disconnect(); } catch (e) {} };
+  },
+
+  /* called on every telemetry frame */
+  check(speed) {
+    const s = Store.db.settings;
+    if (!s.sirenEnabled) { this.armed = true; return; }
+    const limit = Number(s.sirenSpeedLimit) || 95;
+    if (speed > limit) {
+      /* one alert per excursion, and never more than once every 20s */
+      if (this.armed !== false && Date.now() - this.lastAt > 20000) {
+        this.armed = false;
+        this.lastAt = Date.now();
+        this.wail();
+        Store.log('warn', 'Over the speed limit — ' + Math.round(speed) + ' km/h (limit ' + limit + ')');
+        toast('Speeding — ' + Math.round(speed) + ' km/h', 'warn');
+      }
+    } else if (speed < limit - 3) {
+      this.armed = true;      /* re-arm once safely back under */
+    }
+  },
+};
+
+/* ---------- live map view ---------- */
+
+/* Which map the live view is drawing.
+
+   In one place because four callers need the same answer and they used to
+   disagree. viewLiveMap could settle on ProMods while the code that mounted
+   Leaflet asked settings.game and got ETS2 - so the header named one map and
+   the roads underneath were the other's.
+
+   Telemetry says 'ets2' whether or not a map mod is loaded; the game does not
+   know it has been modded. So the wider map is chosen from what the client
+   found on the machine, or from what the driver picked, rather than waited
+   for on the wire. */
+const MAP_VIEWS = ['ets2', 'promods', 'ats'];
+function liveMapKey() {
+  const db = Store.db;
+  const live = db.live;
+  /* the driver's own choice outranks anything detected: they can see which
+     world they are in, and this client cannot */
+  const pick = db.settings.mapView || 'auto';
+  if (MAP_VIEWS.indexOf(pick) > -1) return pick;
+  const base = (Telemetry.mode === 'live' && live && live.game) || db.settings.game || 'ets2';
+  return (base === 'ets2' && MapMods.usingProMods()) ? 'promods' : base;
+}
+
+function viewLiveMap() {
+  const db = Store.db;
+  const live = db.live;
+  const detected = Telemetry.mode === 'live' && live && live.game;
+  const mapKey = liveMapKey();
+  const M = mapFor(mapKey);
+  const src = Telemetry.mode === 'live' ? 'Live telemetry'
+    : db.conn.ets2 === 'running' ? 'Simulated' : 'No signal';
+
+  const mapMode = TileMap.available() ? TileMap.mode() : 'schematic';
+  const gameMode = mapMode === 'game';
+  const worldMode = mapMode === 'world';
+  const useTiles = mapMode === 'tiles';
+  const onLeaflet = gameMode || worldMode || useTiles;
+  const tileCal = useTiles ? TileMap.cal(mapKey) : null;
+  const tilePts = tileCal && tileCal.points ? tileCal.points.length : 0;
+  /* one transform serves the game map, the schematic and real-world tiles.
+     `placed` decides whether a pin can be drawn at all; `exact` whether it
+     came from this machine's own fit or the built-in estimate. */
+  const placed = useTiles ? tilePts >= 2 : Calib.ready(mapKey);
+  const exact = useTiles ? tilePts >= 2 : Calib.exact(mapKey);
+
+  return `
+  ${viewHead('Live map',
+    M.label + ' · ' + src
+      + (MapMods.label() ? ' · ' + MapMods.label() + ' ' + MapMods.state() : ''), `
+    <button class="btn btn-sm ${db.settings.liveTelemetry ? 'btn-primary' : ''}" data-act="toggle-live">
+      ${icon('wifi')}${db.settings.liveTelemetry ? 'Live on' : 'Live off'}</button>
+    ${useTiles ? `<button class="btn btn-sm ${TileMap.following ? 'btn-primary' : ''}" id="followBtn" data-act="follow-toggle">
+      ${icon('target')}${TileMap.following ? 'Following' : 'Follow'}</button>` : ''}
+    ${/* One button per map, ProMods its own rather than something ETS2 turns
+          into behind your back. The old control was a single toggle that
+          swapped between the two base games and hid itself the moment
+          telemetry named one - which left no way at all to say "I am on
+          ProMods", because the game never reports that it has been modded.
+
+          Detection still picks the opening map; these say which one is on
+          screen and let the driver overrule it. */''}
+    <div class="row gap-4">
+      ${MAP_VIEWS.map((k) => `<button class="btn btn-sm ${mapKey === k ? 'btn-primary' : ''}"
+        data-act="map-view" data-v="${k}" title="Draw the ${esc(mapFor(k).label)} map"
+        >${esc(mapFor(k).short)}${detected === baseGameFor(k) && k !== 'promods'
+          ? ' ' + icon('check') : ''}</button>`).join('')}
+    </div>
+    <button class="btn btn-sm ${exact ? '' : 'btn-primary'}" data-act="${useTiles ? 'tile-calibrate' : 'calibrate'}">
+      ${icon('target')}${!placed ? 'Line up' : exact ? 'Calibrate' : 'Fine-tune'}</button>
+    <button class="btn btn-sm ${db.settings.showFleet ? 'btn-primary' : ''}" data-act="fleet-toggle">
+      ${icon('users')}Fleet ${Fleet.drivers.filter((d) => !d.self).length}</button>
+    <button class="btn btn-sm" data-act="tile-source">${icon('map')}Map</button>`)}
+
+  ${useTiles && TileMap.calibrating ? `<div class="card" style="border-color:var(--accent-line)">
+      <div class="card-body row gap-12">
+        <span style="color:var(--accent);width:16px;height:16px">${icon('target')}</span>
+        <div class="grow"><div class="b6">Click exactly where your truck is</div>
+          <div class="t3 xs mt-4">${tilePts ? 'Second of two points — pick a spot well away from the first.' : 'First of two points.'}</div></div>
+        <button class="btn btn-sm" data-act="tile-calibrate-cancel">Cancel</button>
+      </div></div>` : ''}
+
+  ${useTiles && tilePts < 2 && !TileMap.calibrating ? `<div class="card"><div class="card-body row gap-12">
+      <span style="color:var(--warn);width:16px;height:16px">${icon('alert')}</span>
+      <div class="grow"><div class="b6">Tile map not calibrated${tilePts ? ' yet (1 of 2 points)' : ''}</div>
+        <div class="t3 xs mt-4">A tile set of your own has coordinates only you know about, so
+          this one is lined up by hand. Press Calibrate and click where you are.</div></div>
+    </div></div>` : ''}
+
+  ${/* The "working out where the game world sits" banner used to sit here.
+
+        It described a state that fixes itself: the client takes its bearings
+        from the cities the game names, so two jobs finish the job with nobody
+        doing anything. A large permanent panel explaining a wait that needs
+        no action is noise on the screen a driver opens to see where they are
+        - and it sat there for every one of those two jobs.
+
+        The one thing on it worth keeping was the way to do it by hand, and
+        that has moved to Settings, under Game, beside the rest of the map
+        and telemetry options. */''}
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Position</span>
+      ${/* Says so rather than quietly being a few hundred metres out. Not a
+            banner - the panel that used to explain this state was removed for
+            good reason - just the one word, where the reading is. */''}
+      ${placed && !exact ? `<span class="label" style="color:var(--text-3)">approximate</span>` : ''}
+      <span class="label">${live ? esc(headingLabel(live.heading)) + ' · ' + live.speed + ' km/h' : 'no fix'}</span>
+    </div>
+    <div class="card-body" id="mapCard">${onLeaflet
+      ? `<div id="leafletMap" class="leaflet-host"></div>
+         <div class="facts" id="liveFacts">${liveFactsInner()}</div>`
+      : liveMapInner()}</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Fleet on the road</span>
+    </div>
+    <div class="card-body" id="fleetPanel">${fleetPanelInner()}</div>
+  </section>
+
+  ${/* The "Telemetry source" card stood here: mode, endpoint, poll rate,
+        service address, and two paragraphs telling the driver to put the
+        SCS plugin in the game's plugins folder and run a telemetry server.
+
+        The app does both of those itself now - it installs the plugin and
+        it starts and supervises the adapter - so the instructions were not
+        merely noise, they were wrong, and a driver following them would
+        have been doing work that had already been done for them.
+
+        What is left of it is where it belongs: the status bar says whether
+        telemetry is live and why not, and the run monitor names the actual
+        reason when nothing is arriving. */''}
+  </section>`;
+}
+
+function liveMapInner() {
+  const db = Store.db;
+  const live = db.live;
+  const mapKey = liveMapKey();
+  const M = mapFor(mapKey);
+  const job = db.job;
+
+  const cityDots = Object.keys(M.cities).filter((name) => {
+    /* the dashboard map is small, so only the majors and whatever this run
+       actually touches earn a dot */
+    if (cityTier(mapKey, name) === 1) return true;
+    if (job && (name === job.to || name === job.from)) return true;
+    return !!(live && live.near && live.near.city === name);
+  }).map((name) => {
+    const [x, y] = M.cities[name];
+    const isEnd = job && (name === job.to);
+    const isStart = job && (name === job.from);
+    const nearName = live && live.near && live.near.city === name;
+    const r = isEnd || isStart ? 4 : 2.4;
+    const fill = isEnd ? 'var(--accent)' : isStart ? 'var(--ok)' : nearName ? 'var(--info)' : 'rgba(255,255,255,.32)';
+    return `<g class="map-node">
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>
+      <circle cx="${x}" cy="${y}" r="9" fill="transparent"><title>${esc(name)}</title></circle>
+      ${isEnd || isStart || nearName
+        ? `<text x="${x}" y="${y - 8}" text-anchor="middle" class="map-lbl">${esc(cityLabel(name))}</text>` : ''}
+    </g>`;
+  }).join('');
+
+  /* route line from source to destination when a job is running */
+  let routeLine = '';
+  if (job && M.cities[job.from] && M.cities[job.to]) {
+    const a = M.cities[job.from], b = M.cities[job.to];
+    routeLine = `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"
+      stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 5" opacity=".55"/>`;
+  }
+
+  /* breadcrumb trail */
+  let trail = '';
+  if (db.trail && db.trail.length > 1) {
+    trail = `<polyline points="${db.trail.map((p) => p[0] + ',' + p[1]).join(' ')}"
+      fill="none" stroke="var(--accent)" stroke-width="1.6" opacity=".75"
+      stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
+  /* the truck */
+  let marker = '';
+  if (Telemetry.onRoad() && live && live.game === baseGameFor(mapKey) && live.map &&
+      Number.isFinite(live.map.x) && Number.isFinite(live.map.z)) {
+    const deg = -(live.heading || 0) * 360;
+    marker = `<g transform="translate(${live.map.x.toFixed(1)},${live.map.z.toFixed(1)})" id="truckMarker">
+      <circle r="13" fill="var(--me)" opacity=".16"/>
+      <circle r="6.5" fill="var(--me)" stroke="var(--bg)" stroke-width="1.6"/>
+      <g transform="rotate(${deg.toFixed(1)})">
+        <path d="M0 -11 L4.4 4 L0 1.2 L-4.4 4 Z" fill="var(--me)" stroke="var(--bg)" stroke-width="1"/>
+      </g>
+      <title>${esc(Store.db.driver.name)} — ${live.speed} km/h ${esc(headingLabel(live.heading))}</title>
+    </g>`;
+  }
+  if (db.settings.showFleet) {
+    marker += Fleet.drivers.filter((d) => !d.self && (!d.game || d.game === baseGameFor(mapKey)))
+      .map((d) => {
+        const geo = typeof d.lat === 'number' && typeof d.lon === 'number'
+          ? [d.lat, d.lon] : (typeof d.x === 'number' && Calib.toGeo(mapKey, d.x, d.z));
+        if (!geo) return '';
+        const point = geoToGameLatLng(mapKey, geo[0], geo[1]);
+        const name = esc(d.name || d.id);
+        const job = d.job ? (d.job.from || '?') + ' -> ' + (d.job.to || '?') : 'No active job';
+        const truck = d.truck || 'Truck unavailable';
+        return `<g class="fleet-svg-marker" transform="translate(${point.lng.toFixed(1)},${(-point.lat).toFixed(1)})">
+          <circle r="10" fill="var(--info)" opacity=".18"/><path d="M0 -9 L4 4 L0 1 L-4 4 Z" fill="var(--info)" stroke="var(--bg)" stroke-width="1"/>
+          <text x="0" y="-13" text-anchor="middle" class="map-lbl">${name}</text>
+          <title>${name} | ${esc(truck)} | ${esc(job)} | ${d.speed || 0} km/h</title>
+        </g>`;
+      }).join('');
+  }
+
+  const B = M.bounds;
+  const grat = Array.from({ length: 9 }, (_, i) => B.y0 + (i * M.h) / 8).map((y) =>
+    `<line x1="${B.x0}" y1="${y.toFixed(1)}" x2="${B.x1}" y2="${y.toFixed(1)}" stroke="#212730"/>`).join('')
+    + Array.from({ length: 11 }, (_, i) => B.x0 + (i * M.w) / 10).map((x) =>
+    `<line x1="${x.toFixed(1)}" y1="${B.y0}" x2="${x.toFixed(1)}" y2="${B.y1}" stroke="#212730"/>`).join('');
+
+  const stateWord = {
+    delivering: ['ok', 'On the road delivering'],
+    stopped: ['warn', 'Stopped with a load'],
+    driving: ['info', 'Driving, no job'],
+    paused: ['warn', 'Game paused'],
+    idle: ['', 'Parked'],
+  }[db.activityState || 'idle'] || ['', 'Parked'];
+
+  return `
+    <div class="map-wrap">
+      <svg viewBox="${B.x0} ${B.y0} ${M.w} ${M.h}" class="livemap" role="img" aria-label="Driver position">
+        ${grat}${routeLine}${trail}${cityDots}${marker}
+      </svg>
+      <div class="map-badge">
+        <span class="pill ${stateWord[0]}">${icon('truck')}${stateWord[1]}</span>
+      </div>
+    </div>
+
+    <div class="facts" id="liveFacts">${liveFactsInner()}</div>`;
+}
+
+function liveFactsInner() {
+  const db = Store.db;
+  const live = db.live;
+  if (!live) {
+    return `<div class="fact"><div class="k">Position</div><div class="v t3" style="font-size:12.5px">No fix yet</div></div>
+      <div class="fact"><div class="k">Source</div><div class="v t3" style="font-size:12.5px">${esc(Telemetry.mode)}</div></div>`;
+  }
+  const j = db.job;
+  return `
+    <div class="fact"><div class="k">Nearest</div><div class="v">${live.near ? esc(live.near.city) : '—'}</div></div>
+    <div class="fact"><div class="k">Distance to it</div><div class="v">${live.near ? fmt.km(live.near.distance) : '—'}</div></div>
+    <div class="fact"><div class="k">Speed</div><div class="v">${live.speed} km/h${live.speedLimit ? ' <span class="t3">/ ' + live.speedLimit + '</span>' : ''}</div></div>
+    <div class="fact"><div class="k">Heading</div><div class="v">${esc(headingLabel(live.heading))}</div></div>
+    <div class="fact"><div class="k">Destination</div><div class="v">${j ? esc(j.to) : '—'}</div></div>
+    <div class="fact"><div class="k">World X / Z</div><div class="v mono" style="font-size:12px">${Math.round(live.world.x)} / ${Math.round(live.world.z)}</div></div>`;
+}
+
+function fleetPanelInner() {
+  const others = Fleet.drivers.filter((d) => !d.self);
+  if (!others.length) {
+    return `<div class="empty">${icon('users')}<div>${Fleet.enabled()
+      ? 'No other drivers reporting'
+      : 'Connect a fleet service to see the rest of the crew'}</div></div>`;
+  }
+  return `
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Driver</th><th>State</th><th>Run</th><th class="right">Speed</th></tr></thead>
+      <tbody>${others.map((d) => `<tr>
+        <td><div class="row gap-8">${avatarFace(d, 'sm')}
+          <span class="b6">${esc(d.name || d.id)}</span></div></td>
+        <td>${d.state === 'delivering'
+          ? `<span class="pill ok">${icon('truck')}Hauling</span>`
+          : `<span class="pill">${esc(d.state || 'idle')}</span>`}</td>
+        <td class="t2">${d.job ? esc(d.job.from) + ' <span class="t3">&rarr;</span> ' + esc(d.job.to) : '<span class="t3">no load</span>'}</td>
+        <td class="right mono">${Math.round(d.speed || 0)} km/h</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+/* repaint just the moving parts, once per telemetry frame */
+function paintLiveMap() {
+  /* With tiles up, only the marker and the readouts move — rebuilding the
+     container would destroy and recreate the Leaflet instance every second. */
+  if (TileMap.map) {
+    TileMap.update();
+    TileMap.drawFleet();
+    const facts = $('#liveFacts');
+    if (facts) facts.innerHTML = liveFactsInner();
+    const fp = $('#fleetPanel');
+    if (fp) fp.innerHTML = fleetPanelInner();
+    return;
+  }
+  const card = $('#mapCard');
+  if (card) card.innerHTML = liveMapInner();
+}
+
+/* ---------- calibration ---------- */
+function openCalibrate() {
+  const db = Store.db;
+  const live = db.live;
+  /* the map that is on screen, so a driver on ProMods is offered the cities
+     ProMods adds. Either way the sample is stored against the world it came
+     from, which Calib keys by game rather than by view. */
+  const mapKey = liveMapKey();
+  const M = mapFor(mapKey);
+  const pts = Calib.points(mapKey);
+
+  modal({
+    title: 'Line the map up',
+    body: `
+      <p class="t2">This normally happens on its own: every job the game gives you names the
+        city it starts and ends in, and that is all the client needs. Doing it by hand is only
+        for when you would rather not wait.</p>
+      <p class="t2 mt-12">Park in a city, pick it below and save the point. Do it in
+        <b>two cities well apart</b> and your position is exact on every map.</p>
+      ${!live ? `<div class="pill err mt-12">${icon('alert')}No live position — start the game with telemetry running</div>` : `
+        <div class="setting-row mt-12"><span class="t2">Current world position</span>
+          <span class="mono sm">${Math.round(live.world.x)}, ${Math.round(live.world.z)}</span></div>`}
+      <div class="field mt-12"><label for="calCity">I am parked in</label>
+        <select class="select" id="calCity">
+          ${Object.keys(M.cities).sort().map((c) =>
+            `<option value="${esc(c)}">${esc(cityLabel(c) === c ? c : cityLabel(c) + '  (' + c + ')')}</option>`).join('')}
+        </select></div>
+      <div class="t3 xs">References taken: ${pts.length} of 2${
+        pts.length ? ' — ' + pts.map((x) => esc(cityLabel(x.city || ''))).join(', ') : ''}</div>`,
+    foot: `<button class="btn" data-close>Close</button>
+      ${pts.length ? `<button class="btn btn-danger" data-act="cal-reset" data-map="${mapKey}">Reset</button>` : ''}
+      <button class="btn btn-primary" data-act="cal-save" data-map="${mapKey}" ${live ? '' : 'disabled'}>
+        ${icon('target')}Save this point</button>`,
+  });
+}
+
+function saveCalibrationPoint(mapKey) {
+  const db = Store.db;
+  const live = db.live;
+  if (!live) { toast('No live position to calibrate from', 'warn'); return; }
+  const city = $('#calCity') ? $('#calCity').value : null;
+  if (!city || !geoFor(mapKey)[city]) { toast('Pick a city first', 'warn'); return; }
+
+  const solved = Calib.sampleFromCity(mapKey, city, live.world, 'two cities you picked');
+  if (!solved && Calib.points(mapKey).length >= 2) {
+    toast('Those places are too close together — try one much further away', 'warn');
+  } else if (!solved) {
+    toast('Saved. Now drive to a distant city and do it again.', 'info');
+  }
+  closeModals();
+  render();
+}
+
+/* ---------------- store ---------------- */
+const LS = 'gmnwjt.v3';
+migrateStorageKey('gmnwjt.v3', LS);   /* the client store moved with the name */
+
+/* The owner's driver code: GMN-1001 became GMN-001.
+
+   The platform does this to its own stores, but the client is a separate
+   page and a driver can open it without ever opening the platform - so it
+   carries the same migration rather than relying on somebody having
+   visited login.html first.
+
+   Rewritten on the raw JSON, where a code is always a whole quoted string
+   value, so it can never catch part of a longer word. Silent when there is
+   nothing to do, which is every load after the first. */
+function migrateDriverCode(key, from, to) {
+  try {
+    const raw = localStorage.getItem(key);
+    const quoted = '"' + from + '"';
+    if (raw === null || raw.indexOf(quoted) === -1) return;
+    localStorage.setItem(key, raw.split(quoted).join('"' + to + '"'));
+    console.info('[GMN] driver code ' + from + ' is now ' + to + ' in ' + key);
+  } catch (e) { /* storage disabled: nothing stored, nothing pointing at it */ }
+}
+[LS, 'gmn.accounts.v1', 'gmn.trk.session.v1'].forEach(
+  (key) => migrateDriverCode(key, 'GMN-1001', 'GMN-001'));
+
+function seed() {
+  /* A fresh client holds no identity and no history. The driver signs in with
+     their Gaming Nation account first; everything below is filled from real runs. */
+  const db = {
+    driver: null,         /* set by Auth.signIn from the Gaming Nation driver record */
+    conn: { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' },
+    live: null,           /* last decoded position frame */
+    trail: [],            /* breadcrumb in schematic map units */
+    worldTrail: [],       /* breadcrumb in raw game coords, for the tile map */
+    activityState: null,  /* delivering | stopped | driving | paused | idle */
+    job: null,
+    logbook: [],
+    pending: [],
+    uploads: [],
+    activity: [],
+    messages: [],
+
+    /* Which notifications this driver has already looked at. An id and a
+       flag, never a copy of the thing itself - a copy goes stale the moment
+       the announcement behind it is edited, and a driver reading a headline
+       that no longer matches is worse off than one who was never told. */
+    seen: {},
+
+    settings: {
+      profileName: '',
+      autoSubmit: false,
+      captureScreenshot: true,
+      notifications: true,
+      startWithWindows: false,
+      minimiseToTray: true,
+      telemetryPort: '25555',
+      telemetryHost: '127.0.0.1',   /* not localhost — see Telemetry.endpoint() */
+      /* Whether this driver's truck is drawn on the crew's live map. Off
+         means no position is pushed at all - deliveries and sessions still
+         are, so the record is unaffected and only the map goes quiet. On by
+         default: a live map with nobody on it is the commoner complaint,
+         and this is a company everyone joined on purpose. */
+      shareLocation: true,
+
+      /* A call rung into an empty room is worse than a call refused. With
+         this on, an incoming call is answered 'busy' straight away - the
+         same answer the caller gets when this driver is already on one. */
+      doNotDisturb: false,
+
+      chatSound: true,          /* a note when a message arrives */
+
+      /* dark | light | auto. 'auto' follows Windows, which is what somebody
+         who has set their whole machine light already expects. */
+      theme: 'dark',
+
+      hostService: false,       /* run the company service on this machine */
+      hostServiceLan: false,    /* and let the rest of the crew reach it */
+      liveTelemetry: true,      /* poll the real game when the server is reachable */
+      pollRate: 400,            /* ms between telemetry polls — fast enough to read as live */
+      ets2Exe: '',              /* eurotrucks2.exe */
+      atsExe: '',               /* amtrucks.exe */
+      tmpExe: '',               /* TruckersMP or TrucksBook - see tmpLabel() */
+      autoStartTracking: true,  /* arm the link as soon as the game is launched */
+      jobUpdateSec: 10,         /* how often a running job is written to disk */
+      heartbeatSec: 15,         /* how often we tell GMN we are alive */
+      startMinimized: false,
+      sirenEnabled: true,       /* audible alert over the limit */
+      sirenSpeedLimit: 95,
+      game: 'ets2',             /* ets2 | ats - the world, as telemetry names it */
+      mapView: 'auto',          /* auto | ets2 | promods | ats - which map to draw */
+      mapSource: 'game',        /* game (ETS2/ATS road network) | world (real tiles) | tiles (own pyramid) | schematic */
+      tileUrl: '',              /* {z}/{x}/{y} template, for mapSource 'tiles' */
+      worldTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      worldAttribution: '&copy; OpenStreetMap contributors',
+      worldGeo: {},             /* per-game: game metres -> real lat/lon, the one transform */
+      fleetUrl: '',             /* GMN fleet service; empty = own truck only */
+      fleetRate: 5000,
+      showFleet: true,
+      showRegions: true,       /* the coloured seams between map regions */
+      watchSec: 4,             /* how often the process list is checked */
+      tileMinZoom: 0,
+      tileMaxZoom: 8,
+      tileSize: 256,
+      tileTms: false,
+      tileAttribution: '',
+      tileCalibration: {},      /* per-game world -> tile CRS transform */
+      tileView: null,           /* remembered centre + zoom */
+    },
+    stats: { totalKm: 0, totalJobs: 0, totalIncome: 0 },
+  };
+
+  db.activity.push({
+    at: new Date().toISOString(), tag: 'info',
+    msg: 'Client started — build ' + APP_VERSION,
+  });
+  return db;
+}
+
+const Store = {
+  db: null,
+  /* older builds kept a transform per map format; they were all solving the
+     same thing, and the world one is the one that carries over */
+  migrate() {
+    if (!this.db) return;
+
+    /* driver.gmnId became driver.gmnId. The driver record is persisted, so
+       a store written by an older build carries the old spelling — and
+       every screen reading gmnId would show a driver with no id: signed
+       in, apparently nameless, and unable to push a position.
+
+       The old name is spelled here in a way a blanket rename cannot
+       reach, because one already did: it rewrote both halves of this
+       check into `gmnId && !gmnId`, which is never true. A migration
+       that mentions the old name is exactly the code a rename of the old
+       name must not touch. Copied rather than moved, so an older build
+       opened afterwards still finds what it expects. */
+    const OLD_ID = 'h' + 'llId';
+    if (this.db.driver && this.db.driver[OLD_ID] && !this.db.driver.gmnId) {
+      this.db.driver.gmnId = this.db.driver[OLD_ID];
+    }
+
+    /* A store written by an older build knows nothing about the settings added
+       since, and every one of them would read back undefined — which is how a
+       tile layer ends up being handed no URL at all. Fill in whatever is
+       missing from a fresh seed, without touching anything already chosen. */
+    const fresh = seed();
+    this.db.settings = this.db.settings || {};
+    let added = 0;
+    for (const k in fresh.settings) {
+      if (!(k in this.db.settings)) { this.db.settings[k] = fresh.settings[k]; added++; }
+    }
+    /* and the same for the top-level shape the views assume */
+    ['logbook', 'pending', 'uploads', 'activity', 'messages', 'trail', 'worldTrail']
+      .forEach((k) => { if (!Array.isArray(this.db[k])) { this.db[k] = []; added++; } });
+    if (!this.db.conn || typeof this.db.conn !== 'object') { this.db.conn = fresh.conn; added++; }
+    if (!this.db.stats || typeof this.db.stats !== 'object') { this.db.stats = fresh.stats; added++; }
+    if (!this.db.seen || typeof this.db.seen !== 'object') { this.db.seen = {}; added++; }
+    if (added) console.info('[GMN] filled in ' + added + ' setting(s) this build added');
+
+    const s = this.db.settings;
+    s.worldGeo = s.worldGeo || {};
+    const old = s.geoCalibration;
+    if (old) {
+      for (const g in old) {
+        const c = old[g];
+        if (c && typeof c.sx === 'number' && typeof c.sz === 'number' && !s.worldGeo[g]) {
+          s.worldGeo[g] = c;
+        }
+      }
+      delete s.geoCalibration;
+    }
+    /* the schematic transform pointed at a layout that no longer exists */
+    delete s.calibration;
+
+    /* conn.gmn became conn.gmn with the rename. Carried over rather than
+       just renamed in the seed: a store written by an older build has only
+       the old field, so the new one would read undefined and the client
+       would show Offline until something happened to re-check. */
+    if (this.db.conn && this.db.conn.gmn === undefined && this.db.conn.gmn !== undefined) {
+      this.db.conn.gmn = this.db.conn.gmn;
+      delete this.db.conn.gmn;
+    }
+
+    /* An identity from a build that shipped sample data has no sign-in behind
+       it. Clearing it sends the driver to the sign-in screen, which is where
+       they should have been all along. */
+    /* Telemetry belongs to a session, not to the store. It was written out
+       with everything else and read back at boot, so a client that had been
+       driving came up believing it had a position - from a game that is not
+       running and a run that ended hours ago. Nothing downstream can tell
+       that frame from a live one. */
+    this.db.live = null;
+
+    const d = this.db.driver;
+    if (d && !d.authed) {
+      console.info('[GMN] clearing a leftover identity (' + (d.gmnId || '?') + ') — sign in again');
+      this.db.driver = null;
+      this.db.conn = { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
+      this.db.live = null;
+      this.db.activityState = null;
+      this.db.trail = [];
+      this.db.worldTrail = [];
+    }
+
+    /* a run left mid-flight by an older build should not still read as rolling */
+    if (this.db.job && this.db.job.live && this.db.conn.ets2 !== 'running') {
+      this.db.job.live = false;
+      if (this.db.job.status === 'driving') this.db.job.status = 'paused';
+    }
+  },
+
+  load() {
+    try {
+      const raw = localStorage.getItem(LS);
+      if (raw) { this.db = JSON.parse(raw); this.migrate(); return this.db; }
+    } catch (e) { console.warn('[JT] store unreadable, reseeding', e); }
+    this.db = seed(); this.save(); return this.db;
+  },
+  save() {
+    try { localStorage.setItem(LS, JSON.stringify(this.db)); }
+    catch (e) { console.warn('[JT] store not writable', e); }
+  },
+  reset() {
+    try { localStorage.removeItem(LS); } catch (e) {}
+    this.db = seed(); this.save();
+  },
+  log(tag, msg) {
+    this.db.activity.unshift({ at: new Date().toISOString(), tag, msg });
+    this.db.activity = this.db.activity.slice(0, 200);
+    this.save();
+  },
+};
+
+/* ============================================================
+   THE MAP THE DRIVER IS ACTUALLY ON
+   ------------------------------------------------------------
+   ProMods, RusMap, Road to Asia, The Land Down Under - a map mod
+   replaces the world the truck drives in. The client knew only
+   the two base maps, so a driver in Australia or east of the
+   Urals was drawn in Europe or not at all, and nothing on screen
+   said why.
+
+   Two halves, and they answer different questions.
+
+   INSTALLED comes from the shell: the game's mods_info.sii and
+   its mod folder. It is a fact about the machine, not about the
+   drive, because nothing outside the game can read which mods a
+   profile has ENABLED - that lives in an encrypted profile.sii.
+
+   IN USE is decided by the truck. A position outside the base
+   map's own bounds cannot happen on the base map, so it is proof
+   a map mod is loaded - the only proof available. Until that
+   happens the client says "installed", which is what it knows.
+
+   Both travel with the driver's position, so the crew map and
+   the website can say which world somebody is in rather than
+   drawing everyone on the same one.
+   ============================================================ */
+const MapMods = {
+  installed: [],       /* [{ name, known, size }] */
+  at: 0,
+  looking: false,
+  offMap: false,       /* a position the base map cannot explain */
+
+  /* The bridge, reached through a method the way Launcher does it. The
+     object contextBridge exposes is frozen, so this is also the only seam
+     a test can take hold of. */
+  api() { return window.gmnDesktop || null; },
+
+  async detect(force) {
+    const D = this.api();
+    if (!D || !D.gameMods || this.looking) return;
+    if (!force && this.at && Date.now() - this.at < 30 * 60 * 1000) return;
+
+    this.looking = true;
+    try {
+      const kind = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+      const res = await D.gameMods(kind);
+      this.at = Date.now();
+      if (!res || !res.ok) return;
+
+      const was = this.installed.map((m) => m.name).join('|');
+      this.installed = res.maps || [];
+      const now = this.installed.map((m) => m.name).join('|');
+      if (was !== now) {
+        if (this.installed.length) {
+          Store.log('ok', 'Map mod' + (this.installed.length === 1 ? '' : 's')
+            + ' found: ' + this.installed.map((m) => m.name).join(', '));
+        }
+        render();
+      }
+    } catch (e) {
+      /* no shell, or no Documents folder. The base maps still work. */
+    } finally {
+      this.looking = false;
+    }
+  },
+
+  /* The one worth naming. A driver with five installed is on one of them,
+     and the biggest recognised map is the best guess anything can make
+     without reading an encrypted file. */
+  primary() {
+    return this.installed.length ? this.installed[0] : null;
+  },
+
+  /* Called on every live frame. The base map's bounds are its own cities'
+     extent, so a little slack keeps a lorry parked past the last depot
+     from being called a mod. */
+  seen(mapKey, mx, mz) {
+    const b = mapFor(mapKey).bounds;
+    if (!b || !Number.isFinite(mx) || !Number.isFinite(mz)) return;
+    const padX = (b.x1 - b.x0) * 0.06;
+    const padY = (b.y1 - b.y0) * 0.06;
+    const off = mx < b.x0 - padX || mx > b.x1 + padX
+      || mz < b.y0 - padY || mz > b.y1 + padY;
+    if (off === this.offMap) return;
+    this.offMap = off;
+    if (off) {
+      Store.log('info', 'Your position is outside the base ' + mapFor(mapKey).short
+        + ' map — a map mod is loaded'
+        + (this.primary() ? ' (' + this.primary().name + ')' : ''));
+    }
+    render();
+  },
+
+  /* ProMods specifically, because the client HAS a ProMods map - the base
+     European table plus everywhere ProMods reaches that the base game has
+     no road to. Any other map mod is named but drawn on the base map,
+     which is honest: nothing here has its cities. */
+  usingProMods() {
+    return this.installed.some((m) => /^promods/i.test(m.name));
+  },
+
+  /* What to put on screen, and on the card the rest of the crew sees. */
+  label() {
+    const p = this.primary();
+    if (!p) return '';
+    return p.name;
+  },
+  state() {
+    if (!this.installed.length) return '';
+    return this.offMap ? 'in use' : 'installed';
+  },
+};
+
+/* ============================================================
+   WHAT THE WEBSITE KNOWS ABOUT THIS DRIVER
+   ------------------------------------------------------------
+   The photo, the name, the country and the rank all live on the
+   driver's row in Supabase, which is what the website reads and
+   writes. The client read that row at SIGN-IN and never again.
+
+   That is once, and a remembered sign-in never signs in: restore()
+   rebuilds the driver from the account kept on this machine and
+   touches no network at all. So a driver who set their photo on
+   the website after the last full sign-in - which is everybody,
+   because you sign in before you go and set a photo - watched the
+   app go on showing their initials forever, with nothing anywhere
+   saying why.
+
+   This pulls the row on startup and every fifteen minutes after,
+   and folds what changed into the local record.
+
+   IT NEVER BLANKS ANYTHING. A field that comes back null or empty
+   leaves what is already there, because "the column is missing",
+   "the read was refused by a policy" and "the driver cleared it"
+   are indistinguishable from here - and of those three, only one
+   means the photo should go. Clearing a photo on the website
+   clears it there; it is not worth deleting somebody's face over
+   a query that half-failed.
+   ============================================================ */
+/* ============================================================
+   THE CREW'S DISCORD CHANNEL
+   ------------------------------------------------------------
+   The service posts deliveries to a webhook it reads from
+   discord.json in its own directory. Nothing ever created that
+   file: the app offered no way to set one, and the project's
+   gmn-discord.json is not packaged and would not be found by a
+   service running out of app.asar.unpacked anyway.
+
+   So the installed app's service has never had a webhook and has
+   never posted a card. Everything that appeared in the channel
+   came from a test spawning the service out of the checkout.
+
+   A webhook cannot be detected - it is a secret handed out by
+   Discord, and only the person who made it has it - so this is
+   one of the few things in this client that has to be asked for.
+   It is asked for once, kept by the shell, and never read back:
+   the client is told THAT there is one and which host it points
+   at, and never the token.
+   ============================================================ */
+const CrewChannel = {
+  state: null,          /* { set, host } once asked */
+
+  api() { return window.gmnDesktop || null; },
+
+  async load(force) {
+    const D = this.api();
+    if (!D || !D.discordGet) return;
+    if (this.state && !force) return;
+    try {
+      this.state = await D.discordGet();
+      render();
+    } catch (e) { /* the shell is older than this call */ }
+  },
+
+  open() {
+    const D = this.api();
+    if (!D || !D.discordSet) { toast('This needs the desktop app', 'warn'); return; }
+    const on = this.state && this.state.set;
+
+    modal({
+      title: 'Crew Discord channel',
+      body: `
+        <p class="t2 sm">Deliveries and runs are posted to a Discord channel through a
+          webhook. In Discord: <b>Server Settings → Integrations → Webhooks → New
+          Webhook</b>, pick the channel, then <b>Copy Webhook URL</b>.</p>
+        ${on ? `<p class="t3 xs mt-12">One is set already, pointing at
+          <span class="mono">${esc(this.state.host)}</span>. It is not shown here:
+          whoever holds it can post into that channel as this company.</p>` : ''}
+        <div class="field mt-16"><label for="cwHook">Webhook URL</label>
+          <input class="input" id="cwHook" type="password" autocomplete="off"
+            placeholder="https://discord.com/api/webhooks/…"></div>
+        <div class="t3 xs mt-8">It is kept on this machine, in the company service's own
+          folder. It never goes to the website or to Gaming Nation.</div>`,
+      foot: `<button class="btn" data-close>Cancel</button>
+        ${on ? `<button class="btn btn-danger" data-act="crew-channel-clear">${icon('trash')}Remove</button>` : ''}
+        <button class="btn btn-primary" data-act="crew-channel-save">${icon('check')}Save</button>`,
+    });
+  },
+
+  async save(hook) {
+    const D = this.api();
+    if (!D || !D.discordSet) return;
+    const res = await D.discordSet(hook);
+    if (res && res.error) { toast(res.error, 'err'); return; }
+
+    this.state = res && res.set ? { set: true, host: res.host } : { set: false };
+    closeModals();
+    Store.log('ok', hook ? 'Crew Discord channel set' : 'Crew Discord channel removed');
+    toast(hook ? 'Channel set' : 'Channel removed', 'ok');
+
+    /* The service reads that file once, at startup. Without a restart the
+       webhook sits on disk doing nothing while the driver is told it is
+       set - the same shape of lie this whole feature exists to end. */
+    if (HostedService.status.running) {
+      toast('Restarting the service so it picks this up…', 'info');
+      await HostedService.stop();
+      await HostedService.start(!!Store.db.settings.hostServiceLan);
+    }
+    render();
+  },
+};
+
+const ProfileSync = {
+  at: 0,
+  busy: false,
+  EVERY_MS: 15 * 60 * 1000,
+
+  async refresh(force) {
+    if (this.busy) return;
+    if (!Auth.signedIn()) return;
+    if (!force && this.at && Date.now() - this.at < this.EVERY_MS) return;
+
+    const sb = window.gmnSupabase;
+    const d = Store.db.driver;
+    if (!sb || !d || !d.gmnId) return;
+
+    this.busy = true;
+    try {
+      const res = await sb.from('drivers').select('*')
+        .eq('driver_code', d.gmnId).maybeSingle();
+
+      /* An error, or no row, is not news about the driver - it is news
+         about the connection. Nothing is written on either. */
+      if (!res || res.error || !res.data) return;
+      this.at = Date.now();
+
+      const row = res.data;
+      let changed = false;
+
+      /* The photo. Kept in the app's own store as well as on the record,
+         because the record is rebuilt from scratch on every sign-in and
+         this copy is not. */
+      const photo = avatarSrc(row.avatar);
+      if (photo && photo !== d.avatar) {
+        d.avatar = photo;
+        keepAvatar(d.gmnId, photo);
+        changed = true;
+        Store.log('ok', 'Profile photo picked up from your Gaming Nation account');
+      }
+
+      /* Everything else worth showing, and only when it says something.
+         An empty string overwriting a real name is the same mistake as a
+         blanked photo, one field along. */
+      const take = (key, value) => {
+        const v = typeof value === 'string' ? value.trim() : value;
+        if (v === null || v === undefined || v === '') return;
+        if (d[key] === v) return;
+        d[key] = v;
+        changed = true;
+      };
+      take('name', row.full_name);
+      take('country', row.country);
+      take('rank', row.rank);
+      take('role', row.role);
+
+      if (changed) { Store.save(); render(); }
+    } catch (e) {
+      /* offline, or Supabase not configured on this build. The app works
+         without it and says nothing, because there is nothing a driver
+         could do about it. */
+    } finally {
+      this.busy = false;
+    }
+  },
+};
+
+/* ============================================================
+   IS THIS COPY THE CURRENT ONE?
+   ------------------------------------------------------------
+   The website publishes the build it is offering at
+   /version.json, and this compares it to APP_VERSION.
+
+   THREE ANSWERS, NOT TWO. Current, behind, and "could not
+   ask" - and the third is never quietly folded into the
+   first. A client that cannot reach the site and says "up to
+   date" is making a claim it has no basis for, and that is
+   exactly the failure this whole feature exists to prevent:
+   somebody running old code with nothing on screen saying so.
+
+   Versions are compared number by number, not as strings.
+   '1.0.10' is above '1.0.9' and sorts below it as text.
+   ============================================================ */
+const UPDATE_FEED = 'https://gaming-nation.pages.dev/version.json';
+
+const Updates = {
+  state: 'unknown',    /* unknown | current | behind | unreachable */
+  latest: null,
+  where: '',
+  reason: '',
+  at: 0,
+  asking: false,
+
+  /* '1.0.3' or 'V1.0.3' as [1, 0, 3] */
+  parts(v) {
+    return String(v || '').replace(/^v/i, '').split('.')
+      .map((n) => parseInt(n, 10) || 0);
+  },
+  /* -1 this is older, 0 the same, 1 this is newer */
+  compare(a, b) {
+    const x = this.parts(a), y = this.parts(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      const d = (x[i] || 0) - (y[i] || 0);
+      if (d) return d < 0 ? -1 : 1;
+    }
+    return 0;
+  },
+
+  behind() { return this.state === 'behind'; },
+
+  async check(force) {
+    /* once a boot and every six hours after, unless somebody asks */
+    if (this.asking) return;
+    if (!force && this.at && Date.now() - this.at < 6 * 3600 * 1000) return;
+    this.asking = true;
+    try {
+      const res = await this.fetch();
+      this.at = Date.now();
+
+      if (!res || res.error || !res.feed || !res.feed.version) {
+        this.state = 'unreachable';
+        this.reason = (res && res.error) || 'the site did not answer';
+        return;
+      }
+      this.latest = String(res.feed.version);
+      this.where = String(res.feed.downloads || '');
+      const cmp = this.compare(APP_VERSION, this.latest);
+      this.state = cmp < 0 ? 'behind' : 'current';
+      this.reason = '';
+      if (this.state === 'behind') {
+        Store.log('warn', 'A newer client is on the website — '
+          + this.latest + ' (this is ' + APP_VERSION + ')');
+      }
+    } catch (e) {
+      this.state = 'unreachable';
+      this.reason = e && e.message ? e.message : 'the check failed';
+    } finally {
+      this.asking = false;
+      render();
+    }
+  },
+
+  /* The desktop shell asks for us: the client's pages are file://, so a
+     cross-origin fetch from here is subject to CORS and one missing header
+     would turn this into a check that never answers - which reads as "up
+     to date". In a browser there is no shell, and the site does send the
+     header, so fetch is right there and wrong here. */
+  fetch() {
+    const D = window.gmnDesktop;
+    if (D && D.latestVersion) return D.latestVersion(UPDATE_FEED);
+    return window.fetch(UPDATE_FEED, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((feed) => ({ ok: true, feed }))
+      .catch((e) => ({ error: e.message }));
+  },
+
+  /* What to say in the status bar, which is where a driver's eye already
+     goes for the build number. */
+  chip() {
+    /* The build number belongs in all four of these, not three.
+
+       It used to be dropped exactly when the client was behind - the chip
+       became "Outdated - 1.1.7 is out" and the one number a driver needs in
+       order to say what they are running disappeared from the screen. That
+       was survivable while the rail repeated it under their name; the rail
+       does not any more, so this is the only place left that carries it. */
+    if (this.state === 'behind') {
+      return { cls: 'warn',
+        text: 'build ' + APP_VERSION + ' · Outdated · ' + this.latest + ' is out',
+        title: 'This client is ' + APP_VERSION + '. The website is offering '
+          + this.latest + '. Click to open the download page.' };
+    }
+    if (this.state === 'unreachable') {
+      return { cls: '', text: 'build ' + APP_VERSION,
+        title: 'Could not check for a newer build — ' + this.reason
+          + '. This is not the same as being up to date.' };
+    }
+    if (this.state === 'current') {
+      return { cls: '', text: 'build ' + APP_VERSION,
+        title: 'This is the build the website is offering.' };
+    }
+    return { cls: '', text: 'build ' + APP_VERSION, title: 'Checking for a newer build…' };
+  },
+};
+
+/* ============================================================
+   THEME
+   ------------------------------------------------------------
+   Every colour in the client comes from about twenty tokens, so
+   a theme is a data-theme on <html> and nothing else - see the
+   end of tracker.css.
+
+   'auto' follows the machine, and keeps following it: somebody
+   whose Windows flips to dark at sunset should not have to come
+   back here. So the listener stays attached rather than the
+   preference being read once at boot.
+   ============================================================ */
+const Theme = {
+  media: null,
+
+  wanted() {
+    const t = Store.db.settings.theme;
+    return t === 'light' || t === 'auto' ? t : 'dark';
+  },
+
+  apply() {
+    const want = this.wanted();
+    let use = want;
+    if (want === 'auto') {
+      const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      use = dark ? 'dark' : 'light';
+    }
+    /* dark is the stylesheet as written, so it is the ABSENCE of the
+       attribute rather than a value - one place for the default. */
+    if (use === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    this.watch();
+  },
+
+  watch() {
+    if (!window.matchMedia) return;
+    if (!this.media) {
+      this.media = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = () => { if (this.wanted() === 'auto') this.apply(); };
+      /* Safari and older Chromium only have the deprecated form */
+      if (this.media.addEventListener) this.media.addEventListener('change', onChange);
+      else if (this.media.addListener) this.media.addListener(onChange);
+    }
+  },
+};
+
+/* ---------------- app state ---------------- */
+const state = {
+  view: 'dashboard',
+  msgSel: 0,
+  convoySel: null,
+  logFilter: 'all',
+  logQuery: '',
+};
+
+const NAV = [
+  { key: 'dashboard',   label: 'Run monitor',   icon: 'gauge' },
+  { key: 'livemap',     label: 'Live map',      icon: 'pin' },
+  { key: 'pending',     label: 'Delivery queue', icon: 'clock',
+    count: () => Store.db.pending.length },
+  { key: 'uploads',     label: 'Media queue',   icon: 'upload',
+    count: () => Store.db.uploads.filter((u) => u.status !== 'done').length },
+  { key: 'logbook',     label: 'Logbook',       icon: 'book' },
+  { key: 'profile',     label: 'Driver record', icon: 'user' },
+  { key: 'leaderboard', label: 'Standings',     icon: 'trophy' },
+  { key: 'stats',       label: 'Statistics',    icon: 'chart' },
+  { key: 'achievements', label: 'Achievements', icon: 'medal' },
+  { key: 'notifications', label: 'Notifications', icon: 'bell',
+    count: () => Notify.count() },
+  { key: 'support',     label: 'Support',       icon: 'lifebuoy' },
+  /* Announcements AND conversations. The count used to be the unread
+     announcements alone, which was the whole of this screen; a message
+     from another driver now arrives here too and has to be counted, or
+     the one that actually wants answering is the one with no badge. */
+  { key: 'messages',    label: 'Messages',      icon: 'mail',
+    count: () => Store.db.messages.filter((m) => !m.read).length
+      /* Every ROOM is counted on the Chats tab, not here - it was only the
+         fleet room before, so a convoy room's unread landed on Messages
+         and sent the driver to a screen that does not list it. */
+      + Messages.threads.filter((t) => !t.room)
+        .reduce((n, t) => n + (t.unread || 0), 0) },
+
+  { key: 'chats',       label: 'Crew chat',     icon: 'chat',
+    count: () => {
+      return Messages.threads.filter((t) => t.room)
+        .reduce((n, t) => n + (t.unread || 0), 0);
+    } },
+  { key: 'convoy',      label: 'Convoys',       icon: 'route' },
+  { key: 'menu',        label: 'Menu',          icon: 'menu' },
+  { key: 'settings',    label: 'Settings',      icon: 'settings' },
+  { key: 'about',       label: 'About',         icon: 'info' },
+];
+
+/* ---------------- toasts ---------------- */
+function toast(msg, kind = 'info') {
+  const host = $('#toasts'); if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  const ic = { ok: 'check', warn: 'alert', err: 'alert', info: 'info' }[kind] || 'info';
+  el.innerHTML = `${icon(ic)}<div>${esc(msg)}</div>`;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 3800);
+}
+
+/* ---------------- modal ---------------- */
+function modal({ title, body, foot, onMount }) {
+  const w = document.createElement('div');
+  w.className = 'overlay';
+  w.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="modal-head">${esc(title)}</div>
+    <div class="modal-body">${body}</div>
+    <div class="modal-foot">${foot || '<button class="btn" data-close>Close</button>'}</div>
+  </div>`;
+  w.addEventListener('mousedown', (e) => { if (e.target === w) w.remove(); });
+  $$('[data-close]', w).forEach((b) => b.onclick = () => w.remove());
+  $('#layers').appendChild(w);
+  if (onMount) onMount(w);
+  return w;
+}
+function closeModals() { $$('#layers .overlay').forEach((o) => o.remove()); }
+
+/* ============================================================
+   Part 2 — game link (telemetry), job lifecycle
+   ============================================================ */
+
+/* The run itself: how far along it is, and what happens when it lands. Every
+   figure here comes from the telemetry feed — nothing is generated. */
+const GameLink = {
+  progress(job) {
+    if (!job || !job.km) return 0;
+    return clamp(job.drivenKm / job.km * 100, 0, 100);
+  },
+
+  completeJob() {
+    const db = Store.db;
+    const job = db.job;
+    job.status = 'delivered';
+    job.drivenKm = job.km;
+    job.finished = new Date().toISOString();
+    /* time on the run is what the clock says, not what the distance implies —
+       the old figure ignored every minute the truck spent standing still */
+    const started = new Date(job.started).getTime();
+    const elapsed = Number.isFinite(started) ? (Date.now() - started) / 60000 : 0;
+    job.duration = Math.round(elapsed > 0.5 ? elapsed
+      : job.km / Math.max(1, job.avgSpeed || job.speed) * 60);
+    job.fuelUsed = Math.round(job.km * 0.32);
+
+    Store.log('ok', `Delivery complete — ${job.to} (${fmt.km(job.km)}, ${fmt.eur(job.income)})`);
+
+    JobTracker.note(job, 'delivered',
+      'Delivered ' + job.cargo + ' to ' + cityLabel(job.to), 'ok', 'check');
+    Fleet.emit('job.delivered',
+      db.driver.name + ' delivered ' + job.cargo + ' to ' + cityLabel(job.to)
+      + ' — ' + fmt.km(job.km), 'ok');
+
+    const record = {
+      id: job.id, from: job.from, to: job.to, cargo: job.cargo, trailer: job.trailer,
+      weight: job.weight, km: job.km, income: job.income, market: job.market,
+      damage: +job.damage.toFixed(1), fuelUsed: job.fuelUsed,
+      started: job.started,
+      finished: job.finished, duration: job.duration, status: 'pending',
+      avgSpeed: job.avgSpeed || 0, top: Math.round(job.top || 0),
+      events: (job.events || []).slice(-40),
+      /* the run travels with what telemetry saw, so it can be checked */
+      evidence: JobTracker.evidence(job),
+    };
+    db.pending.push(record);
+
+    if (db.settings.captureScreenshot) captureDeliveryPhoto(job.id);
+
+    db.job = null;
+    JobTracker.reset(null);
+    Fleet.pushNow();          /* the board should show us empty straight away */
+    Store.save();
+
+    if (db.settings.autoSubmit) {
+      Store.log('info', 'Auto-submit is on — sending delivery to GMN');
+      submitDelivery(record.id, true);
+    } else {
+      toast('Delivery complete — awaiting submission', 'ok');
+    }
+    render();
+  },
+
+  cancelJob() {
+    const db = Store.db;
+    if (!db.job) return;
+    Store.log('err', 'Delivery cancelled by driver — ' + db.job.id);
+    Fleet.emit('job.cancelled',
+      db.driver.name + ' called off the run to ' + cityLabel(db.job.to), 'warn');
+    db.job = null;
+    JobTracker.reset(null);
+    Fleet.pushNow();
+    Store.save();
+    toast('Delivery cancelled', 'warn');
+    render();
+  },
+};
+
+/* Takes a picture of the drop from the desktop shell. A browser tab cannot
+   read the screen, so there it simply records that no photo was taken rather
+   than inventing one. */
+async function captureDeliveryPhoto(jobId) {
+  const db = Store.db;
+  const D = window.gmnDesktop;
+  if (!D || !D.captureScreen) {
+    Store.log('info', 'No delivery photo — the browser cannot read the screen');
+    return;
+  }
+  let shot = null;
+  try { shot = await D.captureScreen(); } catch (e) { shot = null; }
+  if (!shot || !shot.dataUrl) {
+    Store.log('warn', 'Delivery photo could not be taken for ' + jobId);
+    return;
+  }
+  db.uploads.push({
+    id: uid('up'), kind: 'screenshot', name: 'delivery_' + jobId + '.jpg',
+    size: Math.max(1, Math.round(shot.bytes / 1024)), job: jobId,
+    at: new Date().toISOString(), data: shot.dataUrl,
+    status: db.conn.gmn === 'connected' ? 'queued' : 'waiting',
+  });
+  Store.log('ok', 'Delivery photo captured for ' + jobId);
+  Store.save();
+  if (state.view === 'uploads') render();
+}
+
+/* ---------------- submitting / syncing ---------------- */
+function submitDelivery(id, silent) {
+  const db = Store.db;
+  const i = db.pending.findIndex((p) => p.id === id);
+  if (i < 0) return;
+  const rec = db.pending[i];
+
+  if (db.conn.gmn !== 'connected') {
+    rec.status = 'waiting';
+    Store.log('warn', 'No GMN connection — ' + rec.id + ' held in the queue');
+    Store.save();
+    toast('Offline — delivery kept in the queue', 'warn');
+    render();
+    return;
+  }
+
+  rec.status = 'synced';
+  db.pending.splice(i, 1);
+  db.logbook.unshift(rec);
+  db.stats.totalKm += rec.km;
+  db.stats.totalJobs += 1;
+  db.stats.totalIncome += rec.income;
+  const credited = creditToCompany(rec);
+  Store.log(credited ? 'ok' : 'warn', credited
+    ? `${rec.id} submitted to GMN — ${fmt.km(rec.km)} credited`
+    : `${rec.id} logged here, but your Gaming Nation record could not be reached`);
+  Store.save();
+  if (!silent) toast(credited ? 'Delivery submitted to GMN' : 'Logged locally — GMN not reachable',
+    credited ? 'ok' : 'warn');
+  render();
+}
+
+/* Puts the run on the company record, which is what the website reads: the
+   driver's totals, the fleet activity feed, and the run itself. Without this
+   a delivery would only ever exist on the machine that drove it. */
+function creditToCompany(rec) {
+  const me = Store.db.driver && Store.db.driver.gmnId;
+  const hq = Auth.hqDb();
+  if (!me || !hq) return false;
+  const d = (hq.drivers || []).find((x) => x.id === me);
+  if (!d) return false;
+
+  hq.jobs = hq.jobs || [];
+  if (hq.jobs.some((j) => j.id === rec.id)) return true;   /* already credited */
+  /* The run carries everything the company reports on — where it went, how
+     far, and what it paid. Every earnings figure on the platform is summed
+     back out of these, so the money only has to be right here. */
+  hq.jobs.unshift({
+    id: rec.id, driverId: me, driver: d.name,
+    from: rec.from, to: rec.to, cargo: rec.cargo,
+    km: rec.km, income: rec.income, damage: rec.damage,
+    started: rec.started || null,
+    finished: rec.finished || new Date().toISOString(),
+    duration: rec.duration || 0,
+    avgSpeed: rec.avgSpeed || 0,
+    status: 'delivered',
+  });
+  hq.jobs = hq.jobs.slice(0, 500);
+
+  d.km = (d.km || 0) + rec.km;
+  d.deliveries = (d.deliveries || 0) + 1;
+  d.weekKm = (d.weekKm || 0) + rec.km;
+  d.monthKm = (d.monthKm || 0) + rec.km;
+  /* the all-time total is kept here because the job list is capped and the
+     oldest runs eventually fall off it; the weekly and monthly figures are
+     recomputed from the runs by the platform, so they cannot drift */
+  d.earned = (d.earned || 0) + (rec.income || 0);
+  d.weekEarned = (d.weekEarned || 0) + (rec.income || 0);
+  d.monthEarned = (d.monthEarned || 0) + (rec.income || 0);
+  d.lastSeen = new Date().toISOString();
+
+  /* a dispatched load closes itself off when it is actually run */
+  (hq.assignments || []).forEach((a) => {
+    if (a.driverId === me && (a.status === 'assigned' || a.status === 'accepted')
+      && a.to === rec.to && a.from === rec.from) {
+      a.status = 'done';
+      a.completed = new Date().toISOString();
+    }
+  });
+
+  hq.activity = hq.activity || [];
+  hq.activity.unshift({
+    id: uid('act'), kind: 'delivery', icon: 'package', driverId: me,
+    text: d.name + ' delivered ' + rec.cargo + ' to ' + rec.to,
+    meta: fmt.km(rec.km), at: new Date().toISOString(),
+  });
+  hq.activity = hq.activity.slice(0, 200);
+
+  Auth.saveHqDb(hq);
+  /* the sitting this was driven in gets the credit too */
+  Sessions.credit(rec);
+  if (Sync.on()) Sync.push();
+  return true;
+}
+
+function discardDelivery(id) {
+  const db = Store.db;
+  const rec = db.pending.find((p) => p.id === id);
+  if (!rec) return;
+  db.pending = db.pending.filter((p) => p.id !== id);
+  db.uploads = db.uploads.filter((u) => u.job !== id);
+  Store.log('warn', 'Delivery ' + id + ' discarded by driver');
+  Store.save();
+  toast('Delivery discarded', 'warn');
+  render();
+}
+
+function syncUploads() {
+  const db = Store.db;
+  const queue = db.uploads.filter((u) => u.status !== 'done');
+  if (!queue.length) { toast('Nothing to upload', 'info'); return; }
+  if (db.conn.gmn !== 'connected') { toast('No connection to the GMN server', 'err'); return; }
+  queue.forEach((u) => { u.status = 'done'; u.uploaded = new Date().toISOString(); });
+  Store.log('ok', `Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'} to GMN storage`);
+  Store.save();
+  toast(`Uploaded ${queue.length} file${queue.length === 1 ? '' : 's'}`, 'ok');
+  render();
+}
+
+/* The status light reports what the company service actually answered —
+   clicking it asks again rather than pretending the link changed. */
+async function toggleServer() {
+  const db = Store.db;
+  if (!db.driver || !db.driver.authed) { toast('Sign in first', 'warn'); return; }
+  if (!Sync.on()) {
+    toast('Working on this machine only', 'warn', 'Add a company service in Settings to sync');
+    return;
+  }
+  toast('Checking the company service…', 'info');
+  await Sync.pull();
+  const ok = Sync.status === 'ok';
+  const was = db.conn.gmn === 'connected';
+  db.conn.gmn = ok ? 'connected' : 'offline';
+  if (ok && !was) {
+    db.uploads.forEach((u) => { if (u.status === 'waiting') u.status = 'queued'; });
+    db.pending.forEach((p) => { if (p.status === 'waiting') p.status = 'pending'; });
+  }
+  Store.log(ok ? 'ok' : 'err',
+    ok ? 'Company service answered' : 'Company service did not answer — working offline');
+  Store.save();
+  toast(ok ? 'Gaming Nation online' : 'Gaming Nation offline', ok ? 'ok' : 'err');
+  render();
+}
+
+/* ============================================================
+   Part 3 — views
+   ============================================================ */
+
+const initialsOf = (n) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
+/* A driver's face, where the company record has one.
+
+   The picture is uploaded on the website and stored on the driver record,
+   so by the time it reaches the client it has already travelled here in
+   the company payload — there is nothing to fetch and nothing to cache.
+   Everyone else keeps their initials. */
+function avatarFace(d, cls) {
+  const own = avatarSrc(d && d.avatar);
+
+  /* Then this machine's own copy of the signed-in driver's photo.
+
+     The record is rebuilt from the drivers table on every sign-in and
+     replaced by the company payload on every pull, and it only carries a
+     photo when the database has a column to keep one in. So the record
+     was the least reliable place to read it from, and a driver who had
+     set a photo watched it turn back into initials on the next launch.
+     This copy belongs to the app and nothing that syncs can reach it. */
+  /* Either name for the code. A roster row calls it `id`; the signed-in
+     driver record calls it `gmnId`, and reading only `id` meant the one
+     person whose photo this app keeps a copy of - the driver using it -
+     was the one person it never found it for. */
+  const src = own || keptAvatar(d && (d.id || d.gmnId));
+
+  const inner = src
+    ? `<img class="avatar-img" src="${esc(src)}" alt="${esc((d && (d.name || d.id)) || 'Driver')}"
+        loading="lazy" decoding="async" onerror="${AVATAR_ONERROR}">`
+    : esc(initialsOf((d && (d.name || d.id)) || '?'));
+
+  return `<span class="avatar ${cls || ''}${src ? ' has-img' : ''}">${inner}</span>`;
+}
+
+/* The photo this app was given, kept where nothing can sync it away.
+
+   One entry per driver code, so signing in as somebody else on a shared
+   machine does not show the last person's face. Wrapped, because storage
+   can be unavailable and the app must still draw. */
+const AVATAR_KEEP = 'gmn.trk.avatar.';
+
+/* The Gaming Nation mark, for a photo that is set but will not load.
+
+   Relative: icons/ ships inside the packaged app, so this resolves with
+   no internet — which the published address would not. That address is
+   the second try, for a build served from somewhere without it. */
+const AVATAR_FALLBACK = 'icons/mark.png';
+const AVATAR_FALLBACK_REMOTE = 'https://gaming-nation.pages.dev/icons/mark.png';
+
+/* What may go in an img src.
+
+   It used to be data: URLs and nothing else, so a drivers.avatar holding
+   an ordinary https:// address — a file in Supabase Storage, anything
+   pasted in — was discarded and the driver fell back to their initials
+   with no error anywhere. Still a whitelist, because this value comes
+   from a row a driver can write and goes straight into an attribute. */
+function avatarSrc(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v) return '';
+  if (v.startsWith('data:image/')) return v;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[\w./-]+\.(png|jpe?g|webp|gif|svg)$/i.test(v)) return v;
+  return '';
+}
+
+/* The driver's face, in a form the service can put on a Discord card.
+
+   Two shapes are useful and they get there differently. A public https
+   address is handed to Discord to fetch. A data: URI cannot be fetched by
+   anybody - it is bytes, not a location - so the service uploads it with
+   the card and the embed points at the upload. Either works; what does not
+   is a LAN address, which Discord's servers cannot reach and which would
+   be a broken image on every delivery.
+
+   Capped, because this rides on an ordinary event. An avatar is tens of
+   kilobytes; anything past a megabyte is a mistake somewhere rather than a
+   portrait, and it is not worth slowing a delivery report down for. */
+const CARD_AVATAR_MAX = 1024 * 1024;
+
+function cardAvatar(driver) {
+  /* The same two places, in the same order, that avatarFace draws from.
+     Reading driver.avatar alone was wrong and quietly so: the record is
+     rebuilt on every sign-in and only carries a photo when the database
+     has a column for one, which is exactly why the app keeps its own copy
+     under the driver's code. A driver with a photo on screen still had a
+     faceless card. */
+  const raw = avatarSrc(driver && driver.avatar)
+    || keptAvatar(driver && driver.gmnId);
+
+  const v = usableAvatar(raw);
+  if (v) return v;
+
+  /* No photo set. Rather than a card with a blank where the face goes,
+     send the same initials disc the app itself draws - it is the mark the
+     crew already associates with this driver, and it costs a few hundred
+     bytes. A real photo replaces it the moment one is set. */
+  return initialsAvatar(driver);
+}
+
+/* An avatar the service can actually put on a card: bytes it can upload,
+   or an address Discord's own servers can reach. Anything else - a LAN
+   host, localhost, plain http, a bare filename - would be a broken image
+   on every delivery, so it comes back empty. */
+function usableAvatar(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return '';
+
+  if (/^data:image\//i.test(v)) return v.length > CARD_AVATAR_MAX ? '' : v;
+
+  if (!/^https:\/\//i.test(v)) return '';
+  let host = '';
+  try { host = new URL(v).hostname.toLowerCase(); } catch (e) { return ''; }
+  const unreachable = host === 'localhost' || host === '::1'
+    || /\.local$/.test(host)
+    || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  return unreachable ? '' : v;
+}
+
+/* The driver's initials on the brand disc, as a PNG - the app's own avatar,
+   drawn rather than described, because Discord will not render an SVG in an
+   embed icon. */
+function initialsAvatar(driver) {
+  const name = (driver && (driver.name || driver.gmnId)) || '?';
+  try {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 128;
+    const g = c.getContext('2d');
+    if (!g) return '';
+    g.fillStyle = '#8bd62b';
+    g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
+    /* the same dark ink the client puts on brand green - white on it is
+       about 1.9:1 */
+    g.fillStyle = '#0a1403';
+    g.font = '600 54px "Inter", "Segoe UI", system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(initialsOf(name), 64, 70);
+    return c.toDataURL('image/png');
+  } catch (e) {
+    return '';                 /* no canvas: a name with no face, as before */
+  }
+}
+
+/* Clearing onerror first is what stops a missing fallback looping. */
+const AVATAR_ONERROR = 'this.onerror=null;this.src=&quot;' + AVATAR_FALLBACK + '&quot;;'
+  + 'this.onerror=function(){this.onerror=null;this.src=&quot;'
+  + AVATAR_FALLBACK_REMOTE + '&quot;};';
+
+function keptAvatar(id) {
+  if (!id) return '';
+  try {
+    return avatarSrc(localStorage.getItem(AVATAR_KEEP + id));
+  } catch (e) { return ''; }
+}
+
+function keepAvatar(id, dataUrl) {
+  if (!id) return;
+  try {
+    if (dataUrl) localStorage.setItem(AVATAR_KEEP + id, dataUrl);
+    else localStorage.removeItem(AVATAR_KEEP + id);
+  } catch (e) { /* out of quota, or private mode */ }
+}
+
+/* one call after the typing stops, rather than one per keystroke */
+function debounce(fn, ms) {
+  let t = null;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+function viewHead(title, sub, actions) {
+  /* on a phone the header already names the section, so the title row would
+     say it twice; it is hidden there rather than removed */
+  return `<div class="view-head">
+    <div class="vh-title"><h1 class="view-title">${esc(title)}</h1>
+    ${sub ? `<div class="view-sub">${esc(sub)}</div>` : ''}</div>
+    ${actions ? `<div class="actions">${actions}</div>` : ''}
+  </div>`;
+}
+
+/* ring gauge */
+function gauge(pct, label, value, color) {
+  const size = 58, sw = 4, r = (size - sw) / 2, c = size / 2;
+  const circ = 2 * Math.PI * r, len = clamp(pct, 0, 100) / 100 * circ;
+  return `<div class="gauge" style="width:${size}px;height:${size}px">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#1c2128" stroke-width="${sw}"/>
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+        stroke-linecap="round" stroke-dasharray="${len.toFixed(1)} ${circ.toFixed(1)}"/>
+    </svg>
+    <span class="gauge-txt"><span class="gauge-val">${esc(value)}</span>
+      <span class="gauge-lbl">${esc(label)}</span></span>
+  </div>`;
+}
+
+/* ---------------- dashboard: the run ---------------- */
+function viewDashboard() {
+  const db = Store.db;
+  const running = db.conn.ets2 === 'running';
+  const job = db.job;
+
+  /* nothing here starts or stops anything by hand — the client watches for
+     the game itself and these just report what it has found */
+  /* the sitting the client has open, so a driver can see that their time is
+     being recorded rather than having to take it on trust */
+  const session = Sessions.current();
+  const sessionMin = session
+    ? Math.max(0, Math.round((Date.now() - new Date(session.started).getTime()) / 60000))
+    : null;
+
+  const actions = `
+    <span class="pill game-only ${running ? 'ok' : ''}">${icon(running ? 'truck' : 'search')}${
+      running ? mapFor(db.settings.game).short + ' running' : 'Watching for the game'}</span>
+    ${session ? `<span class="pill ok" title="Your session is being recorded on your Gaming Nation record">
+      ${icon('clock')}${esc(fmt.dur(sessionMin))} this session</span>` : ''}
+    <button class="btn btn-sm game-only" data-act="nav" data-view="settings">${icon('settings')}Link games</button>
+    <button class="btn btn-sm install-cta" data-act="install-app">${icon('download')}Install</button>`;
+
+  return `
+  ${viewHead('Run monitor', db.conn.profile ? 'Game profile: ' + db.conn.profile : 'No game profile selected', actions)}
+
+  ${launchBarHTML()}
+
+  ${/* A seven-cell strip stood here - status, truck, load, location,
+        earned today, driven today, XP. Every one of those is still on
+        screen somewhere it belongs: status and the nearest city along the
+        bottom bar, the truck and the load on the run card below, and
+        today's figures and the XP on Statistics. This was a second copy
+        of all of it across the top of the one screen a driver watches
+        while driving.
+
+        It also carried a bug of its own the whole time: live.near is
+        {city, distance}, and printing it whole put "[object Object]"
+        where the city should have been. Everything else in the client
+        reads live.near.city. */''}
+
+  ${assignmentsCardHTML()}
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Active run</span>
+      <span class="label">${esc(db.driver.gmnId)}</span>
+    </div>
+    <div class="card-body" id="runCard">${runCardInner()}</div>
+  </section>
+
+  ${liveDriversHTML()}
+
+  ${/* The event log used to be the last card on this screen. It is a
+        diagnostic - every line of it is written for somebody working out why
+        something did not happen - and the run monitor is not where a driver
+        goes for that. It is still recorded, in full, and it has moved to
+        Settings where a diagnostic belongs. */''}`;
+}
+
+
+/* The profile tile on the run monitor. Telemetry does not report which game
+   profile is loaded, so this is the driver telling us — it labels their runs
+   and is what the launch bar shows. */
+/* The icons the launch tiles wear.
+
+   Read once out of each game's own executable and kept in the store, so a
+   tile is not waiting on a round trip every time the page draws. Refreshed
+   whenever the path changes - a driver who repoints ETS2 at a different
+   install gets that install's icon.
+
+   Nothing here ships anybody's artwork: the marks belong to SCS and to
+   TruckersMP, and this only ever shows what is already on the driver's
+   own disk. */
+/* Which game profile the driver is actually on.
+
+   Telemetry never reports it, so this used to be a box the driver typed
+   their profile name into - and a typo then rode along on every run they
+   filed, with nothing anywhere to catch it. Somebody who renamed a profile
+   in game had no way to know the label had stopped matching either.
+
+   The games write it down: each profile is a folder whose name is the
+   profile name in hex, and its timestamp moves every time that profile is
+   saved. So the most recently saved profile is the one being played, and
+   the client can simply look.
+
+   A name the driver set by hand is left alone. They may have a reason, and
+   overwriting somebody's deliberate choice on every boot is worse than
+   being slightly out of date. */
+const GameProfiles = {
+  list: [],
+  looking: false,
+
+  async detect() {
+    const D = window.gmnDesktop;
+    if (!D || !D.gameProfiles || this.looking) return;
+    this.looking = true;
+    try {
+      const kind = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+      this.list = (await D.gameProfiles(kind)) || [];
+
+      const s = Store.db.settings;
+      const newest = this.list[0] && this.list[0].name;
+      if (!newest) return;
+
+      /* Whatever the game saved last, always. This used to leave a name
+         the driver had typed alone - but there is no longer anywhere to
+         type one, and a name kept from a build that had that box would
+         otherwise stick forever and label every run with a profile the
+         driver stopped using. */
+      const chosen = String(s.profileName || '').trim();
+      if (chosen === newest) return;
+
+      s.profileName = newest;
+      Store.db.conn.profile = newest;
+      Store.log('ok', chosen
+        ? 'Game profile "' + chosen + '" is gone — now on ' + newest
+        : 'Game profile detected — ' + newest);
+      Store.save();
+      render();
+    } catch (e) {
+      /* no profiles readable is the same as none: the driver can still type one */
+    } finally {
+      this.looking = false;
+    }
+  },
+};
+
+const GameIcons = {
+  pending: false,
+  again: false,
+
+  async refresh() {
+    const D = window.gmnDesktop;
+    if (!D || !D.gameIcon) return;
+    /* asked again while busy: remember it, rather than dropping the ask.
+       A path detected mid-refresh would otherwise wait for the next boot
+       to get its icon. */
+    if (this.pending) { this.again = true; return; }
+    const s = Store.db.settings;
+    const want = { ets2: s.ets2Exe, ats: s.atsExe, tmp: s.tmpExe };
+    const have = s.gameIcons || (s.gameIcons = {});
+
+    /* only ask for what has changed, or nothing at all on most loads */
+    const todo = Object.keys(want).filter((k) =>
+      want[k] && have[k + ':from'] !== want[k]);
+    if (!todo.length) return;
+
+    this.pending = true;
+    try {
+      for (const k of todo) {
+        const url = await D.gameIcon(want[k]);
+        have[k] = url || null;
+        have[k + ':from'] = want[k];
+      }
+      Store.save();
+      render();
+    } catch (e) {
+      /* a tile without an icon is the tile as it was before */
+    } finally {
+      this.pending = false;
+    }
+    if (this.again) { this.again = false; this.refresh(); }
+  },
+
+  of(kind) {
+    const g = Store.db.settings.gameIcons;
+    return (g && g[kind]) || null;
+  },
+};
+
+/* ============================================================
+   WHERE THE GAMES ARE
+   ------------------------------------------------------------
+   Settings has a Detect button beside each game, and that button
+   was the only thing that ever ran the search. So a driver who
+   had just installed the client met launch tiles wearing a
+   warning badge, and clicking one dropped them into Settings to
+   press a button the client was perfectly able to press itself.
+
+   It presses it itself now. Same search, same answer, nobody
+   asked. What keeps that from being rude:
+
+     A path somebody set by hand is theirs. We only fill a blank -
+     or replace one whose file is no longer there, because a tile
+     pointing at a game that has moved cannot start anything, and
+     GameProfiles already treats a vanished choice the same way.
+
+     Finding nothing changes nothing. The old value stays, so a
+     drive that is merely unplugged comes back rather than being
+     quietly blanked.
+
+     Not finding a game is silent. Most drivers own one of the
+     two, and a warning every boot about the one they never
+     bought is noise that teaches people to ignore warnings.
+   ============================================================ */
+const GamePaths = {
+  looking: false,
+
+  async fill() {
+    const D = window.gmnDesktop;
+    if (!D || !D.autoDetect || this.looking) return;
+
+    const s = Store.db.settings;
+    const stale = [];
+    for (const kind of ['ets2', 'ats', 'tmp']) {
+      const have = String(s[Launcher.pathKey(kind)] || '').trim();
+      if (!have) { stale.push(kind); continue; }
+      if (D.exists && !(await D.exists(have).catch(() => true))) stale.push(kind);
+    }
+    if (!stale.length) return;
+
+    this.looking = true;
+    let found = 0;
+    try {
+      for (const kind of stale) {
+        const had = String(s[Launcher.pathKey(kind)] || '').trim();
+        let hit = null;
+        try { hit = await D.autoDetect(kind); } catch (e) { hit = null; }
+        /* nothing found leaves the old value alone - an unplugged drive
+           comes back, and a blanked setting does not */
+        if (!hit || hit === had) continue;
+        s[Launcher.pathKey(kind)] = hit;
+        Store.log('ok', (had ? Launcher.label(kind) + ' moved - now at '
+          : 'Found ' + Launcher.label(kind) + ' - ') + hit);
+        found++;
+      }
+    } finally {
+      this.looking = false;
+    }
+    if (found) { Store.save(); render(); GameIcons.refresh(); }
+  },
+};
+
+function launchBarHTML() {
+  const db = Store.db;
+  const s = db.settings;
+  const ets2Ready = !!s.ets2Exe;
+  const atsReady = !!s.atsExe;
+  const tmpReady = !!s.tmpExe;
+
+  return `<div class="launchbar">
+    <button class="launch-tile game game-only" data-act="launch-game" data-kind="ets2"
+      title="${ets2Ready ? esc(s.ets2Exe) : 'Set the path in Settings'}">
+      <span class="lt-mark">${GameIcons.of('ets2')
+        ? '<img src="' + esc(GameIcons.of('ets2')) + '" alt="">'
+        : icon('truck')}</span>
+      <span class="lt-text"><span class="lt-1">EURO TRUCK</span><span class="lt-2">Simulator 2</span></span>
+      ${ets2Ready ? '' : '<span class="lt-warn" title="No path set">!</span>'}
+    </button>
+
+    <button class="launch-tile game game-only" data-act="launch-game" data-kind="ats"
+      title="${atsReady ? esc(s.atsExe) : 'Set the path in Settings'}">
+      <span class="lt-mark">${GameIcons.of('ats')
+        ? '<img src="' + esc(GameIcons.of('ats')) + '" alt="">'
+        : icon('truck')}</span>
+      <span class="lt-text"><span class="lt-1">AMERICAN TRUCK</span><span class="lt-2">Simulator</span></span>
+      ${atsReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
+    </button>
+
+    <button class="launch-tile tmp game-only" data-act="launch-game" data-kind="tmp"
+      title="${tmpReady ? esc(s.tmpExe) : 'Set the path in Settings'}">
+      <span class="lt-mark">${GameIcons.of('tmp')
+        ? '<img src="' + esc(GameIcons.of('tmp')) + '" alt="">'
+        : icon('users')}</span>
+      <span class="lt-text"><span class="lt-1">${esc(tmpTileWords()[0])}</span><span class="lt-2">${esc(tmpTileWords()[1])}</span></span>
+      ${tmpReady ? '' : '<span class="lt-warn" title="No path set">!</span>'}
+    </button>
+
+    ${/* The PROFILE tile stood here. It existed to ask the driver which game
+          profile they were on, and the client works that out for itself now.
+          Settings still has the field, under Game. */''}
+
+    <button class="launch-tile" data-act="open-gmn" data-href="login.html#/dashboard">
+      <span class="lt-mark">${icon('grid')}</span>
+      <span class="lt-text"><span class="lt-1">MY GMN</span><span class="lt-2">Dashboard</span></span>
+    </button>
+
+    <button class="launch-tile" data-act="open-gmn" data-href="login.html#/rankings">
+      <span class="lt-mark">${icon('trophy')}</span>
+      <span class="lt-text"><span class="lt-1">MY GMN</span><span class="lt-2">Ranking</span></span>
+    </button>
+  </div>`;
+}
+
+/* ---------- who else is out there ----------
+   Every driver currently reporting, with what they are pulling, what they
+   are driving and how fast. Own truck first, then the busiest. */
+/* Every driver reporting, with the run each one is actually on. The rows are
+   not a table any more: a run in progress has a shape — a route, a bar, a
+   time left — and a table cell cannot show it. This is the picture a
+   dispatcher wants, and it moves as the trucks do. */
+function liveDriversHTML() {
+  return `
+  <section class="card" id="fleetCard">
+    <div class="card-head">
+      <span class="label">Drivers on the road</span>
+      <div class="row gap-8">
+        <span class="label" id="fleetCount"></span>
+        ${liveDot()}
+      </div>
+    </div>
+    <div class="card-body" id="fleetBody">${liveDriversInner()}</div>
+  </section>`;
+}
+
+/* the state of the live link, said plainly and in one place */
+function liveDot() {
+  if (!Fleet.enabled()) return `<span class="livedot off" title="No company service connected">Offline</span>`;
+  if (Realtime.status === 'live') return `<span class="livedot on" title="Pushed live from the company service">Live</span>`;
+  if (Realtime.status === 'connecting') return `<span class="livedot wait" title="Opening the live link">Linking</span>`;
+  if (Realtime.status === 'retry') return `<span class="livedot wait" title="${esc(Realtime.lastError || 'reconnecting')}">Polling</span>`;
+  return `<span class="livedot wait" title="Polling the company service">Polling</span>`;
+}
+
+/* Everyone the fleet list draws: the driver themselves first, then everybody
+   else the service is reporting.
+
+   This block used to sit at the top level of the file with no function around
+   it, so `db` resolved to nothing and the whole of tracker.js died on load with
+   "db is not defined" — taking Auth, the sign-in and every screen below it
+   down with it. fleetRows() was called from two places and defined in none. */
+function fleetRows() {
+  const db = Store.db;
+  const mine = db.driver ? db.driver.gmnId : null;
+
+  const self = db.live ? [{
+    id: mine || 'local',
+    name: db.driver?.name || 'Gaming Nation Driver',
+    self: true,
+
+    speed: db.live.speed || 0,
+
+    truck: db.live.truck || db.driver?.truck || '',
+
+    state: db.activityState || 'idle',
+
+    job: db.job ? {
+      from: db.job.from,
+      to: db.job.to,
+      cargo: db.job.cargo,
+      km: db.job.km,
+      drivenKm: db.job.drivenKm,
+      progress: GameLink.progress(db.job),
+      etaMin: JobTracker.etaMinutes(db.job),
+    } : null,
+
+  }] : [];
+
+  /* our own row is built above from live telemetry, which is fresher than
+     anything that has been round the service — so drop the service copy */
+  const others = (Fleet.drivers || [])
+    .filter((d) => d && !d.self && (!mine || d.id !== mine));
+
+  return self.concat(others);
+}
+
+function liveDriversInner() {
+  const rows = fleetRows();
+
+  if (!rows.length) {
+    return `<div class="empty">${icon('users')}
+      <div>${Fleet.enabled() ? 'Nobody is reporting a position' : 'No fleet service connected'}</div>
+      <div class="t3 xs">${Fleet.enabled()
+        ? 'Drivers appear here the moment their client sends a position.'
+        : 'Point every client at the same company service and the whole crew shows up here, live.'}</div>
+    </div>`;
+  }
+
+  const stateOf = (st) => ({
+    delivering: ['rolling', 'Hauling'],
+    stopped: ['held', 'Stopped'],
+    driving: ['moving', 'Running empty'],
+    paused: ['held', 'Paused'],
+  }[st] || ['idle', 'Parked']);
+
+  return `<div class="fleetlist">${rows.map((d) => {
+    const [cls, word] = stateOf(d.state);
+    const job = d.job;
+    const pct = job && Number.isFinite(+job.progress) ? clamp(+job.progress, 0, 100) : null;
+    const eta = job && Number.isFinite(+job.etaMin) ? +job.etaMin : null;
+
+    return `<div class="fleetrow ${cls}${d.self ? ' me' : ''}">
+      ${avatarFace(d, d.self ? 'sm me' : 'sm')}
+
+      <div class="fr-who">
+        <div class="fr-name">${esc(d.name || d.id)}${
+          d.self ? '<span class="pill brand">You</span>' : ''}</div>
+        <div class="fr-truck">${d.truck ? esc(d.truck) : 'truck unknown'}</div>
+      </div>
+
+      <div class="fr-run">
+        ${job ? `
+          <div class="fr-route">
+            <span>${esc(cityLabel(job.from || '?'))}</span>
+            <span class="fr-arrow">${icon('arrowRight')}</span>
+            <span class="to">${esc(cityLabel(job.to || '?'))}</span>
+            ${job.cargo ? `<span class="fr-cargo">${esc(job.cargo)}</span>` : ''}
+          </div>
+          ${pct != null ? `<div class="fr-bar"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}
+          <div class="fr-sub">
+            ${pct != null ? `<b>${Math.round(pct)}%</b>` : ''}
+            ${job.km ? `<span>${fmt.km(Math.round(job.drivenKm || 0))} of ${fmt.km(job.km)}</span>` : ''}
+            ${eta != null && pct != null && pct < 100
+              ? `<span>${fmt.dur(eta)} to run</span>` : ''}
+          </div>`
+        : `<div class="fr-noload">No load aboard</div>`}
+      </div>
+
+      <div class="fr-state">
+        <span class="fr-word"><i class="beat"></i>${word}</span>
+        <span class="fr-speed">${Math.round(d.speed || 0)}<em>km/h</em></span>
+      </div>
+
+      ${/* Reach them from here.
+
+            This is the screen where you find out somebody is forty
+            minutes ahead of you on the same road, and until now the only
+            thing you could do about it was remember the name and go
+            looking for it on another screen. Not offered against your own
+            row, and not offered when the service is down — a button that
+            cannot work is worse than no button. */''}
+      ${!d.self && Messages.on() ? `<div class="fr-reach">
+        <button class="btn btn-sm" title="Message ${esc(d.name || d.id)}"
+          data-act="map-message" data-id="${esc(d.id)}">${icon('chat')}</button>
+        <button class="btn btn-sm" title="Call ${esc(d.name || d.id)}"
+          data-act="map-call" data-id="${esc(d.id)}"
+          data-name="${esc(d.name || d.id)}">${icon('phone')}</button>
+      </div>` : ''}
+    </div>`;
+  }).join('')}</div>
+
+  ${Realtime.events.length ? `<div class="ticker">
+    <div class="ticker-head">${icon('bolt')}Live from the fleet</div>
+    <div class="ticker-list">${Realtime.events.slice(-6).reverse().map((e) => `
+      <div class="ticker-row ${esc(e.level || 'info')}">
+        <span class="ticker-time">${esc(fmt.clock(e.at))}</span>
+        <span class="ticker-text">${esc(e.text || e.kind)}</span>
+      </div>`).join('')}</div>
+  </div>` : ''}`;
+}
+
+/* Repaint the fleet without rebuilding the page around it.
+
+   Rebuilt rather than diffed, which is cheap for a crew of this size — but
+   throttled, because telemetry arrives several times a second and rewriting
+   the list that often would throw away the bars' own animation and any row
+   the driver happens to be hovering. Once a second is as live as an eye can
+   read anyway; the numbers that need to be exact are on the run card. */
+let fleetPaintAt = 0;
+let fleetPaintTimer = null;
+const FLEET_PAINT_MS = 1000;
+
+function paintLiveDrivers(force) {
+  if (state.view !== 'dashboard') return;
+  const since = Date.now() - fleetPaintAt;
+  if (!force && since < FLEET_PAINT_MS) {
+    if (fleetPaintTimer) return;
+    fleetPaintTimer = setTimeout(() => {
+      fleetPaintTimer = null;
+      paintLiveDrivers(true);
+    }, FLEET_PAINT_MS - since);
+    return;
+  }
+  fleetPaintAt = Date.now();
+
+  const body = $('#fleetBody');
+  if (!body) return;
+  body.innerHTML = liveDriversInner();
+
+  const n = fleetRows().length;
+  const count = $('#fleetCount');
+  if (count) count.textContent = n ? n + ' reporting' : 'nobody reporting';
+
+  const card = $('#fleetCard');
+  const dot = card && card.querySelector('.livedot');
+  if (dot) dot.outerHTML = liveDot();
+}
+
+/* the marker is centred on its position, so pin it inside the rail at the extremes */
+const markerPos = (pct) => clamp(pct, 0, 100);
+
+
+/* ---------------- dispatched loads ----------------
+   What the company has given this driver to run, read from the shared
+   company record so the client shows the same list the platform does. */
+function myAssignments() {
+  const db = Auth.hqDb();
+  const me = Store.db.driver ? Store.db.driver.gmnId : null;
+  if (!db || !Array.isArray(db.assignments) || !me) return [];
+  return db.assignments
+    .filter((a) => a.driverId === me && (a.status === 'assigned' || a.status === 'accepted'))
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+}
+
+function assignmentsCardHTML() {
+  const mine = myAssignments();
+  if (!mine.length) return '';
+  return `
+  <section class="card" style="border-color:var(--accent-line)">
+    <div class="card-head">
+      <span class="label">Dispatched to you</span>
+      <span class="pill brand">${mine.length}</span>
+    </div>
+    <div class="card-body col gap-12">
+      ${mine.map((a) => `<div class="row-b wrap gap-12">
+        <div style="min-width:0">
+          <div class="b6">${esc(cityLabel(a.from))} <span class="t3">→</span> ${esc(cityLabel(a.to))}</div>
+          <div class="t3 xs mt-4">${esc(a.cargo)} · ${fmt.km(a.km)}${
+            a.payout ? ' · ' + fmt.eur(a.payout) : ''}</div>
+          ${a.note ? `<div class="t2 xs mt-6">${esc(a.note)}</div>` : ''}
+        </div>
+        <div class="row gap-8">
+          ${a.status === 'assigned'
+            ? `<button class="btn btn-sm btn-primary" data-act="assignment-state"
+                 data-id="${esc(a.id)}" data-v="accepted">Accept</button>`
+            : `<span class="pill info">Accepted</span>`}
+          <button class="btn btn-sm" data-act="assignment-state"
+            data-id="${esc(a.id)}" data-v="done">Done</button>
+        </div>
+      </div>`).join('')}
+    </div>
+  </section>`;
+}
+
+function runCardInner() {
+  const db = Store.db;
+  const job = db.job;
+
+  if (!job) {
+    const last = db.logbook[0];
+
+    /* Seeing the game is not the same as hearing from it.
+
+       This used to say "take a load in game and it appears here on its own"
+       whenever the process was up — including when nothing was arriving from
+       it at all. So a driver with a live load on screen was told the client
+       was fine and to keep waiting, and there was nothing anywhere saying
+       what was actually wrong.
+
+       The game only sends anything when the SCS telemetry plugin is loaded
+       INSIDE it, and that is a file in the game's own folder that this app
+       cannot put there. Which is exactly why it has to be said out loud. */
+    const hearing = Telemetry.mode === 'live';
+
+    /* Ask the adapter what it can see, but only while something is wrong and
+       only now and then — this runs on every draw of the page. The answer
+       lands in Telemetry.diagnostics and the next repaint shows it. */
+    if (!hearing && Date.now() - Telemetry.diagnosedAt > 15000) {
+      Telemetry.diagnosedAt = Date.now();
+      Telemetry.diagnose().then((d) => { if (d) render(); });
+    }
+
+    /* What the adapter said, in its own words. It knows things this page
+       cannot: which memory maps exist on the machine, whether one is being
+       read, and whether a plugin is running that it recognises but cannot
+       parse. Saying "no telemetry" when the adapter can name the reason is
+       throwing away the only useful information anybody has. */
+    const d = Telemetry.diagnostics;
+    const a = Telemetry.adapter;
+
+    /* Why there is no telemetry, most specific cause first. The adapter not
+       running at all is the commonest reason and the only one no amount of
+       driving will fix, so it is said ahead of everything else. */
+    let adapterSays = '';
+    if (hearing) adapterSays = '';
+    else if (a && !a.running) {
+      adapterSays = 'The telemetry adapter is not running, so nothing on this '
+        + 'machine can read the game — ' + a.reason + '.';
+    } else if (d) {
+      adapterSays = (d.foreign && d.foreign.length)
+        ? d.foreign[0].plugin + ' is running and writing ' + d.foreign[0].map
+          + ', but Gaming Nation cannot read that plugin’s format — reading it '
+          + 'anyway would invent a delivery. Install the plugin this client expects.'
+        : (d.advice || '');
+    }
+
+    return `
+      <div class="run-top">
+        <div>
+          <div class="eyebrow">Current delivery</div>
+          <div class="run-idle">${db.conn.ets2 === 'running'
+            ? (hearing ? 'No active delivery' : 'The game is not sending telemetry')
+            : Launcher.api() || GameWatch.supported ? 'Waiting for the game' : 'No run in progress'}</div>
+          <div class="run-meta">${db.conn.ets2 === 'running'
+            ? (hearing
+              ? 'The game is running. Take a load in game and it appears here on its own.'
+              /* The adapter's own account wins when there is one: it can see
+                 the machine, and this page cannot. */
+              : (adapterSays || ('The client can see ' + mapFor(db.settings.game).short + ' running but is '
+                + 'receiving nothing from it, so a delivery cannot be picked up however '
+                + 'far you drive. The telemetry plugin has to sit in the game’s own '
+                + 'plugins folder, and it has to match the build you play: 64-bit ' + mapFor(db.settings.game).short
+                + ' loads bin\\win_x64\\plugins and never looks at win_x86. '
+                + 'Add it there and restart the game.')))
+            : GameWatch.supported
+              ? 'Start ' + mapFor(db.settings.game).label + ' however you like — the client sees it open and starts tracking by itself.'
+              : Launcher.api()
+                ? 'Waiting for the telemetry link. Tracking starts the moment the game answers.'
+                /* No game on this device and no way to get one. Saying
+                   "waiting for the telemetry link" on a phone promises
+                   something that is never going to arrive; what a driver
+                   has here is the record of runs made elsewhere. */
+                : 'Runs are recorded on the machine you play on. This shows them, and everything else about your driving, wherever you are.'}</div>
+        </div>
+        <span class="run-state"><span class="beat"></span>${db.conn.ets2 === 'running'
+          ? (hearing ? 'Idle' : 'No signal') : 'Standby'}</span>
+      </div>
+
+      <!-- the delivery rail sits here whether or not there is a run, so the
+           card keeps its shape instead of jumping about when one starts -->
+      <div class="run-progress mt-20">
+        <div class="row-b">
+          <span class="k">Delivery progress</span>
+          <span class="mono sm t3">—</span>
+        </div>
+        <div class="rrail mt-8 empty">
+          <div class="rrail-track"><div class="rrail-fill" style="width:0%"></div></div>
+          <span class="rrail-marker" style="left:0%">${icon('truck')}</span>
+        </div>
+        <div class="xs t3 mt-8">Progress appears once a load is picked up in game.</div>
+      </div>
+
+      <div class="gauges mt-20" id="gaugeRow">${idleGaugesInner()}</div>
+      ${last ? `<div class="facts">
+        <div class="fact"><div class="k">Last run</div><div class="v">${esc(last.from)} → ${esc(last.to)}</div></div>
+        <div class="fact"><div class="k">Distance</div><div class="v">${fmt.km(last.km)}</div></div>
+        <div class="fact"><div class="k">Payout</div><div class="v">${fmt.eur(last.income)}</div></div>
+        <div class="fact"><div class="k">Completed</div><div class="v">${esc(fmt.rel(last.finished))}</div></div>
+      </div>` : ''}`;
+}
+
+  const pct = GameLink.progress(job);
+  const remaining = Math.max(0, job.km - job.drivenKm);
+  const etaMin = JobTracker.etaMinutes(job);
+  const stateCls = { driving: 'rolling', delivered: 'done', paused: 'held' }[job.status] || '';
+  const stateTxt = { driving: 'Rolling', delivered: 'Delivered', paused: 'Held' }[job.status] || job.status;
+
+  /* three evenly spaced checkpoints so the rail reads as a route */
+  const nodes = [0, 25, 50, 75, 100];
+
+  return `
+    <div class="run-top">
+      <div style="min-width:0">
+        <div class="eyebrow">Current delivery</div>
+        <div class="run-cities">
+          <span class="run-city">${esc(job.from)}</span>
+          <span class="run-sep">${icon('arrowRight')}</span>
+          <span class="run-city to">${esc(job.to)}</span>
+        </div>
+        <div class="run-meta">${esc(job.cargo)} · ${esc(job.trailer)} · ${job.weight} t · ${esc(job.market)}</div>
+      </div>
+      <span class="run-state ${stateCls}"><span class="beat"></span>${esc(stateTxt)}</span>
+    </div>
+
+    <div class="run-progress mt-20">
+      <div class="row-b">
+        <span class="k">Delivery progress</span>
+        <span class="mono sm" id="railPct">${fmt.pct(pct)}</span>
+      </div>
+    </div>
+    <div class="rrail">
+      <div class="rrail-track">
+        <div class="rrail-fill" id="railFill" style="width:${pct}%"></div>
+        ${nodes.map((n) => `<span class="rrail-node ${n === 100 ? 'end' : ''} ${pct >= n ? 'passed' : ''}"
+          data-node="${n}" style="left:${n}%"></span>`).join('')}
+        <span class="rrail-marker" id="railMarker" style="left:${markerPos(pct)}%">${icon('truck')}</span>
+      </div>
+      <div class="rrail-ends"><span>${esc(job.from)}</span><span>${esc(job.to)}</span></div>
+    </div>
+
+    <div class="gauges mt-20" id="gaugeRow">${gaugeRowInner(job, pct)}</div>
+
+    <div class="facts">
+      <div class="fact"><div class="k">Load</div><div class="v mono">${esc(job.id)}</div></div>
+      <div class="fact"><div class="k">Driven</div><div class="v" id="factDriven">${fmt.n(Math.round(job.drivenKm))} / ${fmt.km(job.km)}</div></div>
+      <div class="fact"><div class="k">Remaining</div><div class="v" id="factLeft">${fmt.km(remaining)}</div></div>
+      <div class="fact"><div class="k">Speed</div><div class="v" id="factSpeed">${job.speed} km/h</div></div>
+      <div class="fact"><div class="k">Arrival in</div><div class="v" id="factEta">${
+        etaMin == null ? '—' : fmt.dur(etaMin)}</div></div>
+      <div class="fact"><div class="k">Average</div><div class="v" id="factAvg">${
+        job.avgSpeed ? job.avgSpeed + ' km/h' : '—'}</div></div>
+      <div class="fact"><div class="k">Payout</div><div class="v">${fmt.eur(job.income)}</div></div>
+    </div>
+
+    <!-- what has actually happened on this run, as it happens -->
+    <div class="runline" id="runLine">${runTimelineInner()}</div>`;
+}
+
+/* The run's own history: picked up, milestones passed, anything that went
+   wrong, delivered. It is written by JobTracker as the run happens, so this
+   only has to draw it — newest at the top, because that is the one being
+   read. */
+function runTimelineInner() {
+  const job = Store.db.job;
+  const evs = (job && job.events) || [];
+  if (!evs.length) {
+    return `<div class="runline-empty">${icon('clock')}The run's timeline fills in as you drive.</div>`;
+  }
+  return `<div class="runline-head">${icon('route')}This run</div>
+    <div class="runline-list">${evs.slice(-8).reverse().map((e) => `
+      <div class="runline-row ${esc(e.level || 'info')}">
+        <span class="runline-dot">${icon(e.glyph || 'info')}</span>
+        <span class="runline-text">${esc(e.text)}</span>
+        <span class="runline-km">${fmt.km(e.km || 0)}</span>
+      </div>`).join('')}</div>`;
+}
+
+function paintRunTimeline() {
+  const el = $('#runLine');
+  if (el) el.innerHTML = runTimelineInner();
+}
+
+/* The truck's own condition, with no load aboard.
+
+   Fuel, damage and the truck's name belong to the truck, not to the job, so
+   a driver sitting in a running game with nothing booked should still see
+   them. This row used to be three hardcoded dashes, which reads as "the
+   client cannot see your truck" at exactly the moment it can. */
+function idleGaugesInner() {
+  const live = Telemetry.mode === 'live' ? Store.db.live : null;
+  const fuel = live && Number.isFinite(+live.fuel) ? +live.fuel : null;
+  const dmg = live && Number.isFinite(+live.damage) ? +live.damage : null;
+  const truck = (live && live.truck) || '';
+  const dead = '#2c333d';
+  const fuelColor = fuel == null ? dead : fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#b9e87a';
+  const dmgColor = dmg == null ? dead : dmg > 15 ? '#ef5f5f' : dmg > 5 ? '#d99b2b' : '#3ecf8e';
+
+  return gauge(0, 'Route', '—', dead)
+    + gauge(fuel == null ? 0 : fuel, 'Fuel', fuel == null ? '—' : fmt.pct(fuel), fuelColor)
+    + gauge(dmg == null ? 0 : clamp(dmg, 0, 100), 'Damage',
+        dmg == null ? '—' : dmg.toFixed(1) + '%', dmgColor)
+    + `<div class="grow">
+        <div class="fact"><div class="k">${truck ? 'Truck' : 'Awaiting'}</div>
+          <div class="v t2" style="font-size:12.5px">${
+            truck ? esc(truck) : 'No cargo assigned'}</div></div>
+      </div>`;
+}
+
+function gaugeRowInner(job, pct) {
+  /* a job carried over from an older build, or one the game never reported
+     condition for, still has to draw */
+  const dmg = Number.isFinite(+job.damage) ? +job.damage : 0;
+  const fuel = Number.isFinite(+job.fuel) ? +job.fuel : 0;
+  const dmgColor = dmg > 15 ? '#ef5f5f' : dmg > 5 ? '#d99b2b' : '#3ecf8e';
+  const fuelColor = fuel < 15 ? '#ef5f5f' : fuel < 30 ? '#d99b2b' : '#b9e87a';
+  return gauge(pct, 'Route', fmt.pct(pct), '#8bd62b')
+    + gauge(fuel, 'Fuel', fmt.pct(fuel), fuelColor)
+    + gauge(clamp(dmg, 0, 100), 'Damage', dmg.toFixed(1) + '%', dmgColor);
+}
+
+/* repaint only the live values, once per telemetry frame */
+function paintLiveJob() {
+  const job = Store.db.job;
+  if (!job) {
+    /* No run, but the truck's own dials are live and should keep up with
+       the game rather than waiting for the next full render. */
+    const idle = $('#gaugeRow');
+    if (idle) idle.innerHTML = idleGaugesInner();
+    return;
+  }
+  const pct = GameLink.progress(job);
+  const remaining = Math.max(0, job.km - job.drivenKm);
+  const eta = JobTracker.etaMinutes(job);
+  const set = (id, v) => {
+    const el = $('#' + id);
+    if (!el || el.textContent === v) return;   /* don't touch what has not changed */
+    el.textContent = v;
+  };
+
+  set('railPct', fmt.pct(pct));
+  set('factDriven', fmt.n(Math.round(job.drivenKm)) + ' / ' + fmt.km(job.km));
+  set('factLeft', fmt.km(remaining));
+  set('factSpeed', job.speed + ' km/h');
+  set('factEta', eta == null ? '—' : fmt.dur(eta));
+  set('factAvg', job.avgSpeed ? job.avgSpeed + ' km/h' : '—');
+
+  const fill = $('#railFill'); if (fill) fill.style.width = pct + '%';
+  const mark = $('#railMarker'); if (mark) mark.style.left = markerPos(pct) + '%';
+  $$('.rrail-node').forEach((n) => n.classList.toggle('passed', pct >= +n.dataset.node));
+  const gr = $('#gaugeRow'); if (gr) gr.innerHTML = gaugeRowInner(job, pct);
+}
+
+function consoleInner() {
+  const a = Store.db.activity;
+  if (!a.length) return `<div class="empty">${icon('info')}<div>Nothing logged yet</div></div>`;
+  return a.slice(0, 60).map((r) => `<div class="con-row">
+    <span class="con-time">${esc(fmt.clock(r.at))}</span>
+    <span class="con-lvl ${esc(r.tag)}">${esc(r.tag)}</span>
+    <span class="con-msg">${esc(r.msg)}</span>
+  </div>`).join('');
+}
+
+/* ---------------- logbook ---------------- */
+function viewLogbook() {
+  const db = Store.db;
+  let rows = db.logbook.slice();
+  const q = (state.logQuery || '').trim().toLowerCase();
+  if (q) {
+    rows = rows.filter((r) => (
+      (r.cargo || '') + ' ' + (r.from || '') + ' ' + (r.to || '') + ' ' +
+      cityLabel(r.from || '') + ' ' + cityLabel(r.to || '') + ' ' + (r.id || '')
+    ).toLowerCase().includes(q));
+  }
+  if (state.logFilter === 'week') {
+    const cut = Date.now() - 7 * 864e5;
+    rows = rows.filter((r) => new Date(r.finished).getTime() >= cut);
+  }
+  const totalKm = rows.reduce((s, r) => s + r.km, 0);
+  const totalIncome = rows.reduce((s, r) => s + r.income, 0);
+  const avgDamage = rows.length ? rows.reduce((s, r) => s + (r.damage || 0), 0) / rows.length : 0;
+
+  return `
+  ${viewHead('Logbook', 'Every run recorded on this machine', `
+    <button class="btn btn-sm ${state.logFilter === 'all' ? 'btn-primary' : ''}" data-act="log-filter" data-v="all">All time</button>
+    <button class="btn btn-sm ${state.logFilter === 'week' ? 'btn-primary' : ''}" data-act="log-filter" data-v="week">7 days</button>
+    <button class="btn btn-sm" data-act="export-log">${icon('download')}Export CSV</button>`)}
+
+  <div class="lb-search">
+    <input class="input" id="logSearch" type="search" placeholder="Search cargo, from, to…"
+      value="${esc(state.logQuery || '')}" aria-label="Search the logbook">
+    <button class="lb-filters ${state.logFilter === 'week' ? 'on' : ''}"
+      data-act="log-filter" data-v="${state.logFilter === 'week' ? 'all' : 'week'}">Filters</button>
+  </div>
+
+  <div class="stat-row mb-16">
+    <div class="stat"><div class="v">${fmt.n(rows.length)}</div><div class="k">Runs</div></div>
+    <div class="stat"><div class="v">${fmt.n(totalKm)}</div><div class="k">Kilometres</div></div>
+    <div class="stat"><div class="v">${fmt.eur(totalIncome)}</div><div class="k">Revenue</div></div>
+    <div class="stat"><div class="v">${avgDamage.toFixed(1)}%</div><div class="k">Avg damage</div></div>
+  </div>
+
+  <section class="card">
+    <div class="tbl-wrap">
+      ${rows.length ? `<table class="tbl">
+        <thead><tr><th>Load</th><th>Route</th><th>Cargo</th><th class="right">Distance</th>
+          <th class="right">Payout</th><th class="right">Damage</th><th>Completed</th><th>State</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr>
+          <td class="mono t3" data-l="Load">${esc(r.id)}</td>
+          <td data-l="Route" class="lb-route">${esc(r.from)} <span class="t3">→</span> ${esc(r.to)}</td>
+          <td class="t2" data-l="Cargo">${esc(r.cargo)}</td>
+          <td class="right mono" data-l="Distance">${fmt.km(r.km)}</td>
+          <td class="right mono" data-l="Payout">${fmt.eur(r.income)}</td>
+          <td class="right mono" data-l="Damage">${(r.damage || 0).toFixed(1)}%</td>
+          <td class="t2" data-l="Completed">${esc(fmt.dt(r.finished))}</td>
+          <td data-l="State"><span class="pill ok">${icon('check')}Synced</span></td>
+        </tr>`).join('')}</tbody>
+      </table>` : `<div class="empty">${icon('book')}<div>No runs in this period</div></div>`}
+    </div>
+  </section>`;
+}
+
+/* ---------------- profile ---------------- */
+function viewProfile() {
+  const db = Store.db, d = db.driver, s = db.stats;
+  const rec = Career.record();
+  const badges = Career.badges(rec).filter((b) => b.done).length;
+  return `
+  ${viewHead('Driver record', 'Synced with your Gaming Nation profile',
+    `<button class="btn btn-sm" data-act="nav" data-view="stats">${icon('chart')}Statistics</button>
+     <button class="btn btn-sm" data-act="nav" data-view="achievements">${icon('medal')}Achievements</button>
+     <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">${icon('link')}Edit on the web</button>`)}
+
+  <section class="card"><div class="card-body">
+    <div class="row gap-16 wrap">
+      ${avatarFace(d, 'lg me')}
+      <div class="grow">
+        <div class="lg b7">${esc(d.name)}</div>
+        <div class="t2 sm mt-4">${esc(rec ? Career.rank(rec).name : d.rank)}
+          · <span class="mono">${esc(d.gmnId)}</span>${
+          (rec && rec.country) || d.country
+            ? ' · ' + esc((rec && rec.country) || d.country) : ''}</div>
+        <div class="t3 xs mt-8">Driving for Gaming Nation since ${esc(fmt.date(d.joined))}</div>
+      </div>
+    </div>
+    ${(() => {
+      const strip = badgeStripHTML(rec);
+      return strip ? `<div class="mt-16">
+        <div class="eyebrow">Earned · ${badges} of ${ACHIEVEMENTS.length}</div>
+        <div class="mt-8">${strip}</div>
+      </div>` : '';
+    })()}
+
+    <div class="stat-row mt-20">
+      <div class="stat"><div class="v">${fmt.n(s.totalKm)}</div><div class="k">Total km</div></div>
+      <div class="stat"><div class="v">${fmt.n(s.totalJobs)}</div><div class="k">Runs</div></div>
+      <div class="stat"><div class="v">${fmt.eur(s.totalIncome)}</div><div class="k">Revenue</div></div>
+      <div class="stat"><div class="v">${badges} / ${ACHIEVEMENTS.length}</div><div class="k">Badges</div></div>
+      <div class="stat"><div class="v">${fmt.n(db.pending.length)}</div><div class="k">Awaiting sync</div></div>
+    </div>
+  </div></section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Assigned equipment</span></div>
+    <div class="card-body">
+      <div class="setting-row"><span class="t2">Tractor unit</span><span class="b6">${esc(d.truck)}</span></div>
+      <div class="setting-row"><span class="t2">Registration</span><span class="b6 mono">${esc(d.plate)}</span></div>
+      <div class="setting-row"><span class="t2">Trailer</span><span class="b6">${esc(d.trailer)}</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Linked accounts</span></div>
+    <div class="card-body">
+      <div class="setting-row"><span class="t2">Steam ID</span><span class="b6 mono">${esc(d.steamId)}</span></div>
+      <div class="setting-row"><span class="t2">TruckersMP</span><span class="b6 mono">${esc(d.tmpId)}</span></div>
+      <div class="setting-row"><span class="t2">Discord</span><span class="b6 mono">${esc(d.discord)}</span></div>
+    </div>
+  </section>`;
+}
+
+/* ============================================================
+   THE DRIVER'S CAREER
+   ------------------------------------------------------------
+   Statistics, rank, XP and achievements, all worked out from
+   records that already exist rather than kept in counters of
+   their own.
+
+   That is the design rule here, and it is not tidiness. A
+   counter has to be maintained: today's kilometres need
+   resetting at midnight, and a reset that never runs - the
+   client was closed, the machine was asleep - leaves a number
+   that is wrong for the rest of the day with nothing anywhere
+   to correct it. Summing runs that each carry a date cannot
+   drift, because the runs are the truth.
+
+   Rank and XP read the company record, which is the same record
+   the website reads. A driver seeing 47,000 km here and 47,000
+   km on the platform is not being shown two numbers that happen
+   to agree; there is one number.
+   ============================================================ */
+const Career = {
+  midnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); },
+
+  /* Every run this driver has finished, whether or not it has reached the
+     company yet - a delivery held in the queue because the service was down
+     still happened, and somebody who has just driven 400 km should not be
+     told they have driven none. */
+  runs() {
+    return Store.db.logbook.concat(Store.db.pending).filter((r) => r && r.finished);
+  },
+
+  today() {
+    const since = this.midnight();
+    const runs = this.runs().filter((r) => new Date(r.finished).getTime() >= since);
+    return {
+      runs: runs.length,
+      km: runs.reduce((n, r) => n + (r.km || 0), 0),
+      income: runs.reduce((n, r) => n + (r.income || 0), 0),
+      minutes: this.minutes(since),
+    };
+  },
+
+  /* the sittings this driver has had */
+  sessions() {
+    const hq = Auth.hqDb();
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    if (!hq || !me || !Array.isArray(hq.sessions)) return [];
+    return hq.sessions.filter((s) => s && s.driverId === me);
+  },
+
+  /* Minutes at the wheel. A session still open counts up to right now, which
+     is what makes the figure move while somebody is driving rather than
+     jumping only when they finally close the game. */
+  minutes(since) {
+    return this.sessions().reduce((n, s) => {
+      const a = new Date(s.started).getTime();
+      const b = s.ended ? new Date(s.ended).getTime() : Date.now();
+      if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return n;
+      const from = since ? Math.max(a, since) : a;
+      return b <= from ? n : n + (b - from) / 60000;
+    }, 0);
+  },
+
+  /* The company's row for this driver - the one the website reads. Falls
+     back to what this machine has logged, so a client that cannot reach the
+     company shows the driver's own work rather than zeroes.
+
+     Each field falls back on its own, and a real 0 must never be read as
+     "missing" and quietly replaced by something larger. */
+  record() {
+    const hq = Auth.hqDb();
+    const me = Store.db.driver && Store.db.driver.gmnId;
+    const row = (hq && (hq.drivers || []).find((d) => d.id === me)) || null;
+    const s = Store.db.stats || {};
+    const num = (v, alt) => (Number.isFinite(+v) ? +v : alt);
+    return {
+      row,
+      km: row ? num(row.km, 0) : num(s.totalKm, 0),
+      deliveries: row ? num(row.deliveries, 0) : num(s.totalJobs, 0),
+      earned: row ? num(row.earned, 0) : num(s.totalIncome, 0),
+      convoys: row ? num(row.convoys, 0) : 0,
+      attendance: row ? num(row.attendance, 100) : 100,
+      rankIdx: row && Number.isFinite(+row.rankIdx) ? +row.rankIdx : null,
+      achievements: (row && row.achievements) || [],
+      country: (row && row.country) || '',
+      status: (row && row.status) || 'offline',
+    };
+  },
+
+  /* ---------------- rank ----------------
+     The company awards a rank and the record carries it, so that is what is
+     shown. Working one out from the numbers is only for a record that
+     predates the field - and it applies EVERY condition the platform
+     applies, not distance alone, or this client would promote a driver the
+     website has not. */
+  rank(rec) {
+    const r = rec || this.record();
+    if (Number.isFinite(r.rankIdx) && RANK_LADDER[r.rankIdx]) return RANK_LADDER[r.rankIdx];
+    let out = RANK_LADDER[0];
+    RANK_LADDER.forEach((R) => {
+      if (r.km >= R.km && r.convoys >= R.convoys && r.attendance >= R.att) out = R;
+    });
+    return out;
+  },
+  nextRank(rec) { return RANK_LADDER[this.rank(rec).i + 1] || null; },
+
+  /* What is still standing between this driver and the next rank, said as
+     the conditions themselves. "62%" on its own does not tell somebody they
+     are four convoys short. */
+  toNext(rec) {
+    const r = rec || this.record();
+    const nx = this.nextRank(r);
+    if (!nx) return null;
+    const need = [];
+    if (r.km < nx.km) need.push(fmt.km(nx.km - r.km) + ' further');
+    if (r.convoys < nx.convoys) {
+      const n = nx.convoys - r.convoys;
+      need.push(n + ' more convoy' + (n === 1 ? '' : 's'));
+    }
+    if (r.attendance < nx.att) need.push(nx.att + '% attendance');
+    /* How far along, measured on the condition FURTHEST from being met.
+       Measured on distance alone, a driver with 60,000 km and 6 of the 10
+       convoys the next rank wants sees a bar at 100% under the words "4
+       more convoys" - a bar that disagrees with the sentence beneath it is
+       worse than no bar. Each condition is measured from the rank they
+       hold, because that is the ground they started this climb from. */
+    const cur = this.rank(r);
+    const leg = (have, from, to) => (to <= from ? 1
+      : clamp((have - from) / (to - from), 0, 1));
+    const pct = Math.min(
+      leg(r.km, cur.km, nx.km),
+      leg(r.convoys, cur.convoys, nx.convoys),
+      leg(r.attendance, cur.att, nx.att),
+    );
+    return { rank: nx, need, pct: Math.round(pct * 100) };
+  },
+
+  /* ---------------- XP ----------------
+     There is no XP column on the platform, and adding one here would create
+     a second truth that drifts from the record the website shows. So XP is a
+     pure function of that record: distance covered, deliveries landed,
+     convoys attended. The same driver gets the same number wherever it is
+     worked out, and it moves only when real work moves it.
+
+     The weights are printed on the statistics screen. A score nobody can
+     check is a score nobody has any reason to trust. */
+  XP: { km: 1, delivery: 250, convoy: 500 },
+  xp(rec) {
+    const r = rec || this.record();
+    return Math.round(r.km * this.XP.km
+      + r.deliveries * this.XP.delivery
+      + r.convoys * this.XP.convoy);
+  },
+
+  /* ---------------- achievements ----------------
+     The same list the platform awards, so a badge earned is a badge shown in
+     both places. The 'manual' ones are granted by staff and live on the
+     driver record; the rest are simply true or not, from the numbers. */
+  earned(a, rec) {
+    const r = rec || this.record();
+    switch (a.metric) {
+      case 'km':         return r.km >= a.goal;
+      case 'deliveries': return r.deliveries >= a.goal;
+      case 'convoys':    return r.convoys >= a.goal;
+      case 'attendance': return r.attendance >= a.goal;
+      case 'rank':       return this.rank(r).i >= a.goal;
+      case 'manual':     return r.achievements.indexOf(a.id) > -1;
+      default:           return false;
+    }
+  },
+  progress(a, rec) {
+    const r = rec || this.record();
+    if (a.metric === 'manual') return this.earned(a, r) ? 1 : 0;
+    const cur = { km: r.km, deliveries: r.deliveries, convoys: r.convoys,
+      attendance: r.attendance, rank: this.rank(r).i }[a.metric];
+    return clamp((cur || 0) / a.goal, 0, 1);
+  },
+  badges(rec) {
+    const r = rec || this.record();
+    return ACHIEVEMENTS.map((a) => ({
+      a, done: this.earned(a, r), pct: Math.round(this.progress(a, r) * 100),
+    }));
+  },
+};
+
+/* The badges the company awards, kept in step with ACHIEVEMENTS in script.js.
+   Two lists that have to agree is a poor arrangement and this is the second
+   half of it - but the client has to work with no platform reachable, so it
+   cannot fetch them, and showing a driver a shorter list than the website
+   does would read as badges having been taken away. */
+/* The four things a badge can be about, in the order a career runs:
+   what you haul, who you drive with, what that makes you, and what you
+   gave back. Sixteen cards in one undivided grid is a wall. Kept in step
+   with ACH_GROUPS in script.js. */
+const ACH_GROUPS = [
+  ['haul',      'Delivery & mileage', 'truck'],
+  ['convoy',    'Convoys',            'users'],
+  ['rank',      'Rank & standing',    'medal'],
+  ['community', 'Community & legacy', 'star'],
+];
+
+const ACHIEVEMENTS = [
+  { id: 'a-first',     name: 'First Delivery',        desc: 'Complete your first GMN delivery.',          icon: 'box',    tier: 'bronze', group: 'haul', metric: 'deliveries', goal: 1 },
+  { id: 'a-10k',       name: '10,000 KM Driven',      desc: 'Cover 10,000 km under GMN colours.',         icon: 'route',  tier: 'bronze', group: 'haul', metric: 'km', goal: 10000 },
+  { id: 'a-50k',       name: '50,000 KM Driven',      desc: 'Cover 50,000 km under GMN colours.',         icon: 'map',  tier: 'silver', group: 'haul', metric: 'km', goal: 50000 },
+  { id: 'a-100k',      name: '100,000 KM Driven',     desc: 'Join the six-figure mileage club.',          icon: 'gauge',  tier: 'gold',   group: 'haul', metric: 'km', goal: 100000 },
+  { id: 'a-250k',      name: 'Quarter Million',       desc: 'Cover 250,000 km under GMN colours.',        icon: 'bolt',   tier: 'plat',   group: 'haul', metric: 'km', goal: 250000 },
+  { id: 'a-conv10',    name: '10 Convoys',            desc: 'Attend 10 official GMN convoys.',            icon: 'users',  tier: 'bronze', group: 'convoy', metric: 'convoys', goal: 10 },
+  { id: 'a-conv50',    name: '50 Convoys',            desc: 'Attend 50 official GMN convoys.',            icon: 'userPlus',  tier: 'silver', group: 'convoy', metric: 'convoys', goal: 50 },
+  { id: 'a-conv100',   name: '100 Convoys',           desc: 'Attend 100 official GMN convoys.',           icon: 'trophy', tier: 'gold',   group: 'convoy', metric: 'convoys', goal: 100 },
+  { id: 'a-perfect',   name: 'Perfect Attendance',    desc: 'Hold 100% attendance across a full season.', icon: 'checkCircle',  tier: 'gold',   group: 'rank', metric: 'attendance', goal: 100 },
+  { id: 'a-deliv100',  name: 'Century Hauler',        desc: 'Complete 100 deliveries.',                   icon: 'truck',    tier: 'silver', group: 'haul', metric: 'deliveries', goal: 100 },
+  { id: 'a-deliv500',  name: 'Freight Machine',       desc: 'Complete 500 deliveries.',                   icon: 'activity',    tier: 'plat',   group: 'haul', metric: 'deliveries', goal: 500 },
+  { id: 'a-veteran',   name: 'Veteran Driver',        desc: 'Reach the rank of Veteran Driver.',          icon: 'medal',  tier: 'gold',   group: 'rank', metric: 'rank', goal: 7 },
+  { id: 'a-elite',     name: 'Elite Driver',          desc: 'Reach the rank of Elite Driver.',            icon: 'star',   tier: 'gold',   group: 'rank', metric: 'rank', goal: 6 },
+  { id: 'a-lead',      name: 'Convoy Leader',         desc: 'Lead an official GMN convoy.',               icon: 'flag',   tier: 'silver', group: 'convoy', metric: 'manual', goal: 1 },
+  { id: 'a-community', name: 'Community Contributor', desc: 'Recognised for outstanding community work.', icon: 'megaphone',  tier: 'gold',   group: 'community', metric: 'manual', goal: 1 },
+  { id: 'a-founder',   name: 'Founding Member',       desc: 'Joined Gaming Nation in its first year.',    icon: 'shield', tier: 'plat',   group: 'community', metric: 'manual', goal: 1 },
+];
+
+/* ---------------- statistics ----------------
+
+   The career in numbers, and the rank ladder those numbers are climbing.
+
+   Everything here is derived (see Career), so there is nothing to keep in
+   step and nothing that can drift out of it. The XP weights are printed
+   rather than hidden, because a score nobody can check is a score nobody
+   has any reason to trust - and a driver who can see the weights can work
+   out for themselves that a convoy is worth five hundred. */
+function viewStats() {
+  const rec = Career.record();
+  const rank = Career.rank(rec);
+  const next = Career.toNext(rec);
+  const day = Career.today();
+  const mins = Career.minutes();
+  const sess = Career.sessions();
+  const badges = Career.badges(rec).filter((b) => b.done).length;
+
+  const big = (v, k, why) => `<div class="stat" title="${esc(why || '')}">
+    <div class="v">${v}</div><div class="k">${esc(k)}</div></div>`;
+
+  return `
+  ${viewHead('Statistics', 'Your record at Gaming Nation',
+    `<button class="btn btn-sm" data-act="nav" data-view="achievements">${icon('medal')}Achievements</button>`)}
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Rank</span>
+      <span class="label">${esc(rec.row ? 'from your company record' : 'from this machine')}</span>
+    </div>
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        <span class="rank-chip" style="--rc:${esc(rank.color)}">${esc(rank.abbr)}</span>
+        <div class="grow" style="min-width:180px">
+          <div class="lg b7">${esc(rank.name)}</div>
+          <div class="t3 xs mt-4">${next
+            ? 'Next: ' + esc(next.rank.name)
+            : 'The top of the ladder. There is nothing above this.'}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="lg b7">${fmt.n(Career.xp(rec))}</div>
+          <div class="t3 xs">XP</div>
+        </div>
+      </div>
+
+      ${next ? `
+        <div class="rankbar mt-16"><div class="rankbar-fill" style="width:${next.pct}%"></div></div>
+        <div class="t3 xs mt-8">${next.need.length
+          ? 'Still needed for ' + esc(next.rank.name) + ': ' + esc(next.need.join(', ')) + '.'
+          : 'Every condition for ' + esc(next.rank.name)
+            + ' is met — the company awards the promotion.'}</div>` : ''}
+
+      ${/* The sum, shown as its parts. Anyone can check it. */''}
+      <div class="xpsplit mt-16">
+        <div class="xprow"><span>${fmt.n(rec.km)} km</span>
+          <span class="t3">&times; ${Career.XP.km}</span>
+          <span class="mono">${fmt.n(Math.round(rec.km * Career.XP.km))}</span></div>
+        <div class="xprow"><span>${fmt.n(rec.deliveries)} deliveries</span>
+          <span class="t3">&times; ${Career.XP.delivery}</span>
+          <span class="mono">${fmt.n(rec.deliveries * Career.XP.delivery)}</span></div>
+        <div class="xprow"><span>${fmt.n(rec.convoys)} convoys</span>
+          <span class="t3">&times; ${Career.XP.convoy}</span>
+          <span class="mono">${fmt.n(rec.convoys * Career.XP.convoy)}</span></div>
+        <div class="xprow total"><span>XP</span><span></span>
+          <span class="mono">${fmt.n(Career.xp(rec))}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Career</span></div>
+    <div class="card-body">
+      <div class="stat-row">
+        ${big(fmt.n(rec.km), 'Total km', 'Distance credited to your Gaming Nation record.')}
+        ${big(fmt.n(rec.deliveries), 'Deliveries', 'Runs the company has credited.')}
+        ${big(fmt.eur(rec.earned), 'Earnings', 'Everything your runs have paid.')}
+        ${big(mins >= 1 ? fmt.dur(Math.round(mins)) : '—', 'Driving hours',
+          sess.length ? sess.length + ' session' + (sess.length === 1 ? '' : 's') + ' recorded'
+            : 'No sessions recorded on this company record yet.')}
+        ${big(fmt.n(rec.convoys), 'Convoys', 'Official convoys attended.')}
+        ${big(fmt.n(Career.xp(rec)), 'XP', 'Worked out from the three figures above.')}
+        ${big(esc(rank.name), 'Rank', 'The rank the company has awarded you.')}
+        ${big(badges + ' / ' + ACHIEVEMENTS.length, 'Badges', 'Achievements earned.')}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Today</span></div>
+    <div class="card-body">
+      <div class="stat-row">
+        ${big(fmt.km(day.km), 'Driven', 'Summed from the runs you finished since midnight.')}
+        ${big(fmt.eur(day.income), 'Earned', 'Summed from the same runs.')}
+        ${big(fmt.n(day.runs), 'Runs', 'Deliveries finished since midnight, queued ones included.')}
+        ${big(day.minutes >= 1 ? fmt.dur(Math.round(day.minutes)) : '—', 'At the wheel',
+          'Time in game today. A session still open counts up to now.')}
+      </div>
+      ${day.runs ? '' : `<div class="t3 xs mt-12">Nothing has been finished today yet.
+        These fill in from your runs, so they are right even if the client was closed at midnight.</div>`}
+    </div>
+  </section>`;
+}
+
+
+/* ---------------- achievements ----------------
+
+   The same badges the platform awards, so one earned is one shown in both
+   places. Locked ones are shown too, with how far along they are: a wall
+   of things you cannot see is not a wall worth climbing. */
+/* One badge, drawn the same way everywhere it appears - the achievements
+   wall and the driver record. It was drawn inline in one view and nowhere
+   else, so a badge a driver had won existed on exactly one screen. */
+function badgeMark(a) {
+  return `<span class="ach-ico" title="${esc(a.name + ' — ' + a.desc)}">${icon(a.icon)}</span>`;
+}
+
+/* The ones this driver has actually won, as a row of medallions. Capped:
+   sixteen of them is a wall, and this is a summary - the count carries
+   the rest and the Achievements screen has every one. */
+function badgeStripHTML(rec, limit) {
+  const got = Career.badges(rec).filter((b) => b.done);
+  if (!got.length) return '';
+  const max = limit || 8;
+  const shown = got.slice(0, max);
+  return `<div class="badgestrip">
+    ${shown.map((b) => `<span class="ach tier-${esc(b.a.tier)} got badgeslot">
+      ${badgeMark(b.a)}</span>`).join('')}
+    ${got.length > shown.length
+      ? `<span class="badgestrip-more">+${got.length - shown.length} more</span>` : ''}
+  </div>`;
+}
+
+function viewAchievements() {
+  const rec = Career.record();
+  const all = Career.badges(rec);
+  const done = all.filter((b) => b.done);
+  const rank = Career.rank(rec);
+
+  /* The tier's colour is a class, not an inline value: it has to be a
+     different colour on a pale ground - #9aa3af is a fine silver on
+     #0d111a and an unreadable one on white - and a value written into the
+     element cannot be themed. */
+  const card = (b) => `<div class="ach tier-${esc(b.a.tier)} ${b.done ? 'got' : ''}">
+      ${badgeMark(b.a)}
+      <div class="grow" style="min-width:0">
+        <div class="ach-name">${esc(b.a.name)}</div>
+        <div class="ach-desc">${esc(b.a.desc)}</div>
+        ${b.done
+          ? `<div class="ach-got">${icon('check')}Earned</div>`
+          : b.a.metric === 'manual'
+            ? `<div class="ach-manual">Awarded by the company</div>`
+            : `<div class="ach-bar"><div class="ach-fill" style="width:${b.pct}%"></div></div>
+               <div class="ach-pct">${b.pct}%</div>`}
+      </div>
+      <span class="ach-tier">${esc(b.a.tier)}</span>
+    </div>`;
+
+  return `
+  ${viewHead('Achievements', done.length + ' of ' + all.length + ' earned',
+    `<button class="btn btn-sm" data-act="nav" data-view="stats">${icon('chart')}Statistics</button>`)}
+
+  <section class="card">
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        <span class="rank-chip" style="--rc:${esc(rank.color)}">${esc(rank.abbr)}</span>
+        <div class="grow" style="min-width:170px">
+          <div class="lg b7">${esc(rank.name)}</div>
+          <div class="t3 xs mt-4">Driver level ${rank.i + 1} of ${RANK_LADDER.length}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="lg b7">${done.length}<span class="t3">/${all.length}</span></div>
+          <div class="t3 xs">Badges</div>
+        </div>
+      </div>
+      <div class="rankbar mt-16"><div class="rankbar-fill"
+        style="width:${Math.round(done.length / all.length * 100)}%"></div></div>
+    </div>
+  </section>
+
+  ${/* By what the badge is about, not by whether it is won. Earned and
+        unearned side by side inside a group is the useful comparison -
+        "four of the seven mileage ones" reads at a glance, and the next
+        one along is right there rather than in a different card. */''}
+  ${ACH_GROUPS.map(([key, label, ic]) => {
+    const inGroup = all.filter((b) => (b.a.group || 'haul') === key);
+    if (!inGroup.length) return '';
+    const got = inGroup.filter((b) => b.done).length;
+    return `<section class="card">
+      <div class="card-head">
+        <span class="label">${icon(ic)} ${esc(label)}</span>
+        <span class="label">${got} / ${inGroup.length}</span>
+      </div>
+      <div class="card-body"><div class="achgrid">${inGroup.map(card).join('')}</div></div>
+    </section>`;
+  }).join('')}`;
+}
+
+
+/* ============================================================
+   NOTIFICATIONS
+   ------------------------------------------------------------
+   One feed, gathered from the places these things already live
+   rather than a new store that has to be written to from six
+   directions and kept in step with all of them.
+
+     a job dispatched to you        the company's assignments
+     a message                      the threads the service holds
+     a crew announcement            the platform's announcements
+     a convoy coming up             the convoys you signed on to
+     a badge earned                 worked out from your record
+     anything staff sent you        the platform's notifications
+
+   Read state comes from the source wherever the source has one -
+   a platform notification carries `read`, a thread carries its
+   unread count - so opening a message here and opening it on the
+   messages screen are the same act, not two states to reconcile.
+
+   The rest get a marker in `seen`, which is the ONLY thing this
+   stores: an id and the fact that somebody looked at it. Not a
+   copy of the notification, because a copy goes stale the moment
+   the real thing changes, and a driver reading a headline that
+   no longer matches the announcement it came from is worse off
+   than one who was never told.
+   ============================================================ */
+const SOON_MS = 48 * 3600 * 1000;    /* how far ahead a convoy is "coming up" */
+
+const Notify = {
+  me() { return String((Store.db.driver && Store.db.driver.gmnId) || ''); },
+  seen() { return Store.db.seen || (Store.db.seen = {}); },
+  isSeen(id) { return !!this.seen()[id]; },
+
+  /* Everything worth telling this driver, newest first. Each entry knows
+     where it came from, so opening one can take them to the real thing
+     rather than to a copy of it. */
+  feed() {
+    const db = Store.db;
+    const hq = Auth.hqDb() || {};
+    const me = this.me();
+    const out = [];
+    const add = (o) => { out.push(Object.assign({ unread: !this.isSeen(o.id) }, o)); };
+
+    /* ---- staff sent you something ----
+       driverId null is a broadcast, which is how the platform publishes to
+       everybody without writing a row per driver. */
+    (hq.notifications || [])
+      .filter((n) => n && (!n.driverId || String(n.driverId) === me))
+      .forEach((n) => add({
+        id: 'n:' + n.id, kind: 'Admin', icon: 'bell', at: n.at,
+        title: n.title || 'Notification', body: n.body || '',
+        unread: !n.read && !this.isSeen('n:' + n.id),
+        view: 'messages',
+      }));
+
+    /* ---- crew announcements ---- */
+    (hq.announcements || []).forEach((a) => add({
+      id: 'a:' + a.id, kind: a.pinned ? 'Pinned' : 'Announcement', icon: 'mail',
+      at: a.date || a.at, title: a.title || 'Announcement',
+      body: String(a.body || '').slice(0, 160), view: 'messages',
+    }));
+
+    /* ---- a job dispatched to you ----
+       Only while it still wants something doing. A run already accepted and
+       finished is not news. */
+    (typeof myAssignments === 'function' ? myAssignments() : [])
+      .filter((a) => a.status === 'assigned')
+      .forEach((a) => add({
+        id: 'j:' + a.id, kind: 'New job', icon: 'box', at: a.at || a.created,
+        title: cityLabel(a.from) + ' to ' + cityLabel(a.to),
+        body: a.cargo + ' · ' + fmt.km(a.km) + (a.payout ? ' · ' + fmt.eur(a.payout) : ''),
+        view: 'dashboard',
+      }));
+
+    /* ---- messages waiting ----
+       The thread's own unread count is the truth here; there is no separate
+       read flag to fall out of step with the messages screen. */
+    (Messages.threads || [])
+      .filter((t) => (t.unread || 0) > 0)
+      .forEach((t) => add({
+        id: 'm:' + t.withId, kind: 'Message', icon: 'chat',
+        at: t.last && t.last.at,
+        title: t.room ? roomLabel(t.withId) : (t.name || t.withId),
+        body: t.last ? String(t.last.text || 'Attachment').slice(0, 120) : '',
+        unread: true,
+        view: t.room ? 'chats' : 'messages',
+      }));
+
+    /* ---- a convoy you are signed on to ---- */
+    const now = Date.now();
+    (Auth.events() || [])
+      .filter((e) => e && e.status !== 'completed'
+        && (e.registered || []).some((r) => r.driverId === me))
+      .forEach((e) => {
+        const when = new Date(e.date).getTime();
+        if (!Number.isFinite(when) || when - now > SOON_MS || when < now - 6 * 3600000) return;
+        add({
+          id: 'c:' + e.id, kind: 'Convoy', icon: 'route', at: e.date,
+          title: e.name || 'Convoy',
+          body: (when <= now ? 'Rolling now' : 'Starts ' + fmt.rel(e.date).replace(' ago', ' from now'))
+            + (e.start ? ' · ' + e.start + ' to ' + (e.dest || '') : ''),
+          view: 'convoy',
+        });
+      });
+
+    /* ---- a badge earned ----
+       Worked out, so a driver who earned one while the client was closed is
+       still told about it when they come back. */
+    Career.badges().filter((b) => b.done).forEach((b) => add({
+      id: 'b:' + b.a.id, kind: 'Achievement', icon: b.a.icon, at: null,
+      title: b.a.name, body: b.a.desc, view: 'achievements',
+    }));
+
+    return out.sort((x, y) => {
+      /* unread first, then newest. An achievement has no date of its own -
+         the record does not say when it tipped over - so it sorts last
+         rather than pretending to a time it does not have. */
+      if (x.unread !== y.unread) return x.unread ? -1 : 1;
+      const a = x.at ? new Date(x.at).getTime() : 0;
+      const b = y.at ? new Date(y.at).getTime() : 0;
+      return b - a;
+    });
+  },
+
+  count() { return this.feed().filter((n) => n.unread).length; },
+
+  /* Marking one read marks it where it actually lives, so the badge on the
+     Messages tab agrees with the badge here. */
+  markRead(id) {
+    this.seen()[id] = true;
+    if (id.indexOf('n:') === 0) {
+      const hq = Auth.hqDb();
+      const row = hq && (hq.notifications || []).find((n) => 'n:' + n.id === id);
+      if (row && !row.read) { row.read = true; Auth.saveHqDb(hq); }
+    }
+    /* A message is unread until the MESSAGE is read. Marking only the
+       notification would clear the badge here and leave it on the Messages
+       tab, which is two inboxes disagreeing about the same message - so this
+       marks the thread itself, through the service that owns it. */
+    if (id.indexOf('m:') === 0) Messages.markRead(id.slice(2));
+    Store.save();
+  },
+  markAll() {
+    const feed = this.feed();
+    feed.forEach((n) => { this.seen()[n.id] = true; });
+
+    const hq = Auth.hqDb();
+    if (hq && Array.isArray(hq.notifications)) {
+      let touched = false;
+      hq.notifications.forEach((n) => {
+        if (!n.read && (!n.driverId || String(n.driverId) === this.me())) {
+          n.read = true; touched = true;
+        }
+      });
+      if (touched) Auth.saveHqDb(hq);
+    }
+
+    /* and the threads, for the same reason as above. If the service is
+       unreachable the thread stays unread, which is the honest outcome -
+       nothing here pretends a message was read when it was not. */
+    feed.filter((n) => n.id.indexOf('m:') === 0)
+      .forEach((n) => Messages.markRead(n.id.slice(2)));
+
+    Store.save();
+  },
+};
+
+function viewNotifications() {
+  const feed = Notify.feed();
+  const unread = feed.filter((n) => n.unread).length;
+
+  const row = (n) => `<button class="ntf ${n.unread ? 'new' : ''}"
+      data-act="notify-open" data-id="${esc(n.id)}" data-view="${esc(n.view)}">
+    <span class="ntf-ico">${icon(n.icon)}</span>
+    <span class="ntf-body">
+      <span class="ntf-top">
+        <span class="ntf-kind">${esc(n.kind)}</span>
+        <span class="ntf-when">${n.at ? esc(fmt.rel(n.at)) : ''}</span>
+      </span>
+      <span class="ntf-title">${esc(n.title)}</span>
+      ${n.body ? `<span class="ntf-text">${esc(n.body)}</span>` : ''}
+    </span>
+    ${n.unread ? '<span class="ntf-dot"></span>' : ''}
+  </button>`;
+
+  return `
+  ${viewHead('Notifications', unread ? unread + ' unread' : 'Nothing waiting',
+    unread ? `<button class="btn btn-sm" data-act="notify-all">${icon('check')}Mark all read</button>` : '')}
+
+  <section class="card"><div class="card-body p-0">
+    ${feed.length ? `<div class="ntf-list">${feed.map(row).join('')}</div>`
+      : `<div class="empty">${icon('bell')}
+          <div>Nothing waiting</div>
+          <div class="t3 xs">Dispatched jobs, messages, announcements, convoys you have
+            signed on to and badges you earn all arrive here.</div>
+        </div>`}
+  </div></section>`;
+}
+
+
+/* ============================================================
+   SUPPORT
+   ------------------------------------------------------------
+   Four ways to reach the company, and all four raise a real
+   ticket on the company record - the same tickets the admin
+   console opens. A support screen that collects a message and
+   drops it is worse than no support screen: the driver believes
+   they have been heard.
+
+   A technical report carries the client's own diagnosis with it,
+   unasked: version, which game, whether the adapter is running
+   and what it last said about why nothing is arriving. That is
+   the whole of the first exchange on every technical ticket
+   anybody has ever filed, and the client already knows all of
+   it. Nobody should have to be walked through reading it back.
+
+   Nothing here is sent anywhere the driver cannot see. The
+   diagnosis is shown in the form before it goes.
+   ============================================================ */
+const SUPPORT_KINDS = {
+  admin: { label: 'Contact admin', icon: 'mail', category: 'Question', priority: 'normal',
+    blurb: 'A question for management — anything that is not a fault.' },
+  issue: { label: 'Report an issue', icon: 'alert', category: 'Issue', priority: 'normal',
+    blurb: 'Something on the platform is wrong: a run credited oddly, a figure that looks off.' },
+  driver: { label: 'Report a driver', icon: 'shield', category: 'Conduct', priority: 'high',
+    blurb: 'Conduct on a convoy or in chat. Goes to management, not to the driver.' },
+  tech: { label: 'Technical problem', icon: 'wrench', category: 'Technical', priority: 'normal',
+    blurb: 'The client, the game link or telemetry. Your diagnosis is attached.' },
+};
+
+const Support = {
+  me() { return Store.db.driver || {}; },
+
+  /* Every ticket this driver has raised, newest first. Read off the company
+     record, so a reply written in the admin console shows up here. */
+  mine() {
+    const hq = Auth.hqDb();
+    const me = String(this.me().gmnId || '');
+    if (!hq || !Array.isArray(hq.tickets) || !me) return [];
+    return hq.tickets.filter((t) => String(t.driverId) === me);
+  },
+
+  /* What the client knows about its own state. Written as prose because a
+     person reads it first, and every line of it is a question somebody would
+     otherwise have to ask. */
+  diagnosis() {
+    const db = Store.db;
+    const a = Telemetry.adapter;
+    const d = Telemetry.diagnostics;
+    const lines = [
+      'Client ' + APP_VERSION + ' on ' + (Launcher.api() ? 'the desktop app' : 'a browser'),
+      'Game: ' + mapFor(db.settings.game).label
+        + (db.conn.ets2 === 'running' ? ' (running)' : ' (not running)'),
+      'Telemetry: ' + (Telemetry.mode === 'live' ? 'live' : 'not arriving'),
+      'Company service: ' + (db.conn.gmn === 'connected' ? 'connected' : 'not reachable'),
+    ];
+    if (a) lines.push('Adapter: ' + (a.running ? 'running' : 'not running — ' + (a.reason || 'no reason given')));
+    if (d && d.advice) lines.push('Adapter says: ' + d.advice);
+    if (d && d.foreign && d.foreign.length) {
+      lines.push('Another plugin is writing ' + d.foreign[0].map + ' (' + d.foreign[0].plugin + ')');
+    }
+    return lines.join('\n');
+  },
+
+  open(kind) {
+    const k = SUPPORT_KINDS[kind] || SUPPORT_KINDS.admin;
+    const roster = Auth.roster()
+      .filter((d) => d.id !== this.me().gmnId && d.accountStatus !== 'deleted');
+
+    modal({
+      title: k.label,
+      body: `
+        <p class="t2 sm">${esc(k.blurb)}</p>
+        ${kind === 'driver' ? `
+          <div class="field mt-16"><label for="spWho">Which driver</label>
+            <select class="select" id="spWho">
+              ${roster.length
+                ? roster.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} · ${esc(d.id)}</option>`).join('')
+                : '<option value="">Nobody else is on the roster</option>'}
+            </select></div>` : ''}
+        <div class="field mt-16"><label for="spSubject">Subject</label>
+          <input class="input" id="spSubject" maxlength="90"
+            placeholder="${esc(kind === 'tech' ? 'No telemetry from ETS2' : 'One line')}"></div>
+        <div class="field mt-12"><label for="spBody">What happened</label>
+          <textarea class="input" id="spBody" rows="5"
+            placeholder="As much as you can. When it started, what you were doing."></textarea></div>
+        ${kind === 'tech' ? `
+          <div class="t3 xs mt-12">Sent with it, so nobody has to ask:</div>
+          <pre class="diagbox">${esc(this.diagnosis())}</pre>` : ''}`,
+      foot: `<button class="btn" data-close>Cancel</button>
+             <button class="btn btn-primary" data-act="support-send" data-kind="${esc(kind)}">
+               ${icon('send')}Send</button>`,
+    });
+  },
+
+  send(kind) {
+    const k = SUPPORT_KINDS[kind] || SUPPORT_KINDS.admin;
+    const subject = String(($('#spSubject') || {}).value || '').trim();
+    const body = String(($('#spBody') || {}).value || '').trim();
+    const who = String((($('#spWho') || {}).value) || '').trim();
+
+    if (!subject) { toast('A subject, so somebody can tell what it is about', 'warn'); return; }
+    if (!body) { toast('Say what happened — an empty ticket cannot be answered', 'warn'); return; }
+
+    const hq = Auth.hqDb();
+    if (!hq) {
+      toast('The company record is not reachable — nothing was sent', 'err');
+      Store.log('err', 'Support ticket could not be raised: no company record');
+      return;
+    }
+
+    const me = this.me();
+    const now = new Date().toISOString();
+    let text = body;
+    if (kind === 'driver' && who) {
+      const d = Auth.driverRecord(who);
+      text = 'About ' + (d ? d.name + ' (' + who + ')' : who) + '\n\n' + body;
+    }
+    if (kind === 'tech') text = body + '\n\n--- what the client reports ---\n' + this.diagnosis();
+
+    const ticket = {
+      id: 'TCK-' + Date.now().toString(36).toUpperCase(),
+      subject, category: k.category, priority: k.priority, status: 'open',
+      driverId: me.gmnId, created: now, updated: now,
+      messages: [{ from: me.gmnId, at: now, body: text }],
+    };
+    hq.tickets = hq.tickets || [];
+    hq.tickets.unshift(ticket);
+
+    /* Staff have to be told, or the ticket sits unread until somebody
+       happens to open the console. driverId null is how the platform
+       broadcasts, so this addresses nobody in particular and everybody
+       with the console sees it. */
+    hq.notifications = hq.notifications || [];
+    hq.notifications.unshift({
+      id: 'n-' + Date.now().toString(36), driverId: null, type: 'warn', icon: 'ticket',
+      title: k.label, body: (me.name || 'A driver') + ': ' + subject,
+      href: '#/ticket/' + ticket.id, at: now, read: false,
+    });
+
+    if (!Auth.saveHqDb(hq)) {
+      toast('That could not be saved — nothing was sent', 'err');
+      return;
+    }
+    Store.log('ok', 'Support ticket ' + ticket.id + ' raised — ' + subject);
+    closeModals();
+    toast('Sent — ' + ticket.id, 'ok');
+    state.view = 'support';
+    render();
+  },
+};
+
+function viewSupport() {
+  const mine = Support.mine();
+  const open = mine.filter((t) => t.status !== 'closed');
+
+  const route = (key) => {
+    const k = SUPPORT_KINDS[key];
+    return `<button class="menu-row" data-act="support-open" data-kind="${esc(key)}">
+      <span class="menu-ico">${icon(k.icon)}</span>
+      <span class="grow">
+        <span class="b6">${esc(k.label)}</span>
+        <span class="t3 xs" style="display:block;margin-top:2px">${esc(k.blurb)}</span>
+      </span>
+      ${icon('chevron', 'menu-chev')}
+    </button>`;
+  };
+
+  const ticket = (t) => {
+    const last = (t.messages || [])[t.messages.length - 1];
+    const replied = last && String(last.from) !== String(Store.db.driver.gmnId);
+    return `<div class="setting-row">
+      <div style="min-width:0">
+        <div class="b6">${esc(t.subject)}</div>
+        <div class="t3 xs mt-4"><span class="mono">${esc(t.id)}</span> · ${esc(t.category)}
+          · raised ${esc(fmt.rel(t.created))}${replied ? ' · management replied' : ''}</div>
+      </div>
+      <span class="pill ${t.status === 'closed' ? '' : t.status === 'open' ? 'brand' : 'info'}">${
+        esc(t.status)}</span>
+    </div>`;
+  };
+
+  return `
+  ${viewHead('Support', open.length ? open.length + ' open' : 'Reach the company')}
+
+  <section class="card">
+    <div class="card-head"><span class="label">What do you need</span></div>
+    <div class="card-body p-0">
+      ${['admin', 'issue', 'driver', 'tech'].map(route).join('')}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Your tickets</span>
+      ${mine.length ? `<span class="label">${mine.length}</span>` : ''}
+    </div>
+    <div class="card-body">
+      ${mine.length ? mine.map(ticket).join('')
+        : `<div class="empty">${icon('ticket')}
+            <div>Nothing raised</div>
+            <div class="t3 xs">Anything you send goes on the company record, and management
+              answers it there. Replies appear on this screen.</div>
+          </div>`}
+    </div>
+  </section>
+
+  ${/* A card here showed the client's own diagnosis - version, game,
+        telemetry, what the adapter last said. It was a wall of diagnostic
+        text on a screen a driver opens when something is already wrong,
+        and it told them nothing they could act on.
+
+        It has not gone anywhere useful: a technical report still carries
+        it, and the form shows it before it is sent, which is the moment
+        it means something and the moment transparency about what is being
+        sent actually matters. */''}`;
+}
+
+
+/* ---------------- messages ----------------
+
+   Two things live here now. The announcements from management, which is
+   all this screen used to be, are the first entry in the list; every
+   other entry is another driver, and selecting one opens a real
+   conversation with a composer and a call button.
+
+   The thread list comes from the service rather than from local storage,
+   because the other end of a conversation is on somebody else's machine
+   by definition. */
+const MGMT_THREAD = '#management';
+
+function dmLine(m, mine) {
+  const when = m.at ? fmt.hm(m.at) : '';
+  const file = m.attachment
+    ? `<a class="dm-file" href="${esc(Sync.url() + '/files/' + m.attachment.id)}"
+         target="_blank" rel="noopener noreferrer">
+         ${icon(m.attachment.image ? 'image' : 'link')}${esc(m.attachment.name || 'attachment')}</a>`
+    : '';
+  return `<div class="msg ${mine ? 'mine' : ''}">
+    <div class="who">${esc(m.driver || 'Driver')} · ${esc(when)}</div>
+    ${m.text ? esc(m.text) : ''}${file}</div>`;
+}
+
+/* ---------------- hosting the service from here ----------------
+
+   The company service is what carries messages, calls and the crew room.
+   Somebody has to run it, and until now that somebody had to open a
+   terminal — which is a reasonable thing to ask of whoever set the
+   project up and an unreasonable thing to ask of a driver who installed
+   an app and pressed Messages.
+
+   The desktop build can run it itself. One machine hosts; everybody else
+   points at that address. Two machines both hosting is two separate
+   companies that cannot see each other, so this is a switch rather than
+   something that happens on its own. */
+const HostedService = {
+  status: { running: false, available: false, port: 7040, lan: false, lanUrl: null, error: null },
+
+  /* Only the desktop build can do this: a browser cannot start a server,
+     and the phone app has nowhere to run one. */
+  can() {
+    return !!(typeof window !== 'undefined' && window.gmnDesktop && window.gmnDesktop.startService);
+  },
+
+  async refresh() {
+    if (!this.can()) return;
+    try {
+      this.status = await window.gmnDesktop.serviceStatus();
+      render();
+    } catch (e) { /* the button simply stays as it was */ }
+  },
+
+  /* Started, and then actually joined up: discoverLocalService() is what
+     tells the rest of the client there is a service now, and without it
+     the driver would be hosting one and still looking at an empty screen. */
+  async start(lan) {
+    if (!this.can()) return;
+
+    const res = await window.gmnDesktop.startService({ port: 7040, lan: !!lan });
+    this.status = Object.assign({}, this.status, res, { available: true });
+
+    if (res && res.error) {
+      toast(res.error, 'err');
+      render();
+      return;
+    }
+
+    Store.db.settings.hostService = true;
+    Store.db.settings.hostServiceLan = !!lan;
+    Store.save();
+
+    toast('Company service started on this machine', 'ok');
+    Store.log('ok', 'Hosting the company service on port ' + (res.port || 7040)
+      + (lan ? ' — reachable from the rest of the network' : ' — this machine only'));
+
+    /* A moment for it to bind before anything asks it a question. */
+    setTimeout(() => {
+      discoverLocalService().then(() => {
+        Sync.start();
+        Fleet.start();
+        joinService();
+        RoomCall.poll();
+        this.refresh();
+        render();
+      });
+    }, 900);
+  },
+
+  async stop() {
+    if (!this.can()) return;
+    try { this.status = await window.gmnDesktop.stopService(); } catch (e) { /* going anyway */ }
+    Store.db.settings.hostService = false;
+    Store.save();
+    toast('Company service stopped', 'info');
+    render();
+  },
+};
+
+
+/* Ask for the password once, and get a session the service will accept.
+
+   The banner used to say "sign out and back in". That is advice, not a
+   fix, and worse it is advice that often cannot work: the commonest
+   reason for having no session is that the service was started AFTER
+   signing in, so it had never heard of the account and refused the
+   attempt. Signing out and in again would have been refused the same way
+   until something told the service who exists.
+
+   ServiceAuth.login() now uploads the company before its second attempt,
+   so this really does resolve it — and doing it from here means the
+   driver never has to guess that a sign-in cycle was the ritual. */
+async function connectToService() {
+  const db = Store.db;
+  const email = (db.driver && db.driver.email) || '';
+
+  if (!Sync.url()) {
+    toast('No company service is set', 'warn');
+    return;
+  }
+
+  /* Try the way that needs nothing from them, again, before asking.
+
+     The service may have been down when boot tried, or started since, and
+     a driver who presses a button labelled Connect should get a connection
+     rather than a form — the form is the fallback, not the offer. */
+  if (await ServiceAuth.connect()) {
+    toast('Connected to the company service', 'ok');
+    Messages.pullThreads();
+    RoomCall.poll();
+    render();
+    return;
+  }
+
+  modal({
+    title: 'Connect this device',
+    body: `
+      <p class="t2" style="margin:0 0 14px;line-height:1.6">
+        This device could not connect on its own, which usually means the
+        service is an older build that cannot check a Gaming Nation
+        sign-in yet. Enter the password for
+        <b>${esc(email || 'your account')}</b> to connect it by hand.
+      </p>
+      <p class="t3 xs" style="margin:0 0 14px;line-height:1.6">
+        The service checks this against its own copy of the company. If
+        your password has been changed on the website since that copy was
+        written, it will not match — updating the service is the fix, not
+        a different password.
+      </p>
+      <div class="field"><label for="svcPw">Password</label>
+        <input class="input" id="svcPw" type="password" autocomplete="current-password"></div>
+      <div class="t3 xs mt-8" id="svcWhy"></div>`,
+    foot: `<button class="btn" data-close>Cancel</button>
+           <button class="btn btn-primary" id="svcGo">${icon('link')}Connect</button>`,
+    onMount: (w) => {
+      const pw = $('#svcPw', w);
+      const go = $('#svcGo', w);
+      const why = $('#svcWhy', w);
+      if (pw) pw.focus();
+
+      const attempt = async () => {
+        const value = pw ? pw.value : '';
+        if (!value) { why.textContent = 'Enter your password.'; return; }
+
+        go.disabled = true;
+        go.textContent = 'Connecting…';
+        why.textContent = '';
+
+        const ok = await ServiceAuth.login(email, value);
+
+        if (!ok) {
+          go.disabled = false;
+          go.innerHTML = icon('link') + 'Connect';
+          why.textContent = ServiceAuth.status === 'rejected'
+            ? 'The service did not accept that password.'
+            : 'Could not reach the company service.';
+          return;
+        }
+
+        w.remove();
+        toast('Connected to the company service', 'ok');
+        Messages.pullThreads();
+        RoomCall.poll();
+        render();
+      };
+
+      if (go) go.onclick = attempt;
+      if (pw) pw.onkeydown = (e) => { if (e.key === 'Enter') attempt(); };
+    },
+  });
+}
+
+/* Why the screen is empty, said at the top rather than discovered.
+
+   Driver-to-driver messages and calls run through the company service.
+   With none reachable the thread list holds management and nothing else,
+   which looks exactly like having no friends rather than like a service
+   that is not running — and that is precisely how it was reported: not
+   as an error, but as "still cannot chat". */
+function dmOffline() {
+  if (Messages.on()) return '';
+
+  const noService = !Sync.url();
+
+  /* The desktop build can start it. Offering the button here rather than
+     only in Settings is the whole point: this is the screen where a driver
+     finds out they cannot chat, so it is the screen that should be able to
+     do something about it. */
+  const canHost = noService && HostedService.can();
+
+  const body = noService
+    ? (canHost
+      ? 'Messages and calls between drivers go through Gaming Nation\'s own '
+        + 'service. This machine can run it — one machine hosts and the rest '
+        + 'of the crew points at it. Announcements from management arrive '
+        + 'either way.'
+      : 'Messages and calls between drivers go through Gaming Nation\'s own '
+        + 'service. Run it on the company machine, or put its address in '
+        + 'Settings. Announcements from management still arrive without it.')
+    : !ServiceAuth.tried
+      ? 'The service issues its own session and this device is getting one '
+        + 'now, using the sign-in you already have. Nothing to do.'
+      : ServiceAuth.status === 'rejected'
+        ? 'The service would not accept this device’s sign-in. If it is an '
+          + 'older build it may not know how to check it — connecting by '
+          + 'password still works.'
+        : 'The service could not be reached to get one. It may be starting, '
+          + 'or on a machine that is not answering yet.';
+
+  /* No button while the automatic attempt is still running: it is the
+     thing the button does, and offering it makes a step that needs
+     nobody look like a step that is waiting for somebody. */
+  const offerManual = !noService && ServiceAuth.tried;
+
+  return `<div class="dm-offline">${icon(noService || ServiceAuth.tried ? 'alert' : 'link')}<div class="grow">
+    <div class="b6">${noService
+      ? 'Driver chat needs the company service'
+      : !ServiceAuth.tried
+        ? 'Connecting this device to the service'
+        : 'This device has no session with the service'}</div>
+    <div class="t3 xs mt-4">${body}</div>
+    ${offerManual ? `<div class="dm-offline-acts">
+      <button class="btn btn-sm btn-primary" data-act="service-connect">
+        ${icon('link')}Connect this device</button>
+    </div>` : ''}
+    ${canHost ? `<div class="dm-offline-acts">
+      <button class="btn btn-sm btn-primary" data-act="host-service">
+        ${icon('bolt')}Run it on this machine</button>
+      <button class="btn btn-sm" data-act="host-service-lan" title="Also let other drivers on this network reach it">
+        ${icon('users')}Run it for the whole crew</button>
+    </div>` : ''}
+  </div></div>`;
+}
+
+/* The banner that used to live here is gone on purpose.
+
+   The client starts the service by itself when it cannot find one, so by
+   the time this appeared there was nothing left to decide and nothing to
+   do. It sat on the messages screen for as long as the service ran —
+   announcing a success nobody asked about, with a Stop button beside it,
+   on the screen a driver opens to read their messages. Working is the
+   normal case, and the normal case should be quiet.
+
+   The one thing on it worth keeping was the address the rest of the crew
+   connect to, and an address nobody is told is an address nobody can use.
+   That has moved into the Company service dialog, along with the way to
+   stop hosting — which is where somebody goes when they actually want
+   either of them, instead of every time they open their messages. */
+
+/* The composer, and the reason it is not there when it is not. */
+function dmComposer(placeholder) {
+  if (!Messages.on()) {
+    return `<div class="dm-blocked">${icon('alert')}<div>${esc(Messages.reason())}</div></div>`;
+  }
+  return `<form class="composer" id="dmForm">
+    <input class="input" id="dmText" placeholder="${esc(placeholder)}" autocomplete="off"
+      ${Messages.sending ? 'disabled' : ''}>
+    <button class="btn btn-primary" type="submit" ${Messages.sending ? 'disabled' : ''}>
+      ${icon('send')}${Messages.sending ? 'Sending' : 'Send'}</button>
+  </form>`;
+}
+
+/* Everyone a driver could talk to.
+
+   The Messages screen listed only conversations that already existed, and
+   the one way to start a new one was the button on a live map pin - which
+   needs the other driver to be out on the road reporting a position at
+   that moment. So two drivers who had never spoken could not speak unless
+   they happened to be driving at the same time, and a driver who was
+   parked was unreachable.
+
+   This is the crew, from the company roster: everybody except you, and
+   except anybody suspended. Sorted so whoever is out driving is easiest
+   to find, because that is usually who somebody wants. */
+function crewDirectory() {
+  const hq = Auth.hqDb() || {};
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+  const onRoad = new Set((Fleet.drivers || []).map((d) => String(d.id)));
+
+  return (hq.drivers || [])
+    .filter((d) => d && d.id && String(d.id) !== me
+      && d.accountStatus !== 'suspended')
+    .map((d) => Object.assign({}, d, {
+      driving: onRoad.has(String(d.id)),
+      /* Driving beats online: somebody on the road is reachable AND worth
+         calling about the road. Both beat a status field nobody has
+         refreshed, which is what 'online' amounts to for a parked driver. */
+      online: d.status === 'online',
+    }))
+    .sort((a, b) => (b.driving - a.driving) || (b.online - a.online)
+      || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+}
+
+function openCrewDirectory() {
+  const crew = crewDirectory();
+  modal({
+    title: 'Start a conversation',
+    body: crew.length ? `
+      <p class="t2">Anyone on the crew, whether they are driving or not.</p>
+      ${/* A roster of forty is a scroll, not a list. The filter is on the
+            name and the code, because a driver is looked for by whichever
+            one the person remembers. */''}
+      ${crew.length > 6 ? `<div class="field mt-12">
+        <input class="input" id="crewFind" placeholder="Find a driver by name or code"
+          autocomplete="off"></div>` : ''}
+      <div class="col gap-8 mt-12" id="crewList">
+        ${crew.map((d) => `
+          <div class="setting-row crew-row"
+            data-find="${esc(String(d.name || '') + ' ' + d.id).toLowerCase()}">
+            <div class="row gap-8" style="min-width:0">
+              ${avatarFace(d, 'sm')}
+              <div style="min-width:0">
+                <div class="b6 trunc">
+                  <span class="crewdot ${d.driving ? 'driving' : d.online ? 'online' : ''}"
+                    title="${esc(d.driving ? 'On the road' : d.online ? 'Online' : 'Offline')}"></span>
+                  ${esc(d.name || d.id)}</div>
+                <div class="t3 xs mono">${esc(d.id)}${
+                  d.driving ? ' · on the road' : d.online ? ' · online' : ''}</div>
+              </div>
+            </div>
+            <div class="row gap-8">
+              <button class="btn btn-sm" data-act="map-message" data-id="${esc(d.id)}"
+                title="Message ${esc(d.name || d.id)}">${icon('chat')}</button>
+              <button class="btn btn-sm" data-act="map-call" data-id="${esc(d.id)}"
+                data-name="${esc(d.name || d.id)}"
+                title="Call ${esc(d.name || d.id)}">${icon('phone')}</button>
+            </div>
+          </div>`).join('')}
+      </div>`
+      : `<p class="t2">There is nobody else on the crew yet. Drivers appear here
+         once they have signed up and been approved.</p>`,
+    foot: `<button class="btn" data-close>Close</button>`,
+    onMount(w) {
+      const find = $('#crewFind', w);
+      if (!find) return;
+      find.focus();
+      find.addEventListener('input', () => {
+        const q = find.value.trim().toLowerCase();
+        let shown = 0;
+        $$('.crew-row', w).forEach((row) => {
+          const hit = !q || row.dataset.find.indexOf(q) > -1;
+          row.hidden = !hit;
+          if (hit) shown++;
+        });
+        /* Saying nothing matched beats an empty box, which reads as broken. */
+        let none = $('#crewNone', w);
+        if (!shown && !none) {
+          none = document.createElement('div');
+          none.id = 'crewNone';
+          none.className = 't3 xs';
+          none.textContent = 'Nobody on the crew matches that.';
+          $('#crewList', w).appendChild(none);
+        } else if (shown && none) {
+          none.remove();
+        }
+      });
+    },
+  });
+}
+
+function viewMessages() {
+  const notices = Store.db.messages;
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+  const open = Messages.open;
+
+  /* Management first, then everyone the service says we have talked to. */
+  const rows = [{
+    id: MGMT_THREAD,
+    title: 'Gaming Nation management',
+    sub: notices.length ? notices[0].subject : 'No announcements',
+    unread: notices.filter((m) => !m.read).length,
+    online: true,
+  }].concat(Messages.threads
+    .filter((t) => !t.room)
+    .map((t) => ({
+      id: String(t.withId),
+      title: t.name || t.withId,
+      sub: t.last ? String(t.last.text || 'Attachment').slice(0, 60) : 'No messages yet',
+      unread: t.unread || 0,
+      online: !!t.online,
+    })));
+
+  const sel = rows.find((r) => r.id === open) || rows[0];
+  const body = (() => {
+    if (!sel) return '';
+
+    if (sel.id === MGMT_THREAD) {
+      const m = notices[state.msgSel] || notices[0];
+      if (!m) return `<div class="empty">${icon('mail')}<div>No announcements</div></div>`;
+      return `<div class="thread" style="display:block">
+        <div class="b7 lg">${esc(m.subject)}</div>
+        <div class="t3 xs mt-8">From ${esc(m.from)} · ${esc(fmt.dt(m.at))}</div>
+        <p class="t2 mt-16" style="line-height:1.65">${esc(m.body)}</p>
+        ${notices.length > 1 ? `<div class="dm-notices mt-16">
+          ${notices.map((n, i) => `<button class="dm-notice ${i === state.msgSel ? 'on' : ''}"
+            data-act="sel-msg" data-i="${i}">${esc(n.subject)}</button>`).join('')}
+        </div>` : ''}
+      </div>`;
+    }
+
+    if (Messages.loading) return `<div class="empty">${icon('refresh')}<div>Opening…</div></div>`;
+    if (Messages.error) return `<div class="empty">${icon('alert')}<div>${esc(Messages.error)}</div></div>`;
+
+    return `
+      <div class="thread" id="dmThread">
+        ${Messages.history.length
+          ? Messages.history.map((m) => dmLine(m, String(m.driverId) === me)).join('')
+          : `<div class="empty">${icon('chat')}<div>Say something</div></div>`}
+      </div>
+      ${dmComposer('Message ' + sel.title)}`;
+  })();
+
+  return `
+  ${viewHead('Messages', 'Talk to another driver, or read what management sent',
+    `<button class="btn btn-sm btn-primary" data-act="crew-directory">${icon('chat')}New message</button>
+     <button class="btn btn-sm" data-act="mark-all-read">${icon('check')}Mark all read</button>`)}
+  ${dmOffline()}
+  <section class="card"><div class="card-body">
+    <div class="split">
+      <div class="split-list">
+        ${rows.map((r) => `<div class="split-item ${r.id === (sel && sel.id) ? 'on' : ''} ${r.unread ? 'unread' : ''}"
+          data-act="open-dm" data-id="${esc(r.id)}">
+          <div class="split-title">
+            ${r.id === MGMT_THREAD ? '' : `<span class="dot ${r.online ? 'on' : ''}"></span>`}
+            ${esc(r.title)}${r.unread ? ` <span class="pill sm">${r.unread}</span>` : ''}</div>
+          <div class="split-sub">${esc(r.sub)}</div>
+        </div>`).join('')}
+      </div>
+      <div class="split-body">
+        ${sel && sel.id !== MGMT_THREAD ? `<div class="dm-head">
+          <div>
+            <div class="b6">${esc(sel.title)}</div>
+            <div class="t3 xs">${sel.online ? 'Online now' : 'Offline — they will see it when they open the app'}</div>
+          </div>
+          <button class="btn btn-sm" data-act="call-driver"
+            data-id="${esc(sel.id)}" data-name="${esc(sel.title)}"
+            ${sel.online ? '' : 'disabled'}>${icon('phone')}Call</button>
+        </div>` : ''}
+        ${body}
+      </div>
+    </div>
+  </div></section>`;
+}
+
+/* ---------------- crew chat ----------------
+
+   The crew room is the whole fleet in one conversation, and the group
+   call that goes with it. Convoy channels, which is all this screen used
+   to hold, are still listed underneath — they are a different thing:
+   scoped to one run, and local to whoever is on it.
+
+   The room is the same '#fleet' thread the website opens, so a message
+   typed on a phone at a services and one typed at a desk are in the same
+   place, in order. */
+function viewChats() {
+  /* opens the crew room if nothing is open - see Messages.ensureRoom */
+  Messages.ensureRoom();
+
+  const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+  const onCall = RoomCall.live || RoomCall.joining;
+  const waiting = RoomCall.known.length;
+
+  /* The convoys this driver has signed on to, each with a room of its own.
+     The old "Convoy channels" list came from Store.db.chats, which nothing
+     in the client ever wrote to - a section that could only ever be empty,
+     under a message promising channels that would never arrive. */
+  const convoys = Convoys.all().filter((e) => Convoys.signedOn(e));
+
+  const open = isRoomId(Messages.open) ? Messages.open : FLEET_ROOM;
+  const inFleet = open === FLEET_ROOM;
+
+  const unreadFor = (id) => {
+    const t = (Messages.threads || []).find((x) => String(x.withId) === String(id));
+    return (t && t.unread) || 0;
+  };
+
+  /* Two buttons rather than one with a computed data-act: joining and
+     leaving are different actions, and writing them as one made the second
+     unreachable to anything reading this file — tools/scan.js included,
+     which is how it was noticed. */
+  const callBtn = onCall
+    ? `<button class="btn btn-sm btn-danger" data-act="room-leave">
+        ${icon('phoneOff')}${RoomCall.joining ? 'Joining…' : 'Leave call'}</button>`
+    : `<button class="btn btn-sm btn-primary" data-act="room-join">
+        ${icon('phone')}Crew call${waiting ? ' · ' + waiting : ''}</button>`;
+
+  const body = Messages.loading
+    ? `<div class="empty">${icon('refresh')}<div>Opening…</div></div>`
+    : `<div class="thread" id="dmThread">
+        ${Messages.history.length
+          ? Messages.history.map((m) => dmLine(m, String(m.driverId) === me)).join('')
+          : `<div class="empty">${icon('chat')}
+              <div>Nobody has said anything yet</div>
+              ${inFleet ? '' : `<div class="t3 xs">This room belongs to the convoy.
+                Everyone signed on to it can read what is said here.</div>`}
+            </div>`}
+      </div>
+      ${dmComposer('Message ' + roomLabel(open))}`;
+
+  const row = (id, title, sub, ic) => {
+    const n = unreadFor(id);
+    return `<div class="split-item ${open === id ? 'on' : ''} ${n ? 'unread' : ''}"
+        data-act="open-room" data-id="${esc(id)}">
+      <div class="split-title">${icon(ic)} ${esc(title)}
+        ${n ? `<span class="pill brand">${n}</span>` : ''}</div>
+      <div class="split-sub">${esc(sub)}</div>
+    </div>`;
+  };
+
+  return `
+  ${viewHead('Crew chat',
+    inFleet
+      ? (Messages.members ? Messages.members + ' drivers online' : 'Everyone in the fleet')
+      : roomLabel(open) + ' · everyone signed on',
+    `${inFleet ? callBtn : ''}<span class="pill ${Store.db.conn.gmn === 'connected' ? 'ok' : 'err'}">${icon('wifi')}${Store.db.conn.gmn === 'connected' ? 'Live' : 'Offline'}</span>`)}
+  ${dmOffline()}
+  <section class="card"><div class="card-body">
+    <div class="split">
+      <div class="split-list">
+        ${row(FLEET_ROOM, 'Crew room', 'Everyone in the fleet', 'users')}
+
+        ${convoys.length ? `<div class="split-label">Your convoys</div>` : ''}
+        ${convoys.map((e) => row(convoyRoom(e.id), e.name || e.id,
+          (e.registered || []).length + ' signed on', 'route')).join('')}
+
+        ${/* A room somebody has spoken in that is not the fleet room and not
+              a convoy this driver is on - a convoy they left, or one the
+              schedule no longer carries. Listed rather than hidden: the
+              messages are real and somebody is owed an answer. */''}
+        ${(Messages.threads || [])
+          .filter((t) => t.room && String(t.withId) !== FLEET_ROOM
+            && !convoys.some((e) => convoyRoom(e.id) === String(t.withId)))
+          .map((t) => row(String(t.withId), t.name || roomLabel(t.withId),
+            'Not on this convoy', 'chat')).join('')}
+      </div>
+      <div class="split-body">${body}</div>
+    </div>
+  </div></section>`;
+}
+
+
+/* ---------------- administration ----------------
+   These write to the company record the platform keeps, so a change made
+   on the phone is the change the web console sees. Gated on rank, and the
+   gate is checked again when the action runs, not only when it is drawn. */
+function openAdminDrivers() {
+  if (!can('drivers.manage')) { toast('You do not have the rank for that', 'err'); return; }
+  const roster = Auth.roster().slice().sort((a, b) => (b.km || 0) - (a.km || 0));
+
+  modal({
+    title: 'Drivers', size: 'wide',
+    body: roster.length ? `<div class="adm-list">${roster.map((d) => `
+      <div class="adm-row">
+        ${avatarFace(d, 'sm')}
+        <div class="grow" style="min-width:0">
+          <div class="b6 trunc">${esc(d.name)}</div>
+          <div class="t3 xs mono">${esc(d.id)} · ${esc(roleName(d.role))}${
+            d.accountStatus === 'suspended' ? ' · <span style="color:var(--danger)">suspended</span>' : ''}</div>
+        </div>
+        <div class="row gap-6">
+          ${can('roles.manage') ? `<select class="select sm adm-role" data-id="${esc(d.id)}">
+            ${Object.keys(ROLE_NAMES).map((k) =>
+              `<option value="${k}"${d.role === k ? ' selected' : ''}>${esc(ROLE_NAMES[k])}</option>`).join('')}
+          </select>` : ''}
+          <button class="btn btn-sm ${d.accountStatus === 'suspended' ? '' : 'btn-danger'}"
+            data-act="admin-suspend" data-id="${esc(d.id)}">
+            ${d.accountStatus === 'suspended' ? 'Restore' : 'Suspend'}</button>
+        </div>
+      </div>`).join('')}</div>`
+      : `<div class="empty">${icon('users')}<div>No drivers yet</div>
+         <div class="t3 xs">Drivers appear once they register on the platform.</div></div>`,
+    foot: `<button class="btn" data-close>Close</button>`,
+    onMount(w) {
+      w.querySelectorAll('.adm-role').forEach((sel) => {
+        sel.onchange = () => {
+          if (!can('roles.manage')) { toast('You do not have the rank for that', 'err'); return; }
+          const id = sel.dataset.id;
+          if (Auth.updateDriver(id, { role: sel.value })) {
+            Store.log('ok', 'Set ' + id + ' to ' + roleName(sel.value));
+            toast(roleName(sel.value), 'ok', id + ' role updated');
+            /* changing your own rank changes what you can see */
+            if (Store.db.driver && Store.db.driver.gmnId === id) {
+              Store.db.driver.role = sel.value;
+              Store.save();
+            }
+          } else { toast('Could not save that', 'err'); }
+        };
+      });
+    },
+  });
+}
+
+function adminSuspend(id) {
+  if (!can('drivers.manage')) { toast('You do not have the rank for that', 'err'); return; }
+  const d = Auth.driverRecord(id);
+  if (!d) return;
+  if (Store.db.driver && Store.db.driver.gmnId === id) {
+    toast('You cannot suspend your own account', 'warn');
+    return;
+  }
+  const next = d.accountStatus === 'suspended' ? 'active' : 'suspended';
+  if (Auth.updateDriver(id, { accountStatus: next })) {
+    Store.log(next === 'suspended' ? 'warn' : 'ok',
+      (next === 'suspended' ? 'Suspended ' : 'Restored ') + d.name + ' (' + id + ')');
+    toast(next === 'suspended' ? 'Driver suspended' : 'Driver restored', 'ok', d.name);
+    closeModals();
+    openAdminDrivers();
+  } else { toast('Could not save that', 'err'); }
+}
+
+function openAdminApplications() {
+  if (!can('recruitment.manage')) { toast('You do not have the rank for that', 'err'); return; }
+  const apps = Auth.applications()
+    .filter((a) => a.status === 'pending' || a.status === 'review')
+    .sort((a, b) => new Date(b.submitted) - new Date(a.submitted));
+
+  modal({
+    title: 'Applications to drive', size: 'wide',
+    body: apps.length ? `<div class="adm-list">${apps.map((a) => `
+      <div class="adm-row col" style="align-items:stretch">
+        <div class="row gap-10">
+          <span class="avatar sm">${esc(initialsOf(a.name))}</span>
+          <div class="grow" style="min-width:0">
+            <div class="b6 trunc">${esc(a.name)}</div>
+            <div class="t3 xs trunc">${esc(a.email)}${a.country ? ' · ' + esc(a.country) : ''}</div>
+          </div>
+          <span class="t3 xs">${esc(fmt.rel(a.submitted))}</span>
+        </div>
+        <div class="row gap-8 mt-10">
+          <button class="btn btn-sm btn-primary grow" data-act="app-decide" data-id="${esc(a.id)}" data-v="approved">
+            ${icon('check')}Approve</button>
+          <button class="btn btn-sm btn-danger grow" data-act="app-decide" data-id="${esc(a.id)}" data-v="rejected">
+            ${icon('x')}Reject</button>
+        </div>
+      </div>`).join('')}</div>`
+      : `<div class="empty">${icon('userPlus')}<div>Nothing waiting</div>
+         <div class="t3 xs">New applications from the platform appear here.</div></div>`,
+    foot: `<button class="btn" data-close>Close</button>`,
+  });
+}
+
+function decideApplication(id, verdict) {
+  if (!can('recruitment.manage')) { toast('You do not have the rank for that', 'err'); return; }
+  const a = Auth.updateApplication(id, { status: verdict, decidedAt: new Date().toISOString() });
+  if (!a) { toast('Could not save that', 'err'); return; }
+  Store.log(verdict === 'approved' ? 'ok' : 'warn',
+    (verdict === 'approved' ? 'Approved ' : 'Rejected ') + a.name + "'s application");
+  toast(verdict === 'approved' ? 'Application approved' : 'Application rejected', 'ok', a.name);
+  closeModals();
+  openAdminApplications();
+}
+
+/* ---------------- menu ----------------
+   Everything the six tabs do not carry, plus the company controls for
+   whoever has the rank to use them. */
+const MENU_SECTIONS = [
+  { label: 'Operation', items: ['dashboard', 'pending', 'uploads'] },
+  { label: 'Record',    items: ['profile', 'stats', 'achievements', 'messages'] },
+  { label: 'Client',    items: ['notifications', 'settings', 'support', 'about'] },
+];
+
+function viewMenu() {
+  const d = Store.db.driver;
+  const staff = isStaff();
+  const apps = can('recruitment.manage')
+    ? Auth.applications().filter((a) => a.status === 'pending' || a.status === 'review') : [];
+
+  const row = (key) => {
+    const n = NAV.find((x) => x.key === key);
+    if (!n) return '';
+    const c = n.count ? n.count() : 0;
+    return `<button class="menu-row" data-act="nav" data-view="${key}">
+      <span class="menu-ico">${icon(n.icon)}</span>
+      <span class="grow">${esc(n.label)}</span>
+      ${c ? `<span class="pill brand">${c}</span>` : ''}
+      ${icon('chevron', 'menu-chev')}
+    </button>`;
+  };
+
+  return `
+  ${viewHead('Menu', staff ? roleName(myRole()) + ' · ' + esc(d.gmnId) : esc(d.rank || 'Driver') + ' · ' + esc(d.gmnId))}
+
+  ${staff ? `
+  <div class="menu-group">
+    <div class="menu-label">${icon('shield')}Administration</div>
+    <section class="card"><div class="card-body p-0">
+      ${can('drivers.manage') ? `<button class="menu-row" data-act="admin-drivers">
+        <span class="menu-ico staff">${icon('users')}</span>
+        <span class="grow">Drivers</span>
+        <span class="t3 xs">${Auth.roster().length}</span>${icon('chevron', 'menu-chev')}
+      </button>` : ''}
+      ${can('recruitment.manage') ? `<button class="menu-row" data-act="admin-applications">
+        <span class="menu-ico staff">${icon('userPlus')}</span>
+        <span class="grow">Applications</span>
+        ${apps.length ? `<span class="pill brand">${apps.length}</span>` : '<span class="t3 xs">none waiting</span>'}
+        ${icon('chevron', 'menu-chev')}
+      </button>` : ''}
+      ${can('events.manage') ? `<button class="menu-row" data-act="open-gmn" data-href="login.html#/events">
+        <span class="menu-ico staff">${icon('route')}</span>
+        <span class="grow">Convoy management</span>${icon('chevron', 'menu-chev')}
+      </button>` : ''}
+      ${can('admin.view') ? `<button class="menu-row" data-act="open-gmn" data-href="login.html#/admin">
+        <span class="menu-ico staff">${icon('grid')}</span>
+        <span class="grow">Full admin console</span>${icon('chevron', 'menu-chev')}
+      </button>` : ''}
+    </div></section>
+  </div>` : ''}
+
+  ${MENU_SECTIONS.map((sec) => `
+    <div class="menu-group">
+      <div class="menu-label">${esc(sec.label)}</div>
+      <section class="card"><div class="card-body p-0">${sec.items.map(row).join('')}</div></section>
+    </div>`).join('')}
+
+  <div class="menu-group">
+    <div class="menu-label">Gaming Nation</div>
+    <section class="card"><div class="card-body p-0">
+      <button class="menu-row" data-act="open-gmn" data-href="login.html#/dashboard">
+        <span class="menu-ico">${icon('link')}</span><span class="grow">Open the web platform</span>
+        ${icon('chevron', 'menu-chev')}</button>
+      <button class="menu-row danger" data-act="logout">
+        <span class="menu-ico">${icon('logout')}</span><span class="grow">Sign out</span></button>
+    </div></section>
+  </div>`;
+}
+
+/* ---------------- convoys ----------------
+   Read from the company record the platform keeps, so the phone shows the
+   same schedule the web dashboard does. */
+/* ============================================================
+   CONVOYS
+   ------------------------------------------------------------
+   This screen used to be a list of names and a button that
+   opened the website. Everything a driver actually wants before
+   a convoy - where it meets, what the route is, who is leading,
+   who else is coming, and whether they are on the list - was on
+   the platform, which is not where they are sitting fifteen
+   minutes before departure.
+
+   All of it is on the company record already. Signing on writes
+   to that same record, so it is the same sign-on the website
+   shows, not a second list to reconcile.
+
+   ONE THING IS NOT HERE. A convoy has no chat room of its own:
+   the company service has exactly one room, hardcoded, and every
+   room id collapses into it. So the chat button opens the crew
+   room and says that is what it is doing, rather than pretending
+   to a room that does not exist and quietly putting a driver's
+   convoy message in front of the whole company.
+   ============================================================ */
+const Convoys = {
+  me() { return String((Store.db.driver && Store.db.driver.gmnId) || ''); },
+
+  all() {
+    return (Auth.events() || [])
+      .filter((e) => e && e.status !== 'completed')
+      .sort((a, b) => {
+        /* rolling now first, then soonest */
+        const live = (x) => (x.status === 'live' ? 0 : 1);
+        return live(a) - live(b) || new Date(a.date) - new Date(b.date);
+      });
+  },
+  find(id) { return this.all().find((e) => String(e.id) === String(id)) || null; },
+
+  signedOn(e) {
+    return !!e && (e.registered || []).some((r) => String(r.driverId) === this.me());
+  },
+  full(e) {
+    return !!e.maxSlots && (e.registered || []).length >= e.maxSlots && !this.signedOn(e);
+  },
+
+  /* The crew on this convoy, as people rather than as ids, with the leader
+     first because that is who a driver looks for. */
+  members(e) {
+    const roster = Auth.roster();
+    const led = String(e.leaderId || '');
+    const onRoad = new Set((Fleet.drivers || []).map((d) => String(d.id)));
+    return (e.registered || []).map((r) => {
+      const d = roster.find((x) => String(x.id) === String(r.driverId));
+      return {
+        id: r.driverId,
+        name: (d && d.name) || r.driverId,
+        row: d || null,
+        state: r.state || 'registered',
+        leader: String(r.driverId) === led,
+        me: String(r.driverId) === this.me(),
+        driving: onRoad.has(String(r.driverId)),
+        online: !!d && d.status === 'online',
+      };
+    }).sort((a, b) => (b.leader - a.leader) || (b.driving - a.driving)
+      || String(a.name).localeCompare(String(b.name)));
+  },
+
+  leader(e) {
+    if (!e.leaderId) return null;
+    return Auth.driverRecord(e.leaderId)
+      || { id: e.leaderId, name: e.leaderId };
+  },
+
+  /* Every stop on the way, which is what `path` is for. An event with no
+     path - a meeting, a training session - has a start and no route, and
+     saying "Rotterdam to Rotterdam" would be worse than saying nothing. */
+  route(e) {
+    const path = Array.isArray(e.path) ? e.path.filter(Boolean) : [];
+    if (path.length > 1) return path;
+    return (e.start && e.dest && e.start !== e.dest) ? [e.start, e.dest] : [];
+  },
+
+  /* Signing on and off. Both write the company record, which is the record
+     the website reads - so this is the same list, not a copy of it. */
+  toggle(id) {
+    const hq = Auth.hqDb();
+    const e = hq && (hq.events || []).find((x) => String(x.id) === String(id));
+    if (!e) { toast('That convoy is no longer on the record', 'warn'); return; }
+
+    const me = this.me();
+    if (!me) { toast('Sign in first', 'warn'); return; }
+
+    e.registered = e.registered || [];
+    const at = e.registered.findIndex((r) => String(r.driverId) === me);
+
+    if (at > -1) {
+      e.registered.splice(at, 1);
+      if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+      Store.log('info', 'Signed off ' + (e.name || id));
+      toast('Signed off', 'ok');
+    } else {
+      if (e.maxSlots && e.registered.length >= e.maxSlots) {
+        toast('That convoy is full', 'warn');
+        return;
+      }
+      /* 'registered' is what the platform writes for a sign-up; 'completed'
+         is what it writes afterwards, and that is what attendance counts.
+         Writing anything else here would credit a convoy nobody drove. */
+      e.registered.push({ driverId: me, state: 'registered' });
+      if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+      Store.log('ok', 'Signed on to ' + (e.name || id));
+      toast('Signed on', 'ok');
+    }
+    render();
+  },
+};
+
+/* ---------------- putting a convoy on the schedule ----------------
+
+   The app could show convoys and sign a driver on to one, and that was
+   all: publishing one meant opening the website. An event manager sitting
+   in the client with the crew already on the road had to go somewhere else
+   to say where they were going.
+
+   It writes the same record the platform writes - the same fields, the
+   same 'scheduled' status, the same empty `registered` list - into the
+   same company record, because there is one schedule and both ends read
+   it. A shape of its own would be a second kind of convoy that only one
+   screen understood.
+
+   THE DISTANCE IS REAL GEOGRAPHY. The platform estimates it from its
+   schematic at about 3.1 km per unit; this client has the cities' actual
+   coordinates, because the map needs them, so it measures the route on the
+   globe instead. The two disagree by a few percent on a long run. That is
+   the client being right rather than the client being different, and it is
+   said here so nobody later "fixes" it back. */
+const CONVOY_TYPES = [
+  ['convoy',    'Official Convoy',   ''],
+  ['community', 'Community Convoy',  'info'],
+  ['meeting',   'Driver Meeting',    'violet'],
+  ['training',  'Training Session',  'ok'],
+];
+
+const NewConvoy = {
+  /* every city the game knows, for the pickers */
+  cities(game) {
+    return Object.keys(geoFor(game === 'ats' ? 'ats' : 'ets2')).sort();
+  },
+
+  /* Real kilometres along the stops, in order. A route with fewer than two
+     places is not a route and has no distance - a meeting at HQ is not a
+     drive. */
+  distance(game, stops) {
+    const geo = geoFor(game === 'ats' ? 'ats' : 'ets2');
+    let km = 0;
+    for (let i = 1; i < stops.length; i++) {
+      const a = geo[stops[i - 1]], b = geo[stops[i]];
+      if (!a || !b) return 0;
+      km += haversineKm(a, b);
+    }
+    return Math.round(km);
+  },
+
+  open() {
+    if (!can('events.manage')) { toast('You do not have the rank for that', 'err'); return; }
+
+    const game = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+    const list = this.cities(game);
+    const roster = Auth.roster().filter((d) => d && d.accountStatus !== 'suspended');
+    const me = String((Store.db.driver && Store.db.driver.gmnId) || '');
+
+    /* a fortnight out, at eight in the evening - the slot a VTC convoy
+       actually runs in, rather than "now", which is never right */
+    const when = new Date();
+    when.setDate(when.getDate() + 14);
+    when.setHours(20, 0, 0, 0);
+    const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 16);
+
+    modal({
+      title: 'Put a convoy on the schedule',
+      body: `
+        <datalist id="cvCities">${list.map((c) =>
+          `<option value="${esc(c)}">`).join('')}</datalist>
+
+        <div class="field"><label for="cvName">Name</label>
+          <input class="input" id="cvName" maxlength="80" placeholder="Friday Night Haul"></div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvType">Type</label>
+            <select class="select" id="cvType">
+              ${CONVOY_TYPES.map(([v, l]) =>
+                `<option value="${v}">${esc(l)}</option>`).join('')}
+            </select></div>
+          <div class="field grow"><label for="cvDate">Departs</label>
+            <input class="input" id="cvDate" type="datetime-local" value="${esc(local)}"></div>
+        </div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvFrom">Start</label>
+            <input class="input" id="cvFrom" list="cvCities" placeholder="Calais"></div>
+          <div class="field grow"><label for="cvTo">Destination</label>
+            <input class="input" id="cvTo" list="cvCities" placeholder="Berlin"></div>
+        </div>
+
+        <div class="field mt-12"><label for="cvVia">Stops on the way (optional)</label>
+          <input class="input" id="cvVia" placeholder="Brussels, Cologne — separated by commas"></div>
+
+        <div class="row gap-8 wrap mt-12">
+          <div class="field grow"><label for="cvServer">Server</label>
+            <input class="input" id="cvServer" maxlength="40" placeholder="Simulation 1"></div>
+          <div class="field" style="max-width:120px"><label for="cvSlots">Slots</label>
+            <input class="input" id="cvSlots" type="number" min="2" max="200" value="30"></div>
+        </div>
+
+        <div class="field mt-12"><label for="cvLeader">Convoy leader</label>
+          <select class="select" id="cvLeader">
+            ${roster.map((d) => `<option value="${esc(d.id)}"${
+              String(d.id) === me ? ' selected' : ''}>${esc(d.name || d.id)}</option>`).join('')}
+          </select></div>
+
+        <div class="field mt-12"><label for="cvDesc">Anything else (optional)</label>
+          <textarea class="input" id="cvDesc" rows="2"
+            placeholder="Livery, voice channel, anything the crew should know."></textarea></div>
+
+        <div class="t3 xs mt-12">It goes on the company schedule, so it appears on the
+          website and in every driver's client. Distance is measured along the stops.</div>`,
+      foot: `<button class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary" data-act="convoy-create">${icon('check')}Publish</button>`,
+    });
+  },
+
+  create() {
+    if (!can('events.manage')) { toast('You do not have the rank for that', 'err'); return; }
+
+    const val = (id) => String((($('#' + id) || {}).value) || '').trim();
+    const name = val('cvName');
+    if (!name) { toast('A convoy needs a name', 'warn'); return; }
+
+    const game = Store.db.settings.game === 'ats' ? 'ats' : 'ets2';
+    const geo = geoFor(game);
+    const type = val('cvType') || 'convoy';
+    const row = CONVOY_TYPES.find((t) => t[0] === type) || CONVOY_TYPES[0];
+    const isDrive = type === 'convoy' || type === 'community';
+
+    const from = val('cvFrom');
+    const to = val('cvTo');
+    const via = val('cvVia').split(',').map((x) => x.trim()).filter(Boolean);
+
+    /* A city the game does not have is a typo, and a typo in a route puts
+       the convoy nowhere on the map. Named, so it can be corrected. */
+    const unknown = [from, to].concat(via).filter((c) => c && !geo[c]);
+    if (isDrive && unknown.length) {
+      toast('Not on the ' + mapFor(game).short + ' map: ' + unknown.join(', '), 'warn');
+      return;
+    }
+    if (isDrive && (!from || !to)) {
+      toast('A convoy needs somewhere to start and somewhere to end', 'warn');
+      return;
+    }
+
+    const when = new Date(val('cvDate') || Date.now());
+    if (!Number.isFinite(when.getTime())) { toast('That date does not read', 'warn'); return; }
+
+    const path = isDrive ? [from].concat(via, [to]) : [];
+    const km = this.distance(game, path);
+
+    const hq = Auth.hqDb();
+    if (!hq) { toast('The company record is not reachable', 'err'); return; }
+    hq.events = hq.events || [];
+
+    const leader = val('cvLeader');
+    const event = {
+      id: 'EV-' + Date.now().toString(36).toUpperCase(),
+      name,
+      type,
+      typeLabel: row[1],
+      tone: row[2],
+      status: 'scheduled',
+      date: when.toISOString(),
+      /* the crew gathers before it rolls; the platform uses the same half hour */
+      meetTime: new Date(when.getTime() - 30 * 60000).toISOString(),
+      start: isDrive ? from : 'GMN HQ',
+      dest: isDrive ? to : 'GMN HQ',
+      path,
+      distance: km,
+      /* 65 km/h average, convoy pace - the platform's own figure */
+      duration: km ? Math.round(km / 65 * 60) : 60,
+      maxSlots: clamp(Number(val('cvSlots')) || 30, 2, 200),
+      leaderId: leader,
+      server: val('cvServer'),
+      dlc: 'Base map',
+      meetPoint: isDrive ? from + ' — company car park' : 'Discord · Briefing Room',
+      departPoint: isDrive ? from + ' — city exit' : '—',
+      description: val('cvDesc') || (isDrive
+        ? 'A Gaming Nation convoy from ' + from + ' to ' + to + '.'
+        : 'A Gaming Nation ' + row[1].toLowerCase() + '.'),
+      instructions: [
+        'Arrive at the meeting point at least 30 minutes before departure.',
+        'Full GMN livery is required. Trailer attached before the briefing.',
+        'Hold a minimum 60 m gap. No overtaking inside the convoy.',
+        'Follow convoy control on Discord voice at all times.',
+      ],
+      /* The leader is on it from the moment it exists - they are leading it,
+         and a sheet that says 0 signed on when somebody is running it reads
+         as nobody being interested. */
+      registered: leader ? [{ driverId: leader, state: 'registered' }] : [],
+    };
+
+    hq.events.unshift(event);
+    if (!Auth.saveHqDb(hq)) { toast('That could not be saved', 'err'); return; }
+
+    Store.log('ok', 'Convoy published — ' + name
+      + (km ? ' (' + fmt.km(km) + ')' : ''));
+    closeModals();
+    toast('On the schedule', 'ok');
+    state.convoySel = event.id;
+    state.view = 'convoy';
+    render();
+  },
+};
+
+function convoyDetailHTML(e) {
+  const signed = Convoys.signedOn(e);
+  const live = e.status === 'live';
+  const members = Convoys.members(e);
+  const leader = Convoys.leader(e);
+  const route = Convoys.route(e);
+  const slots = (e.registered || []).length;
+  const full = Convoys.full(e);
+
+  const fact = (k, v) => v
+    ? `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>` : '';
+
+  const dot = (m) => `<span class="crewdot ${m.driving ? 'driving' : m.online ? 'online' : ''}"
+    title="${esc(m.driving ? 'On the road' : m.online ? 'Online' : 'Offline')}"></span>`;
+
+  return `
+  <div class="card-body">
+    ${e.description ? `<p class="t2 sm">${esc(e.description)}</p>` : ''}
+
+    ${route.length ? `
+      <div class="cvroute mt-16">
+        ${route.map((city, i) => `
+          <span class="cvstop ${i === 0 ? 'first' : ''} ${i === route.length - 1 ? 'last' : ''}">
+            <span class="cvdot"></span>${esc(city)}</span>`).join('<span class="cvline"></span>')}
+      </div>` : ''}
+
+    <div class="facts mt-16">
+      ${fact('Departs', esc(fmt.dt(e.date)))}
+      ${fact('Meets', e.meetTime ? esc(fmt.hm(e.meetTime)) : '')}
+      ${fact('Distance', e.distance ? fmt.km(e.distance) : '')}
+      ${fact('Expected', e.duration ? esc(fmt.dur(e.duration)) : '')}
+      ${fact('Server', e.server ? esc(e.server) : '')}
+      ${fact('Map', e.dlc ? esc(e.dlc) : '')}
+      ${fact('Leader', leader ? esc(leader.name) : '')}
+      ${fact('Signed on', slots + (e.maxSlots ? ' of ' + e.maxSlots : ''))}
+    </div>
+
+    ${e.meetPoint ? `<div class="t3 xs mt-12">${icon('pin')}Meeting point: ${esc(e.meetPoint)}</div>` : ''}
+
+    ${(e.instructions || []).length ? `
+      <div class="mt-16">
+        <div class="eyebrow">On the day</div>
+        <ul class="cvrules">${e.instructions.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+    <div class="mt-16">
+      <div class="eyebrow">Who is coming${members.length ? ' · ' + members.length : ''}</div>
+      ${members.length ? `<div class="cvcrew mt-8">${members.map((m) => `
+        <span class="cvmember ${m.me ? 'me' : ''}" title="${esc(m.id)}">
+          ${dot(m)}${esc(m.name)}${m.leader ? '<span class="cvlead">leader</span>' : ''}
+        </span>`).join('')}</div>`
+        : `<div class="t3 xs mt-8">Nobody has signed on yet. Be the first.</div>`}
+    </div>
+
+    <div class="row gap-8 wrap mt-16">
+      <button class="btn ${signed ? '' : 'btn-primary'}" data-act="convoy-join"
+        data-id="${esc(e.id)}" ${full ? 'disabled' : ''}>
+        ${icon(signed ? 'x' : 'check')}${signed ? 'Sign off' : full ? 'Full' : 'Sign on'}
+      </button>
+      <button class="btn" data-act="convoy-chat" data-id="${esc(e.id)}"
+        title="This convoy's own room — everyone signed on can read it">
+        ${icon('chat')}Convoy chat
+      </button>
+      <button class="btn" data-act="open-gmn"
+        data-href="login.html#/convoy/${esc(e.id)}">${icon('link')}On the platform</button>
+      ${live ? '<span class="pill ok"><span class="beat"></span>Rolling now</span>' : ''}
+    </div>
+  </div>`;
+}
+
+function viewConvoy() {
+  const events = Convoys.all();
+  const me = Convoys.me();
+  const mine = events.filter((e) => Convoys.signedOn(e));
+
+  /* Whatever is rolling, else whatever this driver has signed on to next,
+     else the next one at all. Opening on a convoy they have nothing to do
+     with is a worse first guess than opening on their own. */
+  if (!state.convoySel || !Convoys.find(state.convoySel)) {
+    const first = events.find((e) => e.status === 'live') || mine[0] || events[0];
+    state.convoySel = first ? first.id : null;
+  }
+  const open = Convoys.find(state.convoySel);
+
+  const row = (e) => {
+    const live = e.status === 'live';
+    const signed = Convoys.signedOn(e);
+    const slots = (e.registered || []).length;
+    return `<button class="cvrow ${String(e.id) === String(state.convoySel) ? 'on' : ''}"
+        data-act="convoy-open" data-id="${esc(e.id)}">
+      <span class="cvrow-top">
+        <span class="pill ${live ? 'ok' : 'brand'}">${live
+          ? '<span class="beat"></span>Rolling' : esc(e.typeLabel || 'Convoy')}</span>
+        <span class="t3 xs">${esc(fmt.dt(e.date))}</span>
+      </span>
+      <span class="cvrow-name">${esc(e.name)}</span>
+      <span class="cvrow-sub">${e.start ? esc(e.start) + ' → ' + esc(e.dest || '') : ''}</span>
+      <span class="cvrow-foot">
+        ${icon('users')}${slots}${e.maxSlots ? ' / ' + e.maxSlots : ''}
+        ${signed ? '<span class="pill ok">You are on</span>' : ''}
+      </span>
+    </button>`;
+  };
+
+  if (!events.length) {
+    return `
+    ${viewHead('Convoys', 'Nothing on the schedule',
+      `${can('events.manage') ? `<button class="btn btn-sm btn-primary" data-act="convoy-new">${icon('plus')}New convoy</button>` : ''}
+       <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+    <section class="card"><div class="card-body"><div class="empty">${icon('route')}
+      <div>No convoys scheduled</div>
+      <div class="t3 xs">Convoys published on the Gaming Nation platform appear here,
+        with the route, the crew and the sign-on sheet.</div>
+    </div></div></section>`;
+  }
+
+  return `
+  ${viewHead('Convoys',
+    mine.length ? 'You are on ' + mine.length + ' of ' + events.length
+      : events.length + ' coming up',
+    `${can('events.manage') ? `<button class="btn btn-sm btn-primary" data-act="convoy-new">${icon('plus')}New convoy</button>` : ''}
+     <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/events">${icon('link')}All convoys</button>`)}
+
+  <div class="split">
+    <div class="split-list">${events.map(row).join('')}</div>
+    <section class="card split-main">
+      ${open ? `<div class="card-head">
+          <span class="label">${esc(open.name)}</span>
+          <span class="label">${esc(open.typeLabel || 'Convoy')}</span>
+        </div>${convoyDetailHTML(open)}`
+        : `<div class="card-body"><div class="empty">${icon('route')}
+            <div>Pick a convoy</div></div></div>`}
+    </section>
+  </div>`;
+}
+
+
+/* first, second and third get a medal; the rest carry on as numbers, so the
+   order reads as one chain. Kept in step with the platform's rankings. */
+const MEDALS = [
+  { key: 'gold',   face: '#f6cf5c', edge: '#c9962a', ribbon: '#c0392b', text: '#5a4108' },
+  { key: 'silver', face: '#dfe6ef', edge: '#9aa8ba', ribbon: '#41597a', text: '#414c5c' },
+  { key: 'bronze', face: '#e3a56b', edge: '#a86a33', ribbon: '#2f6f4f', text: '#4d2c0c' },
+];
+
+function medal(place, size = 26) {
+  const m = MEDALS[place - 1];
+  if (!m) return '<span class="mono t3">' + place + '</span>';
+  const id = 'tm' + place + Math.random().toString(36).slice(2, 6);
+  return `<span class="medal ${m.key}">
+    <svg viewBox="0 0 40 52" width="${size}" height="${size * 1.3}" aria-hidden="true">
+      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${m.face}"/><stop offset="100%" stop-color="${m.edge}"/>
+      </linearGradient></defs>
+      <path d="M11 2 19 20 L13 24 4 8z" fill="${m.ribbon}"/>
+      <path d="M29 2 21 20 L27 24 36 8z" fill="${m.ribbon}" opacity=".82"/>
+      <circle cx="20" cy="35" r="14.5" fill="url(#${id})" stroke="${m.edge}" stroke-width="1.6"/>
+      <circle cx="20" cy="35" r="10.5" fill="none" stroke="${m.edge}" stroke-width="1" opacity=".55"/>
+      <text x="20" y="40.5" text-anchor="middle" font-size="14" font-weight="800"
+        fill="${m.text}" font-family="inherit">${place}</text>
+    </svg></span>`;
+}
+
+/* ---------------- standings ----------------
+   Read from the Gaming Nation driver records, not invented here. */
+function viewLeaderboard() {
+  const me = Store.db.driver;
+  const roster = Auth.roster();
+  const rows = roster
+    .map((d) => ({ name: d.name, id: d.id, km: d.km || 0, jobs: d.deliveries || 0, me: d.id === me.gmnId }))
+    .sort((a, b) => b.km - a.km);
+
+  /* a client that cannot see the platform's records still knows its own figures */
+  if (!rows.length) {
+    rows.push({ name: me.name, id: me.gmnId, km: Store.db.stats.totalKm, jobs: Store.db.stats.totalJobs, me: true });
+  }
+
+  return `
+  ${viewHead('Standings', 'Fleet distance this season',
+    `<button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/rankings">${icon('link')}Full table</button>`)}
+  ${roster.length ? '' : `<div class="card mb-16"><div class="card-body row gap-12">
+    ${icon('info')}<div class="t3 xs">Only your own record is on this device. Open the GMN
+      dashboard to see the whole fleet.</div></div></div>`}
+  <section class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th style="width:52px">#</th><th>Driver</th><th class="right">Distance</th><th class="right">Runs</th></tr></thead>
+    <tbody>${rows.map((r, i) => `<tr>
+      <td>${medal(i + 1, 24)}</td>
+      <td><div class="row gap-8">${avatarFace(r, r.me ? 'sm me' : 'sm')}
+        <span class="b6">${esc(r.name)}</span>${r.me ? '<span class="pill brand">You</span>' : ''}</div></td>
+      <td class="right mono">${fmt.km(r.km)}</td>
+      <td class="right mono">${fmt.n(r.jobs)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div></section>`;
+}
+
+/* ---------------- delivery queue ---------------- */
+function viewPending() {
+  const list = Store.db.pending;
+  return `
+  ${viewHead('Delivery queue', 'Completed runs waiting to reach Gaming Nation',
+    list.length ? `<button class="btn btn-sm btn-primary" data-act="submit-all">${icon('upload')}Submit all</button>` : '')}
+  <section class="card"><div class="card-body">
+    ${list.length ? list.map((p) => `
+      <div class="queue-item">
+        <div class="row-b wrap gap-12">
+          <div style="min-width:0">
+            <div class="row gap-8">
+              <span class="b7">${esc(p.from)} → ${esc(p.to)}</span>
+              <span class="pill ${p.status === 'waiting' ? 'err' : 'warn'}">${p.status === 'waiting' ? 'Offline' : 'Queued'}</span>
+            </div>
+            <div class="t2 sm mt-8">${esc(p.cargo)} · ${esc(p.trailer)} · ${fmt.km(p.km)} · ${fmt.eur(p.income)}</div>
+            <div class="t3 xs mt-4 mono">${esc(p.id)} · ${esc(fmt.rel(p.finished))} · damage ${(p.damage || 0).toFixed(1)}%</div>
+          </div>
+          <div class="row gap-8">
+            <button class="btn btn-sm btn-ok" data-act="submit-one" data-id="${esc(p.id)}">${icon('check')}Submit</button>
+            <button class="btn btn-sm btn-danger" data-act="discard-one" data-id="${esc(p.id)}">${icon('trash')}Discard</button>
+          </div>
+        </div>
+      </div>`).join('')
+      : `<div class="empty">${icon('clock')}<div>Queue is empty. Finished runs land here before they are sent.</div></div>`}
+  </div></section>`;
+}
+
+/* ---------------- uploads ---------------- */
+function viewUploads() {
+  const list = Store.db.uploads;
+  const queued = list.filter((u) => u.status !== 'done');
+  return `
+  ${viewHead('Media queue', queued.length + ' file' + (queued.length === 1 ? '' : 's') + ' waiting to upload', `
+    <button class="btn btn-sm btn-primary" data-act="sync-uploads" ${queued.length ? '' : 'disabled'}>${icon('refresh')}Sync now</button>
+    <button class="btn btn-sm btn-ghost" data-act="clear-uploads" ${list.length ? '' : 'disabled'}>${icon('trash')}Clear done</button>`)}
+  <section class="card"><div class="tbl-wrap">
+    ${list.length ? `<table class="tbl">
+      <thead><tr><th>File</th><th>Type</th><th>Load</th><th class="right">Size</th><th>Captured</th><th>State</th></tr></thead>
+      <tbody>${list.map((u) => `<tr>
+        <td><div class="row gap-8">${u.data
+          ? `<img src="${esc(u.data)}" alt="" class="shot-thumb" data-act="open-shot" data-id="${esc(u.id)}">`
+          : icon(u.kind === 'screenshot' ? 'image' : 'folder')}<span class="mono">${esc(u.name)}</span></div></td>
+        <td class="t2">${esc(u.kind)}</td>
+        <td class="mono t3">${esc(u.job || '—')}</td>
+        <td class="right mono">${fmt.n(u.size)} KB</td>
+        <td class="t2">${esc(fmt.rel(u.at))}</td>
+        <td>${u.status === 'done'
+          ? `<span class="pill ok">${icon('check')}Uploaded</span>`
+          : u.status === 'waiting'
+            ? `<span class="pill err">${icon('alert')}Offline</span>`
+            : `<span class="pill warn">${icon('clock')}Queued</span>`}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : `<div class="empty">${icon('upload')}<div>Nothing queued. Delivery photos appear here.</div></div>`}
+  </div></section>`;
+}
+
+/* ---------------- settings ---------------- */
+function exePickerHTML(kind, label, value) {
+  return `<div class="field">
+    <label for="exe-${kind}">${esc(label)}</label>
+    <div class="row gap-8 wrap">
+      <input class="input grow" id="exe-${kind}" value="${esc(value || '')}"
+        placeholder="Not set — Browse or Auto-detect" style="min-width:180px">
+      <button class="btn" data-act="browse-exe" data-kind="${kind}">${icon('folder')}Browse</button>
+      <button class="btn" data-act="detect-exe" data-kind="${kind}">${icon('search')}Auto-detect</button>
+    </div>
+    ${value ? `<span class="hint" style="color:var(--ok)">${icon('check')}Selected</span>` : ''}
+  </div>`;
+}
+
+function viewSettings() {
+  const s = Store.db.settings;
+  const toggle = (key, label, note) => `
+    <div class="setting-row">
+      <div><div class="b6">${esc(label)}</div><div class="t3 xs mt-4">${esc(note)}</div></div>
+      <button class="switch ${s[key] ? 'on' : ''}" data-act="toggle" data-k="${key}"
+        role="switch" aria-checked="${!!s[key]}" aria-label="${esc(label)}"></button>
+    </div>`;
+
+  const d = Store.db.driver;
+  const rec = Career.record();
+
+  return `
+  ${viewHead('Settings', 'Client configuration on this machine',
+    `<button class="btn btn-sm btn-primary" data-act="save-settings">${icon('check')}Save</button>`)}
+
+  ${/* The games first. This is the one card a driver opens Settings FOR -
+        every other card here is something they set once and forget, and
+        the paths, the launch buttons and the profile all live in this one.
+        It sat fourth, under three cards about the client itself. */''}
+  <section class="card">
+    <div class="card-head"><span class="label">Game</span></div>
+    <div class="card-body">
+      ${exePickerHTML('ets2', 'Euro Truck Simulator 2 (eurotrucks2.exe)', s.ets2Exe)}
+      ${exePickerHTML('ats', 'American Truck Simulator (amtrucks.exe)', s.atsExe)}
+      ${exePickerHTML('tmp', tmpLabel() + ' (optional)', s.tmpExe)}
+      <div class="row gap-8 wrap mb-16">
+        <button class="btn" data-act="launch-game" data-kind="ets2">${icon('play')}Launch ETS2</button>
+        <button class="btn" data-act="launch-game" data-kind="tmp">${icon('users')}Launch ${esc(tmpLabel())}</button>
+      </div>
+      ${toggle('autoStartTracking', 'Start tracking after launching the game',
+               'Arm the telemetry link as soon as the game is started from here.')}
+      ${/* A "Game profile" box stood here, and under it the client's own
+            answer - "Found on this machine: AFRICA (playing), LAND". The
+            box was asking a question the line beneath it had already
+            answered. The games write the profile name down and stamp the
+            folder every time they save, so the one being played is simply
+            the newest, and the client reads it. The run monitor's header
+            says which one.
+
+            Beside them, Telemetry host and Port. The client starts the
+            adapter itself and the adapter binds 127.0.0.1:25555 - it is
+            not configurable at the other end, so a box offering to change
+            this end could only ever break it. "localhost" typed here was
+            already being rewritten to 127.0.0.1 before use, which is a
+            field whose value is silently ignored: worse than no field. */''}
+      <div class="field"><label for="setGame">Game</label>
+        <select class="select" id="setGame">
+          <option value="ets2" ${s.game !== 'ats' ? 'selected' : ''}>Euro Truck Simulator 2</option>
+          <option value="ats" ${s.game === 'ats' ? 'selected' : ''}>American Truck Simulator</option>
+        </select></div>
+      <div class="row gap-8 wrap">
+        <div class="field" style="max-width:170px"><label for="setPoll">Telemetry poll (ms)</label>
+          <input class="input" id="setPoll" type="number" min="250" max="10000" step="250"
+            value="${esc(String(s.pollRate || 400))}"></div>
+        <div class="field" style="max-width:190px"><label for="setJobSec">Live job update (seconds)</label>
+          <input class="input" id="setJobSec" type="number" min="5" max="300" step="5"
+            value="${esc(String(s.jobUpdateSec || 10))}"></div>
+        <div class="field" style="max-width:180px"><label for="setBeatSec">Heartbeat (seconds)</label>
+          <input class="input" id="setBeatSec" type="number" min="5" max="300" step="5"
+            value="${esc(String(s.heartbeatSec || 15))}"></div>
+      </div>
+      ${toggle('liveTelemetry', 'Read the game live', 'Poll the telemetry server and follow the real truck. Falls back to the simulator when it is not answering.')}
+      <div class="setting-row">
+        <div><div class="b6">Map</div>
+          <div class="t3 xs mt-4">${
+            s.mapSource === 'game' ? 'Game map — the ETS2 / ATS road network'
+            : s.mapSource === 'world' ? 'Real-world road tiles'
+            : s.mapSource === 'tiles' && s.tileUrl ? esc(s.tileUrl)
+            : 'Built-in schematic'}</div></div>
+        <button class="btn btn-sm" data-act="tile-source">${icon('map')}Configure</button>
+      </div>
+      ${/* A "Detect the game automatically" switch stood here, defaulted on,
+            and under it a paragraph telling drivers to put the SCS telemetry
+            plugin into <game>/bin/win_x64/plugins/ and run a telemetry
+            server. The client installs that plugin and starts and watches
+            that server itself, so the paragraph was work already done, and
+            the switch only ever offered to make the client worse at its job.
+
+            Detection is simply how the client works now. The per-game
+            Browse and Detect buttons above remain, for the driver who wants
+            to point at a particular copy by hand. */''}
+
+      ${/* Lining the map up by hand. It is almost never needed - two jobs do
+            it on their own from the cities the game names - so it lives here
+            rather than on the map, where it used to be a banner that could
+            not be dismissed. */''}
+      <div class="setting-row mt-12">
+        <div>
+          <div class="t2">Map position</div>
+          <div class="t3 xs mt-4">${Calib.exact(s.game === 'ats' ? 'ats' : 'ets2')
+            ? 'Lined up. Your position is exact on every map.'
+            : Calib.ready(s.game === 'ats' ? 'ats' : 'ets2')
+              ? 'Running on the built-in estimate — close enough to put you on the right '
+                + 'road. Two jobs in cities well apart make it exact on their own.'
+              : 'Lines itself up from the cities the game names — two jobs is enough. '
+                + 'You can also do it by hand.'}</div>
+        </div>
+        <button class="btn btn-sm" data-act="calibrate">${icon('target')}Do it by hand</button>
+      </div>
+    </div>
+  </section>
+
+  ${/* Who is signed in, and the way out. Both were reachable only from the
+        menu, which is not where anybody looks for an account. Nothing here
+        is editable: the driver record belongs to the platform, and a second
+        place to change a name is a second name to reconcile. */''}
+  <section class="card">
+    <div class="card-head"><span class="label">Account</span></div>
+    <div class="card-body">
+      <div class="row gap-14 wrap">
+        ${avatarFace(d, 'lg me')}
+        <div class="grow" style="min-width:170px">
+          <div class="lg b7">${esc(d.name)}</div>
+          <div class="t2 sm mt-4"><span class="mono">${esc(d.gmnId)}</span>
+            ${rec.country || d.country ? ' · ' + esc(rec.country || d.country) : ''}</div>
+          <div class="t3 xs mt-4">${esc(Career.rank(rec).name)} ·
+            joined ${esc(fmt.date(d.joined))}</div>
+        </div>
+      </div>
+      <div class="row gap-8 wrap mt-16">
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/settings">
+          ${icon('link')}Change it on the platform</button>
+        <button class="btn btn-sm" data-act="nav" data-view="support">
+          ${icon('lifebuoy')}Support</button>
+        <button class="btn btn-sm btn-danger" data-act="logout">${icon('logout')}Sign out</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Crew</span></div>
+    <div class="card-body">
+      ${toggle('shareLocation', 'Show my truck on the crew map',
+        'Pushes your position while you drive. Off means the map goes quiet — '
+        + 'deliveries, sessions and your record are unaffected.')}
+      ${toggle('doNotDisturb', 'Do not disturb',
+        'Incoming calls are answered busy straight away, which is what the caller '
+        + 'already gets when you are on another call. Messages still arrive.')}
+      ${toggle('chatSound', 'Sound on a new message',
+        'A short note when a message lands while the client is open.')}
+
+      ${isStaff() && Launcher.api() ? `<div class="setting-row">
+        <div>
+          <div class="b6">Crew Discord channel</div>
+          <div class="t3 xs mt-4">${CrewChannel.state && CrewChannel.state.set
+            ? 'Deliveries are posted to ' + esc(CrewChannel.state.host) + '.'
+            : 'Not set — nothing is posted to Discord. A webhook cannot be '
+              + 'found automatically; Discord only gives it to you once.'}</div>
+        </div>
+        <button class="btn btn-sm ${CrewChannel.state && CrewChannel.state.set ? '' : 'btn-primary'}"
+          data-act="crew-channel">${icon('chat')}${
+          CrewChannel.state && CrewChannel.state.set ? 'Change' : 'Set it up'}</button>
+      </div>` : ''}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Appearance</span></div>
+    <div class="card-body">
+      <div class="setting-row">
+        <div>
+          <div class="b6">Theme</div>
+          <div class="t3 xs mt-4">${s.theme === 'auto'
+            ? 'Following Windows, and it keeps following it.'
+            : s.theme === 'light' ? 'Light.' : 'Dark, the way the client ships.'}</div>
+        </div>
+        <div class="seg">
+          ${[['dark', 'Dark'], ['light', 'Light'], ['auto', 'Match Windows']].map(([v, l]) => `
+            <button class="${(s.theme || 'dark') === v ? 'on' : ''}"
+              data-act="set-theme" data-v="${v}">${l}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Runs</span></div>
+    <div class="card-body">
+      ${toggle('autoSubmit', 'Submit runs automatically', 'Send each finished run without confirming.')}
+      ${toggle('captureScreenshot', 'Capture a photo on delivery', 'Takes a picture of the screen when a run lands and attaches it to the record. Desktop app only.')}
+      ${toggle('notifications', 'Desktop notifications', 'Convoy reminders and sync results.')}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Speed alert</span></div>
+    <div class="card-body">
+      ${toggle('sirenEnabled', 'Sound a siren over the speed limit',
+               'A two-tone alert when you go faster than the figure below.')}
+      <div class="row gap-8 wrap mt-8" style="align-items:flex-end">
+        <div class="field" style="max-width:190px;margin-bottom:0">
+          <label for="setSiren">Siren speed limit (km/h)</label>
+          <input class="input" id="setSiren" type="number" min="30" max="200" step="5"
+            value="${esc(String(s.sirenSpeedLimit || 95))}">
+        </div>
+        <button class="btn" data-act="test-siren">${icon('bell')}Test the siren</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Application</span></div>
+    <div class="card-body">
+      ${toggle('startWithWindows', 'Start with Windows', 'Launch the client when you sign in.')}
+      ${toggle('startMinimized', 'Start minimised', 'When it starts with Windows, go straight to the tray instead of opening a window.')}
+      ${toggle('minimiseToTray', 'Minimise to the tray', 'Keep tracking while the window is closed.')}
+      ${Launcher.api() ? '' : `<div class="t3 xs mt-8">${icon('info')} Startup and tray options only apply to the desktop app.</div>`}
+      <div class="row gap-8 mt-16">
+        <button class="btn btn-primary" data-act="save-settings">${icon('check')}Save settings</button>
+        <button class="btn btn-danger" data-act="reset-app">${icon('refresh')}Reset client data</button>
+      </div>
+    </div>
+  </section>
+
+  ${/* Moved off the run monitor, where it was the last card on the screen a
+        driver opens to watch their delivery. Every line in it is written for
+        somebody working out why something did not happen, which is what this
+        screen is for and that one is not. Still recorded in full either
+        way. */''}
+  <section class="card">
+    <div class="card-head">
+      <span class="label">Event log</span>
+      <button class="btn btn-sm btn-ghost" data-act="clear-log">${icon('trash')}Clear</button>
+    </div>
+    <div class="card-body">
+      <div class="t3 xs mb-8">What the client has been doing. Worth a look when
+        something did not happen that should have.</div>
+      <div class="console">${consoleInner()}</div>
+    </div>
+  </section>`;
+}
+
+/* ---------------- about ---------------- */
+function viewAbout() {
+  return `
+  ${viewHead('About', 'Gaming Nation Trucker · build ' + APP_VERSION)}
+  <section class="card"><div class="card-body">
+    <div class="row gap-16 wrap">
+      ${gmnEmblem('lg', 'framed')}
+      <div>
+        <div class="lg b7">Gaming Nation Trucker</div>
+        <div class="t2 sm mt-4">Gaming Nation driver client</div>
+        <div class="brand-strap">Virtual logistics · Real drivers · Real-time operations</div>
+      </div>
+    </div>
+    <p class="t2 mt-20" style="line-height:1.7;max-width:620px">
+      The Gaming Nation Trucker watches Euro Truck Simulator 2 over the telemetry link, records every run you
+      finish, and pushes the result to your Gaming Nation driver record — distance, cargo, payout and
+      damage — so your rank and standing stay current without typing anything in by hand.
+    </p>
+    <div class="facts">
+      <div class="fact"><div class="k">Telemetry</div><div class="v t2" style="font-size:12.5px">ETS2 SDK link</div></div>
+      <div class="fact"><div class="k">Sync</div><div class="v t2" style="font-size:12.5px">Automatic</div></div>
+      <div class="fact"><div class="k">Media</div><div class="v t2" style="font-size:12.5px">Delivery photos</div></div>
+      <div class="fact"><div class="k">Crew</div><div class="v t2" style="font-size:12.5px">Chat + messages</div></div>
+    </div>
+  </div></section>
+
+  <section class="card">
+    <div class="card-head"><span class="label">Gaming Nation on the web</span></div>
+    <div class="card-body">
+      <div class="row gap-8 wrap">
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/dashboard">${icon('grid')}Command centre</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/convoys">${icon('truck')}Convoys</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/rankings">${icon('trophy')}Rankings</button>
+        <button class="btn btn-sm" data-act="open-gmn" data-href="login.html#/support">${icon('info')}Support</button>
+      </div>
+      <div class="t3 xs mt-16" style="letter-spacing:.14em">DRIVE · DELIVER · DOMINATE</div>
+    </div>
+  </section>`;
+}
+
+/* ============================================================
+   Part 4 — chrome, actions, render, boot
+   ============================================================ */
+
+/* navigation grouped by purpose rather than one flat list */
+const NAV_GROUPS = [
+  { label: 'Operation', items: ['dashboard', 'livemap', 'pending', 'uploads'] },
+  { label: 'Record',    items: ['logbook', 'profile', 'stats', 'achievements', 'leaderboard'] },
+  { label: 'Crew',      items: ['messages', 'chats', 'convoy'] },
+  /* staff only: without this the company controls were reachable on a phone
+     and nowhere at all on the desktop */
+  { label: 'Company',   items: ['adm-drivers', 'adm-apps'], staff: true },
+  { label: 'Client',    items: ['notifications', 'settings', 'support', 'about'] },
+];
+
+/* rail entries that open a dialog rather than a view */
+const NAV_ACTIONS = {
+  'adm-drivers': { label: 'Drivers',      icon: 'users',    act: 'admin-drivers',
+                   perm: 'drivers.manage' },
+  'adm-apps':    { label: 'Applications', icon: 'userPlus', act: 'admin-applications',
+                   perm: 'recruitment.manage',
+                   count: () => Auth.applications().filter((a) => a.status === 'pending' || a.status === 'review').length },
+};
+
+function navHTML() {
+  const byKey = {};
+  NAV.forEach((n) => { byKey[n.key] = n; });
+  return NAV_GROUPS.map((g) => {
+    if (g.staff && !isStaff()) return '';
+    const rows = g.items.map((k) => {
+      const a = NAV_ACTIONS[k];
+      if (a) {
+        if (a.perm && !can(a.perm)) return '';
+        const c = a.count ? a.count() : 0;
+        return `<button class="nav-item" data-act="${a.act}">
+          ${icon(a.icon)}<span>${esc(a.label)}</span>
+          ${c ? `<span class="nav-count">${c}</span>` : ''}</button>`;
+      }
+      const n = byKey[k]; if (!n) return '';
+      const c = n.count ? n.count() : 0;
+      return `<button class="nav-item ${state.view === n.key ? 'active' : ''}" data-act="nav" data-view="${n.key}">
+        ${icon(n.icon)}<span>${esc(n.label)}</span>
+        ${c ? `<span class="nav-count">${c}</span>` : ''}</button>`;
+    }).join('');
+    if (!rows) return '';
+    return `<div class="rail-group">
+      <div class="rail-label">${esc(g.label)}</div>${rows}</div>`;
+  }).join('');
+}
+
+/* The build number used to be repeated here, under the driver's own name,
+   with an "outdated" badge beside it. It has gone: the status bar already
+   carries the version along the bottom edge, and when the client is behind
+   that one is a BUTTON that opens the download page, where this was only
+   ever text. Two copies of the same warning, the nearer one doing nothing
+   when pressed, is the copy worth removing. */
+function railFootHTML() {
+  const d = Store.db.driver;
+  return `<button class="driver-chip" data-act="driver-menu">
+    ${avatarFace(d, 'me')}
+    <span class="driver-text grow" style="min-width:0">
+      <span class="b6 trunc" style="display:block">${esc(d.name)}</span>
+      <span class="t3 xs mono">${esc(d.gmnId)}</span>
+    </span>
+    ${icon('chevron', 'chev')}
+  </button>`;
+}
+
+/* connection state lives along the bottom edge, not in the header */
+function statusBarHTML() {
+  const c = Store.db.conn;
+  const db = Store.db;
+  const gmnOn = c.gmn === 'connected';
+  const ets2On = c.ets2 === 'running';
+  const linkOn = c.link === 'connected';
+  const queued = db.pending.length + db.uploads.filter((u) => u.status !== 'done').length;
+
+  return `
+    <button class="sb-item btn-like ${gmnOn ? 'on' : ''}" data-act="toggle-server"
+      title="Check the company service now">
+      <span class="sb-dot ${gmnOn ? 'ok' : 'err'}"></span>${gmnOn ? 'Gaming Nation online' : 'Gaming Nation offline'}</button>
+    <span class="sb-sep"></span>
+    <span class="sb-item ${ets2On ? 'on' : ''}">
+      <span class="sb-dot ${ets2On ? 'ok' : ''}"></span>${ets2On ? 'ETS2 running' : 'ETS2 closed'}</span>
+    <span class="sb-sep"></span>
+    <!-- "Armed" was the label on the state where nothing is connected at
+         all, which made the least working of the three read as the most
+         confident. A driver watching this while their load never appeared
+         had every reason to believe the client was fine. -->
+    <button class="sb-item btn-like ${linkOn ? 'on' : ''}" data-act="nav" data-view="livemap"
+      title="${Telemetry.mode === 'live'
+        ? 'The game is sending telemetry and runs are being tracked'
+        : linkOn
+          ? 'Connected to the adapter, but the game has not sent a frame yet'
+          : 'Nothing is arriving from the game — the telemetry plugin is usually missing from its plugins folder'}">
+      <span class="sb-dot ${Telemetry.mode === 'live' ? 'ok' : linkOn ? 'warn' : 'err'}"></span>${
+        Telemetry.mode === 'live' ? 'Telemetry live' : linkOn ? 'Telemetry waiting' : 'No telemetry'}</button>
+    <span class="sb-sep"></span>
+    <button class="sb-item btn-like ${Realtime.status === 'live' ? 'on' : ''}"
+      data-act="fleet-setup"
+      title="${Realtime.status === 'live'
+        ? 'The company pushes changes to this client as they happen'
+        : esc(Realtime.lastError || 'Falling back to polling the company service')}">
+      <span class="sb-dot ${Realtime.status === 'live' ? 'ok'
+        : Fleet.enabled() ? 'warn' : ''}"></span>${
+        Realtime.status === 'live' ? 'Fleet live'
+        : Fleet.enabled() ? 'Fleet polling' : 'Fleet offline'}</button>
+    <span class="sb-sep"></span>
+    <button class="sb-item btn-like optional" data-act="nav" data-view="livemap">
+      ${icon('pin')}${db.live && db.live.near ? esc(db.live.near.city) : 'no position'}</button>
+    <span class="sb-sep optional"></span>
+    <span class="sb-item optional">${icon('user')}${esc(c.profile || 'no profile')}</span>
+    <span class="sb-spacer"></span>
+    <button class="sb-item btn-like" data-act="nav" data-view="pending">${icon('clock')}${queued} queued</button>
+    <span class="sb-sep"></span>
+    ${(() => {
+      /* The build number, and whether it is the current one. This is the
+         one place a driver already looks for the version, so it is where
+         "yours is old" belongs - not behind a menu they have no reason to
+         open. */
+      const u = Updates.chip();
+      return u.cls === 'warn'
+        ? `<button class="sb-item btn-like warn" data-act="open-update"
+             title="${esc(u.title)}">${icon('download')}${esc(u.text)}</button>`
+        : `<span class="sb-item optional" title="${esc(u.title)}">${esc(u.text)}</span>`;
+    })()}`;
+}
+
+/* ============================================================
+   Platform: desktop shell (Electron), installed app, or browser tab.
+   ============================================================ */
+const Platform = {
+  installPrompt: null,
+  isDesktopShell: () => !!(window.gmnDesktop && window.gmnDesktop.isDesktop),
+  isStandalone: () => window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    window.navigator.standalone === true,
+  isPhone: () => window.matchMedia('(max-width:720px)').matches,
+
+  init() {
+    document.body.classList.toggle('is-desktop-shell', this.isDesktopShell());
+
+    /* offline shell + installability (needs https or localhost) */
+    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+      navigator.serviceWorker.register('sw.js').then((reg) => {
+        Store.log('ok', 'Offline mode ready (service worker ' + (reg.active ? 'active' : 'installing') + ')');
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              toast('An update is ready - reopen the app to apply it', 'info');
+            }
+          });
+        });
+      }).catch((err) => console.warn('[JT] service worker not registered', err));
+    }
+
+    /* Chromium fires this when the app qualifies for installation */
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.installPrompt = e;
+      document.body.classList.add('can-install');
+      render();
+    });
+    window.addEventListener('appinstalled', () => {
+      this.installPrompt = null;
+      document.body.classList.remove('can-install');
+      Store.log('ok', 'Installed as an application');
+      toast('Gaming Nation Trucker installed', 'ok');
+    });
+
+    window.addEventListener('online', () => { Store.log('ok', 'Network back online'); render(); });
+    window.addEventListener('offline', () => {
+      Store.log('warn', 'Network offline - queued work is held locally');
+      render();
+    });
+  },
+
+  install() {
+    if (!this.installPrompt) {
+      modal({
+        title: 'Install the client',
+        body: '<p class="t2">Your browser has not offered an install prompt yet.</p>'
+          + '<p class="t2 mt-12"><b>Desktop</b> - browser menu, then'
+          + ' &ldquo;Install Gaming Nation Trucker&rdquo; (Chrome/Edge). Or use the packaged desktop build.</p>'
+          + '<p class="t2 mt-12"><b>iPhone / iPad</b> - Share, then <b>Add to Home Screen</b>.</p>'
+          + '<p class="t2 mt-12"><b>Android</b> - menu, then <b>Install app</b>.</p>'
+          + '<p class="t3 xs mt-12">Installing requires the page to be served over https (or localhost).</p>',
+      });
+      return;
+    }
+    this.installPrompt.prompt();
+    this.installPrompt.userChoice.then((res) => {
+      Store.log('info', 'Install prompt ' + (res && res.outcome));
+      this.installPrompt = null;
+      document.body.classList.remove('can-install');
+      render();
+    });
+  },
+};
+
+/* ============================================================
+   DRIVER TO DRIVER — messages, calls, and the crew room
+
+   Until now the client could only be talked AT: Messages held
+   announcements from management, and Crew chat held convoy channels
+   with a button that sent you to the website to actually reach
+   anybody. Both of those are still here; what is new is that a driver
+   can now hold a conversation, and a call, without leaving the app.
+
+   None of the protocol is new. fleet-server.js has carried
+   /api/dm/*, /api/call/* and the '#fleet' room for a while and the
+   website has spoken it all along — this is the client side of the
+   same conversation, so a message sent from a phone lands in the same
+   thread as one sent from the site.
+
+   Three pieces, in the order they depend on each other:
+
+     ServiceAuth   an identity the service will answer to. Without one
+                   every endpoint below is a 401, which is exactly why
+                   none of this worked from the client before.
+     Messages      threads, history and sending.
+     Calls
+     RoomCall      one-to-one, and the mesh for the crew room.
+   ============================================================ */
+
+/* Storage keys moved with the company name.
+
+   A key is not a label: it is where somebody's data already is. Renaming
+   `gmn.db.v1` to `gmn.db.v1` and walking away would leave every existing
+   install looking at an empty company — signed out, no roster, no
+   settings — with the real data still sitting in the browser under a name
+   nothing reads any more. Uninstalling and reinstalling would not fix it
+   either, because nothing was lost; it was orphaned.
+
+   So the old key is read once and carried over. Cheap, silent, and it
+   only ever happens on the first load after an upgrade: after that the
+   new key exists and this does nothing.
+
+   Deliberately does NOT delete the old key. If somebody opens an older
+   build — a portable copy on a stick, a machine that has not updated —
+   their data is still where that build expects to find it. The two are
+   only out of step from the moment they start writing to different
+   places, and losing a week of a driver's records to tidiness is a bad
+   trade for a few bytes of localStorage. */
+function migrateStorageKey(from, to) {
+  try {
+    if (localStorage.getItem(to) !== null) return;
+    const held = localStorage.getItem(from);
+    if (held !== null) localStorage.setItem(to, held);
+  } catch (e) {
+    /* private mode, or storage disabled. Nothing to carry and nowhere to
+       carry it to; the caller reads the new key and finds nothing, which
+       is the same as a fresh install. */
+  }
+}
+
+[
+  ['gmn.accounts.v1', 'gmn.accounts.v1'],
+  ['gmn.db.v1', 'gmn.db.v1'],
+  ['gmn.session.v1', 'gmn.session.v1'],
+  ['gmn.token.v1', 'gmn.token.v1'],
+  ['gmn.resetToOwner.v2', 'gmn.resetToOwner.v2'],
+  ['gmn.lastDriverEmail', 'gmn.lastDriverEmail'],
+  ['gmn.trk.session.v1', 'gmn.trk.session.v1'],
+  ['gmn.trk.service.v1', 'gmn.trk.service.v1'],
+].forEach(([from, to]) => migrateStorageKey(from, to));
+
+const SERVICE_TOKEN_KEY = 'gmn.trk.service.v1';
+
+/* ---------------- who the service thinks we are ----------------
+
+   The client already signs a driver in against the local account
+   store, and that is what gates the UI. It is NOT what gates the
+   service: the service issues its own token, and a message or a
+   ringing call can only be delivered to a connection that carries
+   one. So signing in has to do both, and the second half is here. */
+const ServiceAuth = {
+  token: null,
+  driver: null,        /* what the SERVICE says we are, not what we say */
+  status: 'off',       /* off | signed-in | rejected | unreachable */
+
+  load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SERVICE_TOKEN_KEY) || 'null');
+      if (raw && raw.token) {
+        this.token = raw.token;
+        this.driver = raw.driver || null;
+        this.status = 'signed-in';
+      }
+    } catch (e) { /* nothing kept */ }
+  },
+
+  keep() {
+    try {
+      if (this.token) {
+        localStorage.setItem(SERVICE_TOKEN_KEY,
+          JSON.stringify({ token: this.token, driver: this.driver }));
+      } else {
+        localStorage.removeItem(SERVICE_TOKEN_KEY);
+      }
+    } catch (e) { /* private mode; it simply will not persist */ }
+  },
+
+  on() { return !!this.token; },
+
+  headers(extra) {
+    const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+    if (this.token) h.Authorization = 'Bearer ' + this.token;
+    return h;
+  },
+
+  connecting: null,    /* the attempt in flight, so ten callers make one */
+  tried: false,        /* an automatic attempt has been made and finished */
+
+  /* Connect with the session this device already has.
+
+     This is the one that should happen, and it needs nothing from the
+     driver. They signed in to Supabase to open the app; the service can
+     verify that same session and issue its own. No password, no dialog,
+     no "connect this device".
+
+     It replaces a step that could not work. login() below checks a
+     password against a hash in the company record, and that hash stopped
+     being the driver's password when accounts moved to Supabase — so
+     "Connect this device" asked for something, and then refused the only
+     answer there was. Nobody could get past it by typing more carefully.
+
+     Deliberately quiet. A service that is down, or too old to know this
+     endpoint, is a normal state on a machine that has never run one, and
+     the Messages screen already says what is missing. */
+  async connect() {
+    if (this.connecting) return this.connecting;
+    this.connecting = this._connect().then((ok) => {
+      this.connecting = null;
+      this.tried = true;
+      return ok;
+    });
+    return this.connecting;
+  },
+
+  async _connect(retried) {
+    const base = Sync.url();
+    if (!base) { this.status = 'off'; return false; }
+    if (!window.gmnSupabase) return false;
+
+    let access = '';
+    try {
+      const { data } = await window.gmnSupabase.auth.getSession();
+      access = (data && data.session && data.session.access_token) || '';
+    } catch (e) { /* no session to offer */ }
+
+    if (!access) return false;
+
+    try {
+      const res = await fetch(base + '/api/auth/supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: access }),
+      });
+
+      /* The service knows the account is real — Supabase told it so — but
+         has never been told this driver exists. That is the ordinary case
+         when the app starts the service itself: it comes up holding
+         whatever was last written to disk. Teach it and ask again. */
+      if (res.status === 404 && !retried) {
+        try {
+          await Sync.sendNow();
+          await new Promise((r) => setTimeout(r, 400));
+        } catch (e) { /* the retry reports it */ }
+        return this._connect(true);
+      }
+
+      if (!res.ok) {
+        /* 501 is a service older than this build, or one with no Supabase
+           configured. Both fall back to the password dialog rather than
+           leaving the driver with nothing. */
+        this.status = res.status === 401 || res.status === 403
+          ? 'rejected' : 'unreachable';
+        return false;
+      }
+
+      const body = await res.json();
+      if (!body || !body.token) { this.status = 'unreachable'; return false; }
+
+      this.token = body.token;
+      this.driver = body.driver || null;
+      this.status = 'signed-in';
+      this.keep();
+
+      /* The live channel was opened anonymously at boot — before there was
+         any identity to open it with — so the service cannot route a
+         private message down it. Open it again now that there is. */
+      this.reopenStream();
+      Messages.pullThreads();
+      Ice.load();
+      return true;
+
+    } catch (e) {
+      this.status = 'unreachable';
+      return false;
+    }
+  },
+
+  /* Called from the sign-in path, which is the one moment the password
+     is in hand. A driver never types it twice. */
+  async login(handle, password, retried) {
+    const base = Sync.url();
+    if (!base) { this.status = 'off'; return false; }
+
+    try {
+      const res = await fetch(base + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: handle, password }),
+      });
+
+      /* A 401 usually is not a wrong password.
+
+         The service authenticates against the accounts in the company
+         record IT holds, and it starts out holding nothing. A driver who
+         signs in before the service has ever been told about the company
+         — which is the ordinary case when the app starts it — is refused
+         by a service that has simply never heard of them.
+
+         So teach it, once, and ask again. Sync.sendNow() uploads the
+         roster and the accounts with it. If the second attempt is refused
+         too, the password really was wrong. */
+      if (res.status === 401 && !retried) {
+        try {
+          await Sync.sendNow();
+          await new Promise((r) => setTimeout(r, 400));
+        } catch (e) { /* the retry will report it */ }
+        return this.login(handle, password, true);
+      }
+
+      if (res.status === 401) { this.status = 'rejected'; return false; }
+      if (!res.ok) { this.status = 'unreachable'; return false; }
+
+      const body = await res.json();
+      this.token = body.token;
+      this.driver = body.driver || null;
+      this.status = 'signed-in';
+      this.keep();
+
+      /* The live channel was opened anonymously at boot — before there
+         was any identity to open it with — so the service has no way to
+         route a private message down it. Open it again now that there
+         is. Without this, messages only arrive on the next poll and a
+         call never rings at all. */
+      this.reopenStream();
+      Messages.pullThreads();
+      Ice.load();
+      return true;
+    } catch (e) {
+      this.status = 'unreachable';
+      return false;
+    }
+  },
+
+  async logout() {
+    const base = Sync.url();
+    if (base && this.token) {
+      try {
+        await fetch(base + '/api/auth/logout',
+          { method: 'POST', headers: this.headers() });
+      } catch (e) { /* leaving anyway */ }
+    }
+    this.token = null;
+    this.driver = null;
+    this.status = 'off';
+    /* The next person to sign in on this machine gets their own attempt.
+       Left set, they would be shown the failure the last driver had. */
+    this.tried = false;
+    this.keep();
+    Messages.reset();
+    this.reopenStream();
+  },
+
+  reopenStream() {
+    try {
+      if (typeof Realtime === 'undefined' || !Sync.url()) return;
+      Realtime.stop();
+      Realtime.start();
+    } catch (e) {
+      console.warn('[GMN] could not reopen the live channel:', e.message);
+    }
+  },
+};
+
+/* Hold a session with the service, without asking anybody anything.
+
+   Three places need this and each used to do it by hand: load whatever
+   token was kept, then pull threads and the call configuration. What none
+   of them did was get a token when there wasn't one — which is why a
+   device that had never held one, or whose token the service had since
+   forgotten, sat on "no session with the service" until somebody found
+   the button and typed a password that could not work.
+
+   Called on boot, when the service is found later, and after signing in.
+   Safe to call repeatedly: connect() folds concurrent attempts into one,
+   and does nothing at all when there is already a token. */
+function joinService() {
+  ServiceAuth.load();
+
+  if (ServiceAuth.on()) {
+    Messages.pullThreads();
+    Ice.load();
+    return Promise.resolve(true);
+  }
+
+  return ServiceAuth.connect().then((ok) => {
+    if (ok) {
+      Store.log('ok', 'Connected to the company service as '
+        + ((ServiceAuth.driver && ServiceAuth.driver.id) || 'this driver'));
+      render();
+    }
+    return ok;
+  });
+}
+
+/* ---------------- the conversations ---------------- */
+const FLEET_ROOM = '#fleet';
+
+/* A convoy gets a room of its own. Before this the company had exactly one
+   room - every room id collapsed into it on the service - so a convoy's
+   chat went in front of the whole company, which is why the convoy screen's
+   chat button opened the crew room and said so on hover.
+
+   The id is derived from the convoy rather than stored: two clients working
+   it out independently have to land on the same string, and anything
+   remembered can be remembered differently. */
+const convoyRoom = (id) => '#convoy:' + String(id || '').replace(/[^A-Za-z0-9_-]/g, '');
+const isRoomId = (id) => /^#[A-Za-z0-9:_-]{1,64}$/.test(String(id || ''));
+
+/* What to call a room on screen. The convoy's real name when this client
+   knows it - it has the schedule and the service does not - then whatever
+   the service remembered, and the bare id only as a last resort. */
+function roomLabel(id) {
+  const s = String(id || '');
+  if (s === FLEET_ROOM) return 'Crew room';
+  const m = /^#convoy:(.+)$/.exec(s);
+  if (m) {
+    const e = (Auth.events() || []).find((x) => String(x.id) === m[1]);
+    if (e && e.name) return e.name;
+  }
+  const t = (Messages.threads || []).find((x) => String(x.withId) === s);
+  if (t && t.name) return t.name;
+  return m ? 'Convoy ' + m[1] : s.replace(/^#/, '');
+}
+
+const Messages = {
+  threads: [],
+  open: null,          /* the id being read: a driver code, or FLEET_ROOM */
+  history: [],
+  members: 0,          /* how many are in the room, when the room is open */
+  loading: false,
+  sending: false,
+  error: null,
+
+  on() { return !!(Sync.url() && ServiceAuth.on()); },
+
+  /* Why the composer is disabled, in words a driver can act on. The
+     two reasons are different problems with different fixes, and
+     saying "unavailable" for both helps nobody. */
+  reason() {
+    if (!Sync.url()) return 'No company service is set. Settings has the address.';
+    if (!ServiceAuth.on()) return 'This device has no session with the service — use Connect this device above.';
+    return '';
+  },
+
+  reset() {
+    this.threads = [];
+    this.open = null;
+    this.roomTried = false;
+    this.history = [];
+    this.members = 0;
+    this.error = null;
+  },
+
+  unread() {
+    return this.threads.reduce((n, t) => n + (t.unread || 0), 0);
+  },
+
+  async pullThreads(retried) {
+    if (!this.on()) return;
+    try {
+      const res = await fetch(Sync.url() + '/api/dm/threads',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+
+      /* The token this device holds is no longer one the service knows —
+         it was restarted with its sessions cleared, or the token expired.
+         Nothing is wrong with the driver's sign-in, so get another one
+         and carry on rather than showing them a dead screen.
+
+         This is polled, so without it a stale token is permanent: every
+         request 401s, nothing says so, and Messages just stays empty. */
+      if (res.status === 401 && !retried) {
+        ServiceAuth.token = null;
+        ServiceAuth.driver = null;
+        ServiceAuth.keep();
+        if (await ServiceAuth.connect()) return this.pullThreads(true);
+        render();
+        return;
+      }
+
+      if (!res.ok) return;
+      const body = await res.json();
+      this.threads = body.threads || [];
+      this.error = null;
+      render();
+    } catch (e) { /* the fleet loop reports the link being down */ }
+  },
+
+  /* The Chats screen draws the crew room as the selected one the moment it
+     opens. It has to actually BE open, not merely look it: send() refuses
+     while nothing is open, and the history only ever loads for the thread
+     that is. Before this a driver opened Chats, saw the room highlighted
+     and empty, typed a message, pressed Send, and nothing happened at all -
+     no error, no message, nothing.
+
+     Tried once. A service that is down must not be re-asked on every
+     repaint, and the flag clears when the conversation list is reset -
+     which is what a sign-out, a sign-in and a service change all do. */
+  roomTried: false,
+  ensureRoom() {
+    if (this.open || this.roomTried || !this.on()) return;
+    this.roomTried = true;
+    this.openThread(FLEET_ROOM);
+  },
+
+  async openThread(withId) {
+    this.open = String(withId);
+    this.history = [];
+    this.loading = true;
+    this.error = null;
+    render();
+
+    if (!this.on()) { this.loading = false; render(); return; }
+
+    try {
+      const res = await fetch(
+        Sync.url() + '/api/dm/' + encodeURIComponent(this.open) + '?limit=100',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+
+      if (!res.ok) {
+        this.loading = false;
+        this.error = res.status === 404
+          ? 'That driver is not on the roster the service holds.'
+          : 'The service would not open that conversation.';
+        render();
+        return;
+      }
+
+      const body = await res.json();
+      this.history = body.messages || [];
+      this.members = body.members || 0;
+      this.loading = false;
+      render();
+      this.scrollDown();
+      this.markRead(this.open);
+    } catch (e) {
+      this.loading = false;
+      this.error = 'Could not reach the company service.';
+      render();
+    }
+  },
+
+  async markRead(withId) {
+    if (!this.on()) return;
+    try {
+      await fetch(Sync.url() + '/api/dm/read', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ withId: withId }),
+      });
+      const t = this.threads.find((x) => String(x.withId) === String(withId));
+      if (t) t.unread = 0;
+    } catch (e) { /* it stays unread; nothing is lost */ }
+  },
+
+  async send(text) {
+    const body = String(text || '').trim();
+    if (!body || !this.open || this.sending) return;
+
+    if (!this.on()) {
+      toast(this.reason(), 'warn');
+      return;
+    }
+
+    this.sending = true;
+    render();
+
+    try {
+      const res = await fetch(Sync.url() + '/api/dm/send', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        /* The room's name travels with the message. The service holds the
+           company record but not the convoy schedule, so it cannot look a
+           convoy's name up - without this a convoy room is listed as its
+           id to anybody whose client has not loaded the schedule. */
+        body: JSON.stringify(Object.assign({ to: this.open, text: body },
+          isRoomId(this.open) && this.open !== FLEET_ROOM
+            ? { roomName: roomLabel(this.open) } : {})),
+      });
+
+      this.sending = false;
+
+      if (!res.ok) {
+        toast(res.status === 429
+          ? 'Sending too fast — try again in a moment'
+          : 'That message did not send', 'err');
+        render();
+        return;
+      }
+
+      /* The service echoes it back down the live channel to everyone
+         including us, so it is not appended here — doing both showed
+         every sent message twice. */
+      const input = $('#dmText');
+      if (input) { input.value = ''; input.focus(); }
+      render();
+    } catch (e) {
+      this.sending = false;
+      toast('Could not reach the company service', 'err');
+      render();
+    }
+  },
+
+  /* A message arriving on the live channel. */
+  arrive(d) {
+    if (!d || !d.message) return;
+    const m = d.message;
+    const mine = String(m.driverId) === String(Store.db.driver && Store.db.driver.gmnId);
+
+    /* Is it for the conversation on screen? For the room, everything is;
+       for a person, either end of the pair counts. */
+    /* `room` used to be true or absent, back when there was one room. It
+       carries the room's id now, because "a room message arrived" is no
+       longer enough to know whether it belongs on the screen in front of
+       you - a convoy's message would otherwise appear in the crew room. */
+    const room = d.room === true ? FLEET_ROOM : (d.room || '');
+    const inOpen = this.open && (
+      (room && String(room) === String(this.open))
+      || (!room && (String(d.withId) === this.open
+        || String(m.driverId) === this.open
+        || (mine && String(d.to) === this.open))));
+
+    if (inOpen) {
+      if (!this.history.some((x) => x.id === m.id)) this.history.push(m);
+      render();
+      this.scrollDown();
+      if (!mine) this.markRead(this.open);
+    } else if (!mine) {
+      const who = room ? roomLabel(room) : (m.driver || 'A driver');
+      toast(who + ': ' + String(m.text || 'sent an attachment').slice(0, 60), 'info');
+      /* Only for a conversation that is not already on screen: a note for a
+         message the driver is watching arrive is noise. */
+      if (Store.db.settings.chatSound) Siren.note();
+    }
+
+    this.pullThreads();
+  },
+
+  scrollDown() {
+    setTimeout(() => {
+      const el = $('#dmThread');
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 30);
+  },
+};
+
+/* ---------------- how a call reaches the other end ----------------
+
+   Two ends of a call have to find a path between them. STUN tells each
+   one what its own public address is, which is enough on an ordinary
+   home or office network and enough on none of the awkward ones: behind
+   symmetric NAT, or a firewall that drops UDP, both ends learn addresses
+   they still cannot reach. The call rings, both sides say connecting,
+   and nothing happens.
+
+   Getting through those needs a TURN relay, which is a server somebody
+   pays for. Whether this company has one is not a decision this file can
+   make, so it stops pretending: the service is asked. Set GMN_TURN_URL
+   there and every client picks it up — app, website and console — with
+   no rebuild and nothing for a driver to configure.
+
+   Cached, because it changes when the service restarts and not between
+   two calls. Falls back to the same public STUN that was hard-coded here
+   before, so a service too old to answer behaves exactly as it used to. */
+const Ice = {
+  servers: null,
+  relay: false,
+  loading: false,
+
+  FALLBACK: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+
+  config() {
+    return { iceServers: this.servers || this.FALLBACK };
+  },
+
+  /* Asked once, before the first call rather than during it: fetching
+     while the phone is already ringing adds a round trip to the one
+     moment nobody wants to wait. */
+  async load() {
+    /* Guarded on having an answer, not on having asked.
+
+       It was the second of those, and boot calls this before anybody has
+       signed in — so the one call that could have worked, straight after
+       sign-in, returned early against a flag the failed attempt had
+       already set. The relay was served correctly and silently never
+       collected, which looks exactly like not having one. */
+    if (this.servers || this.loading) return;
+
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+
+    this.loading = true;
+    try {
+      const res = await fetch(base + '/api/call/ice',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      if (Array.isArray(body.iceServers) && body.iceServers.length) {
+        this.servers = body.iceServers;
+        this.relay = !!body.relay;
+      }
+    } catch (e) {
+      /* the fallback is a working configuration, not a stub */
+    } finally {
+      this.loading = false;
+    }
+  },
+
+  /* What to tell somebody whose call just failed to connect. The cause is
+     almost always the network rather than either device, and saying so
+     stops a driver reinstalling the app over a firewall rule. */
+  whyFailed() {
+    return this.relay
+      ? 'The two ends could not reach each other, even through the relay.'
+      : 'This network will not let the two ends connect directly, and the '
+        + 'company has no relay set up. A different network usually works.';
+  },
+};
+
+/* Why calling is unavailable, or null when it is not.
+
+   This used to be a bare can() that answered true or false, and the
+   screen said "This device cannot make calls" — which blames the device
+   for what is nearly always the address. navigator.mediaDevices is
+   simply undefined on an insecure origin, so a driver opening the client
+   over http:// on a LAN address hit exactly that message and had no way
+   to know a URL was the problem. */
+function callBlocker() {
+  if (typeof RTCPeerConnection === 'undefined') {
+    return 'This browser has no support for calling.';
+  }
+
+  /* file:// in the desktop build and localhost in the phone app are both
+     trustworthy; a plain http:// LAN address is not, and that is the case
+     worth naming. */
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return 'Calling needs a secure address. Open Gaming Nation from the '
+      + 'desktop app, or over https:// or localhost — a browser will not '
+      + 'hand out the microphone on a plain http:// address.';
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return 'This browser will not give Gaming Nation a microphone.';
+  }
+
+  return null;
+}
+
+/* ---------------- calling ----------------
+
+   Public STUN only. A relay would need a server the company does not
+   have; without one a call connects on any normal network and fails on
+   a strict corporate one, which is the honest trade.
+
+   The protocol is the website's, unchanged, because the two have to be
+   able to ring each other: a driver on a phone calling a dispatcher on
+   the site is the ordinary case, not the exotic one. */
+const Calls = {
+  pc: null,
+  callId: null,
+  withId: null,
+  withName: '',
+  state: 'idle',       /* idle | ringing | incoming | connecting | live */
+  local: null,
+  remote: null,
+  incoming: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+
+
+  can() { return !callBlocker(); },
+
+  media() {
+    return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  },
+
+  async signalOut(kind, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on() || !this.withId) return null;
+    try {
+      return await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to: this.withId, kind, callId: this.callId, payload }),
+      });
+    } catch (e) { return null; }
+  },
+
+  peer() {
+    const pc = new RTCPeerConnection(Ice.config());
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      this.remote = e.streams[0];
+      const el = $('#callRemote');
+      if (el) { el.srcObject = this.remote; el.play().catch(() => {}); }
+      if (this.state !== 'live') {
+        this.state = 'live';
+        this.startedAt = Date.now();
+        this.tick();
+      }
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (this.state !== 'idle') {
+          toast(pc.connectionState === 'failed'
+            ? Ice.whyFailed()
+            : 'The call ended',
+          pc.connectionState === 'failed' ? 'err' : 'info');
+          this.teardown();
+        }
+      }
+    };
+
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    return pc;
+  },
+
+  async start(driverId, name) {
+    if (!this.can()) {
+      toast(callBlocker(), 'warn');
+      return;
+    }
+    if (this.state !== 'idle') { toast('You are already on a call', 'warn'); return; }
+    if (RoomCall.live) { toast('Leave the crew call first', 'warn'); return; }
+    if (!Messages.on()) { toast(Messages.reason(), 'warn'); return; }
+
+    this.withId = String(driverId);
+    this.withName = name || driverId;
+    this.callId = 'CALL-' + Math.random().toString(16).slice(2, 10);
+    this.state = 'ringing';
+    paintCall();
+
+    try {
+      this.local = await this.media();
+    } catch (e) {
+      toast('No microphone — permission is needed before calling', 'err');
+      this.teardown();
+      return;
+    }
+
+    const res = await this.signalOut('ring');
+
+    if (res && res.status === 409) {
+      toast(this.withName + ' is not connected', 'warn');
+      this.teardown();
+      return;
+    }
+    if (!res || !res.ok) {
+      toast('Could not place the call', 'err');
+      this.teardown();
+      return;
+    }
+    paintCall();
+  },
+
+  /* The callee makes no offer: it says yes, and the caller starts the
+     negotiation, so only one side is ever the offerer. */
+  async accept() {
+    const inc = this.incoming;
+    if (!inc) return;
+
+    this.incoming = null;
+    this.withId = String(inc.from);
+    this.withName = inc.fromName || inc.from;
+    this.callId = inc.callId;
+    this.state = 'connecting';
+    paintCall();
+
+    try {
+      this.local = await this.media();
+    } catch (e) {
+      toast('No microphone — the call could not be answered', 'err');
+      this.signalOut('decline');
+      this.teardown();
+      return;
+    }
+
+    this.pc = this.peer();
+    await this.signalOut('accept');
+  },
+
+  decline() {
+    if (!this.incoming) return;
+    /* Tell them first: teardown() clears the address the signal needs. */
+    this.withId = String(this.incoming.from);
+    this.callId = this.incoming.callId;
+    this.signalOut('decline');
+    this.teardown();
+  },
+
+  hangUp() {
+    if (this.state !== 'idle') this.signalOut('hangup');
+    this.teardown();
+  },
+
+  toggleMute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (this.state !== 'live') return;
+      const el = $('#callTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  teardown() {
+    try { if (this.pc) this.pc.close(); } catch (e) { /* already gone */ }
+    if (this.local) this.local.getTracks().forEach((t) => t.stop());
+    clearInterval(this.timer);
+    this.pc = null;
+    this.local = null;
+    this.remote = null;
+    this.timer = null;
+    this.callId = null;
+    this.withId = null;
+    this.withName = '';
+    this.incoming = null;
+    this.muted = false;
+    this.startedAt = 0;
+    this.state = 'idle';
+    paintCall();
+  },
+
+  async signal(d) {
+    if (!d) return;
+
+    /* Room traffic belongs to the group call, which keeps its own peers.
+       Routed here rather than in the event listener so there is one door
+       into call signalling and not two. */
+    if (d.room === FLEET_ROOM || String(d.kind).indexOf('room.') === 0
+        || (RoomCall.live && RoomCall.peers[String(d.from)])) {
+      return RoomCall.signal(d);
+    }
+
+    if (d.kind === 'ring') {
+      /* Already busy, or asked not to be disturbed: say so, rather than
+         ringing unanswered behind whatever is already on screen. Both give
+         the caller the same honest answer - somebody is there and is not
+         picking up - instead of a phone nobody hears. */
+      if (this.state !== 'idle' || this.incoming || Store.db.settings.doNotDisturb) {
+        const was = { withId: this.withId, callId: this.callId };
+        this.withId = String(d.from);
+        this.callId = d.callId;
+        await this.signalOut('busy');
+        this.withId = was.withId;
+        this.callId = was.callId;
+        return;
+      }
+      this.incoming = d;
+      this.state = 'incoming';
+      paintCall();
+      return;
+    }
+
+    /* Anything else about a call this device is not on is not ours. */
+    if (!this.callId || d.callId !== this.callId) return;
+
+    if (d.kind === 'accept') {
+      this.state = 'connecting';
+      this.pc = this.peer();
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+      await this.signalOut('offer', { sdp: this.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'offer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await this.pc.createAnswer();
+      await this.pc.setLocalDescription(answer);
+      await this.signalOut('answer', { sdp: this.pc.localDescription });
+      return;
+    }
+
+    if (d.kind === 'answer' && this.pc) {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice' && this.pc && d.payload && d.payload.candidate) {
+      try { await this.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+      catch (e) { /* a candidate that arrives too early is not fatal */ }
+      return;
+    }
+
+    if (d.kind === 'decline') { toast(this.withName + ' declined', 'info'); this.teardown(); return; }
+    if (d.kind === 'busy') { toast(this.withName + ' is on another call', 'info'); this.teardown(); return; }
+    if (d.kind === 'hangup') { toast('The call ended', 'info'); this.teardown(); }
+  },
+};
+
+/* ---------------- the crew call ----------------
+
+   A mesh: everyone holds one peer connection to everyone else. No
+   server mixes the audio, which is why there is nothing to run and
+   nothing to pay for — and also why it is not the shape for fifty
+   people. The list is capped so it degrades by refusing rather than by
+   melting somebody's phone.
+
+   Who offers to whom is settled once, on joining: the service hands a
+   joiner the list of people already in, and the joiner offers to each.
+   Everyone already in waits to be offered to. Exactly one side of every
+   pair starts, and there is no glare to resolve. */
+const RoomCall = {
+  live: false,
+  joining: false,
+  peers: {},           /* driverId -> { pc, name, stream } */
+  local: null,
+  muted: false,
+  startedAt: 0,
+  timer: null,
+  known: [],           /* who is in it, whether or not this device has joined */
+
+  MAX: 8,
+
+
+  count() { return Object.keys(this.peers).length + (this.live ? 1 : 0); },
+
+  async signalOut(kind, to, payload) {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return null;
+    try {
+      return await fetch(base + '/api/call/signal', {
+        method: 'POST',
+        headers: ServiceAuth.headers(),
+        body: JSON.stringify({ to, kind, room: FLEET_ROOM, payload }),
+      });
+    } catch (e) { return null; }
+  },
+
+  /* Who is in it, for the button label, without joining to find out. */
+  async poll() {
+    const base = Sync.url();
+    if (!base || !ServiceAuth.on()) return;
+    try {
+      const res = await fetch(base + '/api/call/room',
+        { cache: 'no-store', headers: ServiceAuth.headers() });
+      if (!res.ok) return;
+      const body = await res.json();
+      this.known = body.peers || [];
+      render();
+    } catch (e) { /* the button just shows no count */ }
+  },
+
+  peerFor(id, name) {
+    if (this.peers[id]) return this.peers[id];
+
+    const pc = new RTCPeerConnection(Ice.config());
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.signalOut('ice', id, { candidate: e.candidate });
+    };
+
+    pc.ontrack = (e) => {
+      const entry = this.peers[id];
+      if (!entry) return;
+      entry.stream = e.streams[0];
+      this.attach();
+      paintCall();
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) this.drop(id);
+    };
+
+    if (this.local) this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+
+    this.peers[id] = { pc, name: name || id, stream: null };
+    return this.peers[id];
+  },
+
+  drop(id) {
+    const entry = this.peers[id];
+    if (!entry) return;
+    try { entry.pc.close(); } catch (e) { /* already gone */ }
+    delete this.peers[id];
+    paintCall();
+  },
+
+  async join() {
+    if (this.live || this.joining) return;
+
+    if (!Calls.can()) { toast(callBlocker(), 'warn'); return; }
+    if (Calls.state !== 'idle') { toast('End your call before joining the crew call', 'warn'); return; }
+    if (!Messages.on()) { toast(Messages.reason(), 'warn'); return; }
+
+    this.joining = true;
+    render();
+
+    try {
+      this.local = await Calls.media();
+    } catch (e) {
+      this.joining = false;
+      toast('No microphone — permission is needed before joining', 'err');
+      render();
+      return;
+    }
+
+    const res = await this.signalOut('join', FLEET_ROOM);
+    this.joining = false;
+
+    if (!res || !res.ok) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+      toast('Could not join the crew call', 'err');
+      render();
+      return;
+    }
+
+    const body = await res.json().catch(() => ({}));
+    const already = (body.peers || []).slice(0, this.MAX - 1);
+
+    if ((body.peers || []).length > this.MAX - 1) {
+      toast('The crew call is full — you are hearing the first ' + already.length, 'warn');
+    }
+
+    this.live = true;
+    this.startedAt = Date.now();
+    this.tick();
+
+    /* One offer per pair, from the joiner. */
+    for (const p of already) {
+      const entry = this.peerFor(String(p.driverId), p.name);
+      const offer = await entry.pc.createOffer();
+      await entry.pc.setLocalDescription(offer);
+      await this.signalOut('offer', String(p.driverId), { sdp: entry.pc.localDescription });
+    }
+
+    paintCall();
+    render();
+  },
+
+  async leave(quiet) {
+    if (!this.live && !this.joining) return;
+
+    Object.keys(this.peers).forEach((id) => this.drop(id));
+    this.peers = {};
+
+    if (this.local) {
+      this.local.getTracks().forEach((t) => t.stop());
+      this.local = null;
+    }
+
+    clearInterval(this.timer);
+    this.timer = null;
+    this.live = false;
+    this.joining = false;
+    this.muted = false;
+    this.startedAt = 0;
+
+    await this.signalOut('leave', FLEET_ROOM);
+
+    if (!quiet) toast('You left the crew call', 'info');
+    paintCall();
+    render();
+  },
+
+  mute() {
+    if (!this.local) return;
+    this.muted = !this.muted;
+    this.local.getAudioTracks().forEach((t) => { t.enabled = !this.muted; });
+    paintCall();
+  },
+
+  tick() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (!this.live) return;
+      const el = $('#callTimer');
+      if (el) el.textContent = this.elapsed();
+    }, 1000);
+  },
+
+  elapsed() {
+    if (!this.startedAt) return '';
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  },
+
+  /* One <audio> per peer, kept in a host element the re-render does not
+     replace — a stream attached to an element that is then thrown away
+     goes silent while the call is still up. */
+  attach() {
+    const host = $('#roomAudio');
+    if (!host) return;
+
+    Object.keys(this.peers).forEach((id) => {
+      const entry = this.peers[id];
+      if (!entry.stream) return;
+
+      let el = host.querySelector('[data-peer="' + id.replace(/"/g, '') + '"]');
+      if (!el) {
+        el = document.createElement('audio');
+        el.dataset.peer = id;
+        el.autoplay = true;
+        host.appendChild(el);
+      }
+      if (el.srcObject !== entry.stream) {
+        el.srcObject = entry.stream;
+        el.play().catch(() => {});
+      }
+    });
+
+    host.querySelectorAll('audio').forEach((el) => {
+      if (!this.peers[el.dataset.peer]) el.remove();
+    });
+  },
+
+  async signal(d) {
+    const from = String(d.from || '');
+
+    if (d.kind === 'room.joined') {
+      this.known = this.known.filter((p) => String(p.driverId) !== from)
+        .concat([{ driverId: from, name: d.fromName }]);
+      if (this.live) toast(d.fromName + ' joined the crew call', 'info');
+      render();
+      return;
+    }
+
+    if (d.kind === 'room.left') {
+      this.known = this.known.filter((p) => String(p.driverId) !== from);
+      if (this.live && this.peers[from]) {
+        toast(d.fromName + ' left the crew call', 'info');
+        this.drop(from);
+      }
+      render();
+      return;
+    }
+
+    if (!this.live) return;
+
+    if (d.kind === 'offer') {
+      const entry = this.peerFor(from, d.fromName);
+      await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      const answer = await entry.pc.createAnswer();
+      await entry.pc.setLocalDescription(answer);
+      await this.signalOut('answer', from, { sdp: entry.pc.localDescription });
+      paintCall();
+      return;
+    }
+
+    if (d.kind === 'answer') {
+      const entry = this.peers[from];
+      if (entry) await entry.pc.setRemoteDescription(new RTCSessionDescription(d.payload.sdp));
+      return;
+    }
+
+    if (d.kind === 'ice') {
+      const entry = this.peers[from];
+      if (entry && d.payload && d.payload.candidate) {
+        try { await entry.pc.addIceCandidate(new RTCIceCandidate(d.payload.candidate)); }
+        catch (e) { /* a candidate that arrives too early is not fatal */ }
+      }
+      return;
+    }
+
+    if (d.kind === 'hangup') this.drop(from);
+  },
+};
+
+/* ---------------- the call overlay ----------------
+
+   Drawn outside render(), into its own host, because a re-render
+   replaces the DOM and a <video>/<audio> whose element is replaced
+   stops playing mid-call. */
+function paintCall() {
+  const host = $('#callHost');
+  if (!host) return;
+
+  const c = Calls;
+  const r = RoomCall;
+
+  if (c.state === 'idle' && !r.live && !r.joining) {
+    /* Keep the audio host itself: dropping it would detach live streams. */
+    host.innerHTML = '<div id="roomAudio" hidden></div>';
+    return;
+  }
+
+  if (r.live || r.joining) {
+    const names = Object.keys(r.peers).map((id) => esc(r.peers[id].name));
+    host.innerHTML = `
+      <div class="call-bar">
+        <div class="call-who">
+          ${icon('users')}
+          <div>
+            <div class="call-name">Crew call</div>
+            <div class="call-sub">${r.joining ? 'Joining…'
+              : (r.count() + ' on the call' + (names.length ? ' · ' + names.join(', ') : ' · waiting for others'))}</div>
+          </div>
+        </div>
+        <div class="call-timer mono" id="callTimer">${esc(r.elapsed())}</div>
+        <div class="call-acts">
+          <button class="btn btn-sm ${r.muted ? 'btn-mute' : ''}" data-act="room-mute">
+            ${icon(r.muted ? 'micOff' : 'mic')}${r.muted ? 'Unmute' : 'Mute'}</button>
+          <button class="btn btn-sm btn-danger" data-act="room-leave">${icon('phoneOff')}Leave</button>
+        </div>
+      </div>
+      <div id="roomAudio" hidden></div>`;
+    r.attach();
+    return;
+  }
+
+  if (c.state === 'incoming' && c.incoming) {
+    host.innerHTML = `
+      <div class="call-bar ringing">
+        <div class="call-who">
+          ${icon('phone')}
+          <div>
+            <div class="call-name">${esc(c.incoming.fromName || c.incoming.from)}</div>
+            <div class="call-sub">Incoming call</div>
+          </div>
+        </div>
+        <div class="call-acts">
+          <button class="btn btn-sm btn-ok" data-act="call-accept">${icon('phone')}Answer</button>
+          <button class="btn btn-sm btn-danger" data-act="call-decline">${icon('phoneOff')}Decline</button>
+        </div>
+      </div>
+      <div id="roomAudio" hidden></div>`;
+    return;
+  }
+
+  const label = { ringing: 'Ringing…', connecting: 'Connecting…', live: '' }[c.state] || '';
+  host.innerHTML = `
+    <div class="call-bar${c.state === 'live' ? '' : ' ringing'}">
+      <div class="call-who">
+        ${icon('phone')}
+        <div>
+          <div class="call-name">${esc(c.withName)}</div>
+          <div class="call-sub">${esc(label || 'On a call')}</div>
+        </div>
+      </div>
+      <div class="call-timer mono" id="callTimer">${esc(c.elapsed())}</div>
+      <div class="call-acts">
+        ${c.state === 'live' ? `<button class="btn btn-sm ${c.muted ? 'btn-mute' : ''}" data-act="call-mute">
+          ${icon(c.muted ? 'micOff' : 'mic')}${c.muted ? 'Unmute' : 'Mute'}</button>` : ''}
+        <button class="btn btn-sm btn-danger" data-act="call-hangup">${icon('phoneOff')}
+          ${c.state === 'live' ? 'End' : 'Cancel'}</button>
+      </div>
+    </div>
+    <audio id="callRemote" autoplay></audio>
+    <div id="roomAudio" hidden></div>`;
+}
+
+
+const VIEWS = {
+  dashboard: viewDashboard,
+  livemap: viewLiveMap,
+  logbook: viewLogbook,
+  profile: viewProfile,
+  messages: viewMessages,
+  chats: viewChats,
+  leaderboard: viewLeaderboard,
+  stats: viewStats,
+  achievements: viewAchievements,
+  notifications: viewNotifications,
+  support: viewSupport,
+  pending: viewPending,
+  uploads: viewUploads,
+  settings: viewSettings,
+  about: viewAbout,
+  convoy: viewConvoy,
+  menu: viewMenu,
+};
+
+/* six sections reach the phone tab bar; everything else lives under Menu */
+const TAB_KEYS = ['logbook', 'chats', 'livemap', 'convoy', 'leaderboard', 'menu'];
+const TAB_SHORT = { logbook: 'Logbook', chats: 'Chats', livemap: 'Map',
+  convoy: 'Convoy', leaderboard: 'Ranking', menu: 'Menu' };
+
+/* ---------- phone chrome ----------
+   The phone gets a header of its own: who you are, which section you are
+   looking at, and the rank you hold — rather than the desktop's title and
+   hamburger, which waste the only row a phone has. */
+function appbarHTML() {
+  const d = Store.db.driver;
+  if (!d) return '';
+  const cur = NAV.find((n) => n.key === state.view);
+  const on = Store.db.conn.gmn === 'connected';
+  const staff = isStaff();
+
+  return `
+    <button class="ab-face" data-act="nav" data-view="profile" aria-label="Driver record">
+      <span class="ab-avatar">${esc(initialsOf(d.name))}</span>
+      <span class="ab-live ${on ? 'ok' : ''}" title="${on ? 'Gaming Nation online' : 'Gaming Nation offline'}"></span>
+    </button>
+    <div class="ab-who">
+      <div class="ab-name">${esc(d.name)}</div>
+      <div class="ab-sec">${esc(cur ? cur.label : 'Gaming Nation')}</div>
+    </div>
+    <button class="ab-rank ${staff ? 'staff' : ''}" data-act="nav" data-view="menu"
+      aria-label="${esc(staff ? roleName(myRole()) : (d.rank || 'Driver'))}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2.6l7.4 2.6v6.1c0 4.7-3.1 8.4-7.4 10.1-4.3-1.7-7.4-5.4-7.4-10.1V5.2z"/>
+        <path class="star" d="M12 7.6l1.4 2.9 3.2.4-2.3 2.2.6 3.1-2.9-1.5-2.9 1.5.6-3.1-2.3-2.2 3.2-.4z"/>
+      </svg>
+      <span class="ab-rank-t">${esc(staff ? roleName(myRole()).split(' ')[0] : (d.rank || 'Driver').split(' ')[0])}</span>
+    </button>`;
+}
+
+function tabbarHTML() {
+  const byKey = {};
+  NAV.forEach((n) => { byKey[n.key] = n; });
+  return TAB_KEYS.map((k) => {
+    const n = byKey[k];
+    if (!n) return '';
+    const c = n.count ? n.count() : 0;
+    return '<button class="tab ' + (state.view === k ? 'active' : '') + '" data-act="nav" data-view="' + k + '"'
+      + ' aria-label="' + esc(n.label) + '"' + (state.view === k ? ' aria-current="page"' : '') + '>'
+      + icon(n.icon) + '<span>' + esc(TAB_SHORT[k] || n.label) + '</span>'
+      + (c ? '<span class="tab-count">' + c + '</span>' : '') + '</button>';
+  }).join('');
+}
+
+
+/* Shown in place of a screen that threw, instead of an empty client. */
+function screenErrorHTML(view, err) {
+  const detail = String((err && err.stack) || (err && err.message) || err || 'unknown');
+  const nav = NAV.find((n) => n.key === view);
+  return `
+  ${viewHead('This screen could not be drawn', nav ? nav.label : view)}
+  <section class="card"><div class="card-body">
+    <div class="row gap-12" style="align-items:flex-start">
+      <span style="flex:none;width:18px;height:18px;color:var(--danger)">${icon('alert')}</span>
+      <div class="grow" style="min-width:0">
+        <p class="t2 sm">Something on this screen is not what the client expected. Everything
+          else still works — pick another section from the menu.</p>
+        <pre class="mono xs mt-12" style="white-space:pre-wrap;word-break:break-word;
+          max-height:200px;overflow:auto;padding:10px 12px;border-radius:8px;
+          background:var(--panel-2);color:var(--text-2)">${esc(detail.slice(0, 900))}</pre>
+        <button class="btn btn-sm mt-12" data-act="nav" data-view="dashboard">
+          ${icon('gauge')}Back to the run monitor</button>
+      </div>
+    </div>
+  </div></section>`;
+}
+
+function render() {
+  /* until a driver signs in, the sign-in screen stands in for the client.
+     It sits under the title bar rather than over it, so the window controls
+     keep working on the desktop build. */
+  const app = $('#app');
+  const host = $('#signinHost');
+  if (!Auth.signedIn()) {
+    if (app) app.classList.add('signed-out');
+    if (host) { host.innerHTML = signInHTML(); bindSignIn(); }
+    return;
+  }
+  if (app) app.classList.remove('signed-out');
+  if (host && host.innerHTML) host.innerHTML = '';
+
+  $('#brandLogo').innerHTML = brandLogo();
+  $('#nav').innerHTML = navHTML();
+  $('#railFoot').innerHTML = railFootHTML();
+  $('#statusbar').innerHTML = statusBarHTML();
+  /* a view that throws used to leave the client blank with only a toast to
+     go on; now it says which screen failed and why, and the rest still works */
+  try {
+    ($('#main')).innerHTML = (VIEWS[state.view] || viewDashboard)();
+  } catch (err) {
+    console.error('[GMN] the ' + state.view + ' screen failed to draw', err);
+    ($('#main')).innerHTML = screenErrorHTML(state.view, err);
+  }
+
+  /* phone chrome */
+  const tb = $('#tabbar');
+  if (tb) tb.innerHTML = tabbarHTML();
+  const ab = $('#appbar');
+  if (ab) ab.innerHTML = appbarHTML();
+
+  bindViewForms();
+  const th = $('#thread');
+  if (th) th.scrollTop = th.scrollHeight;
+
+  /* The call bar lives outside #app, so a re-render does not draw it —
+     but a re-render can change what it should say (who is in the crew
+     call, whether the mute is on), so it is repainted alongside. */
+  paintCall();
+}
+
+function bindViewForms() {
+  const ls = $('#logSearch');
+  if (ls) {
+    ls.oninput = debounce(() => {
+      state.logQuery = ls.value;
+      render();
+      const again = $('#logSearch');
+      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    }, 180);
+  }
+
+  /* Leaflet has to be attached after its container exists in the document */
+  const host = $('#leafletMap');
+  if (host) {
+    TileMap.mount(host, liveMapKey());
+  } else {
+    TileMap.destroy();
+  }
+
+  const df = $('#dmForm');
+  if (df) df.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#dmText');
+    if (input) Messages.send(input.value);
+  });
+
+  /* The thread opens at the bottom, where the newest message is. Doing
+     it here rather than in render() means it also happens after a
+     re-render caused by somebody else typing. */
+  const dt = $('#dmThread');
+  if (dt) dt.scrollTop = dt.scrollHeight;
+
+}
+
+function driverMenu(anchor) {
+  const open = $('.menu');
+  if (open) { open.remove(); return; }
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.innerHTML = `
+    <button data-act="nav" data-view="profile">${icon('user')}Driver record</button>
+    <button data-act="open-gmn" data-href="login.html#/dashboard">${icon('link')}Open web HQ</button>
+    <button data-act="nav" data-view="settings">${icon('settings')}Settings</button>
+    <div class="sep"></div>
+    <button class="danger" data-act="logout">${icon('logout')}Sign out</button>`;
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.max(8, r.left) + 'px';
+  m.style.top = (r.top - 8) + 'px';
+  m.style.transform = 'translateY(-100%)';
+  $('#layers').appendChild(m);
+  setTimeout(() => {
+    const off = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off); } };
+    document.addEventListener('mousedown', off);
+  }, 0);
+}
+
+/* ---------------- actions ---------------- */
+function handle(act, t) {
+  const db = Store.db;
+  switch (act) {
+    case 'nav': {
+      if (state.view === 'livemap' && t.dataset.view !== 'livemap') {
+        TileMap.calibrating = false;
+        TileMap.destroy();
+      }
+      state.view = t.dataset.view;
+      closeMenus();
+      const mainEl = $('#main');
+      if (mainEl) mainEl.scrollTop = 0;
+      window.scrollTo(0, 0);
+      render();
+      return;
+    }
+    case 'open-shot': {
+      const u = Store.db.uploads.find((x) => x.id === t.dataset.id);
+      if (!u || !u.data) { toast('That photo is no longer stored', 'warn'); return; }
+      modal({
+        title: u.name, size: 'wide',
+        body: `<img src="${esc(u.data)}" alt="Delivery photo" style="width:100%;border-radius:10px;display:block">`,
+        foot: `<button class="btn" data-close>Close</button>`,
+      });
+      return;
+    }
+    case 'assignment-state': {
+      const hq = Auth.hqDb();
+      const a = hq && (hq.assignments || []).find((x) => x.id === t.dataset.id);
+      if (!a || a.driverId !== (Store.db.driver && Store.db.driver.gmnId)) {
+        toast('That load is not yours', 'err'); return;
+      }
+      a.status = t.dataset.v;
+      if (a.status === 'done') a.completed = new Date().toISOString();
+      Auth.saveHqDb(hq);
+      if (Sync.on()) Sync.push();
+      Store.log('ok', 'Load ' + a.id + ' marked ' + a.status);
+      toast(a.status === 'done' ? 'Load closed off' : 'Load accepted', 'ok');
+      render();
+      return;
+    }
+    case 'install-app': Platform.install(); return;
+    case 'driver-menu': driverMenu(t); return;
+
+    case 'toggle-server': toggleServer(); return;
+
+    case 'pw-reveal': {
+      const f = $('#si-pw');
+      if (!f) return;
+      const show = f.type === 'password';
+      f.type = show ? 'text' : 'password';
+      t.setAttribute('aria-label', show ? 'Hide the password' : 'Show the password');
+      t.setAttribute('aria-pressed', String(show));
+      t.classList.toggle('on', show);
+      /* The icon has to say which way it goes: an eye that never changes
+         cannot tell you whether the password is showing. */
+      t.innerHTML = icon(show ? 'eyeOff' : 'eye');
+      f.focus();
+      return;
+    }
+
+    case 'restore-owner':
+      if (Auth.restoreOwner()) {
+        toast('Owner sign-in restored', 'ok', 'Try your password again');
+        render();
+      } else {
+        toast('Could not write to storage', 'err');
+      }
+      return;
+
+    case 'admin-drivers': openAdminDrivers(); return;
+    case 'admin-applications': openAdminApplications(); return;
+    case 'admin-suspend': adminSuspend(t.dataset.id); return;
+    case 'app-decide': decideApplication(t.dataset.id, t.dataset.v); return;
+
+    case 'launch-game': Launcher.launch(t.dataset.kind); return;
+    case 'browse-exe': Launcher.browse(t.dataset.kind); return;
+    case 'detect-exe': Launcher.autoDetect(t.dataset.kind); return;
+
+    case 'notify-open':
+      Notify.markRead(t.dataset.id);
+      if (t.dataset.view) state.view = t.dataset.view;
+      render();
+      return;
+    case 'notify-all': Notify.markAll(); render(); return;
+    case 'open-update': {
+      /* Ask again while we are here: the driver may have updated already,
+         and a badge that only clears on the next boot is a badge that
+         stops meaning anything. */
+      Updates.check(true);
+      const href = Updates.where
+        || UPDATE_FEED.replace(/\/version\.json$/, '/#/download');
+      Store.log('info', 'Opening the download page — ' + href);
+      if (window.Capacitor) location.href = href;
+      else window.open(href, '_blank');
+      return;
+    }
+    case 'crew-channel': CrewChannel.open(); return;
+    case 'crew-channel-save':
+      CrewChannel.save(String(($('#cwHook') || {}).value || '').trim());
+      return;
+    case 'crew-channel-clear': CrewChannel.save(''); return;
+    case 'set-theme':
+      Store.db.settings.theme = t.dataset.v;
+      Store.save();
+      Theme.apply();
+      render();
+      return;
+    case 'convoy-new': NewConvoy.open(); return;
+    case 'convoy-create': NewConvoy.create(); return;
+    case 'convoy-open': state.convoySel = t.dataset.id; render(); return;
+    case 'convoy-join': Convoys.toggle(t.dataset.id); return;
+    case 'convoy-chat':
+      Messages.openThread(convoyRoom(t.dataset.id));
+      state.view = 'chats';
+      render();
+      return;
+    case 'support-open': Support.open(t.dataset.kind); return;
+    case 'support-send': Support.send(t.dataset.kind); return;
+    case 'test-siren': Siren.wail(1.6); return;
+
+    case 'toggle-live': {
+      db.settings.liveTelemetry = !db.settings.liveTelemetry;
+      if (db.settings.liveTelemetry) {
+        Telemetry.start();
+        Store.log('info', 'Looking for the telemetry server at ' + Telemetry.endpoint());
+      } else {
+        Telemetry.stop();
+        Telemetry.mode = 'off';
+        db.conn.telemetry = 'off';
+        Store.log('info', 'Live telemetry turned off');
+      }
+      Store.save(); render();
+      return;
+    }
+    case 'map-view': {
+      const view = t.dataset.v;
+      db.settings.mapView = view;
+      /* ProMods is a view of the ETS2 world, so the game the rest of the app
+         deals in - the fleet list, the heartbeat, the logbook - stays the one
+         telemetry actually names. Only the drawing changes. */
+      db.settings.game = baseGameFor(view);
+      Store.log('info', 'Map switched to ' + mapFor(view).label);
+      /* otherwise the fleet list keeps showing the other map's runs until the
+         next heartbeat comes round */
+      Fleet.step();
+      Store.save(); render();
+      return;
+    }
+    case 'calibrate': openCalibrate(); return;
+    case 'tile-source': openTileSource(); return;
+    case 'cal-reset':
+      Calib.reset(t.dataset.map);
+      Store.log('warn', 'Map alignment reset — it will line itself up again on the next job');
+      closeModals(); TileMap.destroy(); render();
+      return;
+    case 'fleet-setup': openFleetSetup(); return;
+    case 'fleet-save': saveFleetSetup(); return;
+    case 'fleet-toggle':
+      db.settings.showFleet = !db.settings.showFleet;
+      Store.save();
+      if (TileMap.map) TileMap.drawFleet();
+      render();
+      return;
+    case 'tile-save': saveTileSource(); return;
+    case 'tile-calibrate': TileMap.beginCalibration(); return;
+    case 'tile-calibrate-cancel': TileMap.cancelCalibration(); return;
+    case 'follow-toggle':
+      TileMap.following = !TileMap.following;
+      if (TileMap.following) TileMap.redraw();
+      render();
+      return;
+    case 'cal-save': saveCalibrationPoint(t.dataset.map); return;
+
+    case 'clear-log':
+      db.activity = [];
+      Store.log('info', 'Event log cleared');
+      render();
+      return;
+
+
+    case 'open-gmn': {
+      const href = t.dataset.href;
+      Store.log('info', 'Opening ' + href);
+      /* inside the native shell there is no second window to open into,
+         so navigate in place; a browser gets a new tab as before */
+      if (window.Capacitor) location.href = href;
+      else window.open(href, '_blank');
+      return;
+    }
+
+    case 'log-filter': state.logFilter = t.dataset.v; render(); return;
+
+    case 'export-log': {
+      const rows = [['Load', 'From', 'To', 'Cargo', 'Trailer', 'Km', 'Payout', 'Damage', 'Completed']];
+      db.logbook.forEach((r) => rows.push([r.id, r.from, r.to, r.cargo, r.trailer, r.km, r.income, r.damage, r.finished]));
+      const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'gaming-nation-logbook.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 800);
+      Store.log('ok', 'Logbook exported to CSV');
+      toast('Logbook exported', 'ok');
+      return;
+    }
+
+    case 'sel-msg': {
+      state.msgSel = +t.dataset.i;
+      const m = db.messages[state.msgSel];
+      if (m && !m.read) { m.read = true; Store.save(); }
+      render();
+      return;
+    }
+    case 'mark-all-read':
+      db.messages.forEach((m) => { m.read = true; });
+      Store.save(); toast('All messages marked read', 'ok'); render();
+      return;
+
+    case 'open-dm': {
+      const id = t.dataset.id;
+      if (id === MGMT_THREAD) { Messages.open = MGMT_THREAD; render(); return; }
+      Messages.openThread(id);
+      return;
+    }
+
+    case 'open-room':
+      Messages.openThread(isRoomId(t.dataset.id) ? t.dataset.id : FLEET_ROOM);
+      return;
+
+    /* From the live map. Opening the conversation means going to the
+       screen it is on, or the thread loads behind the map and nothing
+       appears to happen. */
+    case 'crew-directory': openCrewDirectory(); return;
+
+    case 'map-message':
+      closeModals();          /* it may have been opened from the directory */
+      state.view = 'messages';
+      Messages.openThread(t.dataset.id);
+      return;
+
+    case 'map-call': Calls.start(t.dataset.id, t.dataset.name); return;
+
+    case 'service-connect': connectToService(); return;
+
+    case 'host-service': HostedService.start(false); return;
+    case 'host-service-lan': HostedService.start(true); return;
+    case 'host-service-stop': closeModals(); HostedService.stop(); return;
+
+    case 'call-driver': Calls.start(t.dataset.id, t.dataset.name); return;
+    case 'call-accept': Calls.accept(); return;
+    case 'call-decline': Calls.decline(); return;
+    case 'call-hangup': Calls.hangUp(); return;
+    case 'call-mute': Calls.toggleMute(); return;
+
+    case 'room-join': RoomCall.join(); return;
+    case 'room-leave': RoomCall.leave(); return;
+    case 'room-mute': RoomCall.mute(); return;
+
+    case 'submit-one': submitDelivery(t.dataset.id); return;
+    case 'discard-one': discardDelivery(t.dataset.id); return;
+    case 'submit-all': {
+      const ids = db.pending.map((p) => p.id);
+      if (!ids.length) return;
+      ids.forEach((id) => submitDelivery(id, true));
+      toast(`Submitted ${ids.length} run${ids.length === 1 ? '' : 's'}`, 'ok');
+      return;
+    }
+
+    case 'sync-uploads': syncUploads(); return;
+    case 'clear-uploads':
+      db.uploads = db.uploads.filter((u) => u.status !== 'done');
+      Store.save(); render();
+      return;
+
+    case 'toggle': {
+      const k = t.dataset.k;
+      db.settings[k] = !db.settings[k];
+      t.classList.toggle('on', db.settings[k]);
+      t.setAttribute('aria-checked', String(!!db.settings[k]));
+      Store.save();
+      if (k === 'startWithWindows' || k === 'minimiseToTray' || k === 'startMinimized') Launcher.syncOsPreferences();
+      return;
+    }
+    case 'save-settings': {
+      const game = $('#setGame'), poll = $('#setPoll');
+      if (game) db.settings.game = game.value;
+      if (poll) db.settings.pollRate = clamp(Number(poll.value) || 400, 250, 10000);
+      const jobSec = $('#setJobSec'), beatSec = $('#setBeatSec'), siren = $('#setSiren');
+      if (jobSec) db.settings.jobUpdateSec = clamp(Number(jobSec.value) || 10, 5, 300);
+      if (beatSec) db.settings.heartbeatSec = clamp(Number(beatSec.value) || 15, 5, 300);
+      if (siren) db.settings.sirenSpeedLimit = clamp(Number(siren.value) || 95, 30, 200);
+      ['ets2', 'ats', 'tmp'].forEach((kind) => {
+        const el = $('#exe-' + kind);
+        if (el) db.settings[Launcher.pathKey(kind)] = el.value.trim();
+      });
+      Launcher.syncOsPreferences();
+      /* a path that has just changed points at a different install, and a
+         different install has a different icon */
+      GameIcons.refresh();
+      if (db.settings.liveTelemetry) Telemetry.start(); else Telemetry.stop();
+      Fleet.start();                 /* pick the new heartbeat up straight away */
+      GameWatch.start();             /* and any change to how the game is watched */
+      Telemetry.savedAt = null;      /* and the new job update interval */
+      Store.log('ok', 'Settings saved');
+      Store.save(); toast('Settings saved', 'ok'); render();
+      return;
+    }
+    case 'reset-app':
+      modal({
+        title: 'Reset client data?',
+        body: `<p class="t2">Clears the logbook, the send queue and every setting on this machine and
+          signs you out. Runs already synced to Gaming Nation are not affected, and your driver record
+          on the company stays as it is.</p>`,
+        foot: `<button class="btn" data-close>Cancel</button>
+               <button class="btn btn-danger" data-act="reset-ok">Reset</button>`,
+        onMount(w) {
+          $('[data-act="reset-ok"]', w).onclick = () => {
+            Store.reset(); w.remove();
+            state.view = 'dashboard'; toast('Client data reset', 'ok'); render();
+          };
+        },
+      });
+      return;
+
+    case 'logout':
+      closeMenus();
+      modal({
+        title: 'Sign out',
+        body: `<p class="t2">Sign out of the Gaming Nation Trucker on this machine? Queued runs stay put and are
+          submitted next time you sign in.</p>`,
+        foot: `<button class="btn" data-close>Cancel</button>
+               <button class="btn btn-danger" data-act="logout-ok">Sign out</button>`,
+        onMount(w) {
+          $('[data-act="logout-ok"]', w).onclick = () => {
+            Store.log('info', 'Driver signed out');
+            w.remove();
+            /* back to the sign-in screen rather than a dead end that needs a reload */
+            Auth.signOut();
+            toast('Signed out', 'ok');
+          };
+        },
+      });
+      return;
+  }
+}
+
+function closeMenus() { $$('.menu').forEach((m) => m.remove()); }
+/* window controls — real in the desktop shell, explained in the browser */
+function windowControl(kind) {
+  const api = window.gmnDesktop;
+  if (api && typeof api[kind] === 'function') { api[kind](); return; }
+  toast('Window controls belong to the desktop build — this is the browser preview.', 'info');
+}
+
+/* ---------------- boot ---------------- */
+/* ============================================================
+   SIGNING IN
+   ------------------------------------------------------------
+   The client has no identity of its own. It reads the Gaming Nation
+   account store — the same records the web platform writes — so a
+   driver signs in here with the details they registered with, and
+   the client picks their real driver record up from the same place.
+
+   Both live in this browser profile's storage. Served together (the
+   PWA, the phone build, `npm run serve`) or bundled together (the
+   desktop app, where every page shares one file:// origin) they are
+   the same store. A machine that has never seen the platform has no
+   accounts on it yet, which is what the sign-in screen says.
+   ============================================================ */
+const HQ_ACCOUNTS = 'gmn.accounts.v1';
+const HQ_DB = 'gmn.db.v1';
+const LS_TRK_SESSION = 'gmn.trk.session.v1';
+
+const Auth = {
+  accounts() {
+    try { return JSON.parse(localStorage.getItem(HQ_ACCOUNTS) || '[]'); }
+    catch (e) { return []; }
+  },
+  hqDb() {
+    try { return JSON.parse(localStorage.getItem(HQ_DB) || 'null'); }
+    catch (e) { return null; }
+  },
+  /* every driver the platform knows about, for the standings table */
+  roster() {
+    const db = this.hqDb();
+    return (db && Array.isArray(db.drivers)) ? db.drivers : [];
+  },
+  driverRecord(id) { return this.roster().find((d) => d.id === id) || null; },
+
+  /* Administration writes back to the company record the platform keeps.
+     Both live in this browser profile's storage, so a change made here is
+     the same change the web platform sees. */
+  saveHqDb(db) {
+    if (typeof Sync !== 'undefined' && Sync.on && Sync.on() && !Sync.applying) Sync.push();
+    try { localStorage.setItem(HQ_DB, JSON.stringify(db)); return true; }
+    catch (e) { console.warn('[GMN] could not write the company record', e); return false; }
+  },
+  updateDriver(id, patch) {
+    const db = this.hqDb();
+    if (!db || !Array.isArray(db.drivers)) return null;
+    const d = db.drivers.find((x) => x.id === id);
+    if (!d) return null;
+    Object.assign(d, patch);
+    return this.saveHqDb(db) ? d : null;
+  },
+  applications() {
+    const db = this.hqDb();
+    return (db && Array.isArray(db.applications)) ? db.applications : [];
+  },
+  updateApplication(id, patch) {
+    const db = this.hqDb();
+    if (!db || !Array.isArray(db.applications)) return null;
+    const a = db.applications.find((x) => x.id === id);
+    if (!a) return null;
+    Object.assign(a, patch);
+    return this.saveHqDb(db) ? a : null;
+  },
+  events() {
+    const db = this.hqDb();
+    return (db && Array.isArray(db.events)) ? db.events : [];
+  },
+
+  /* ---- the owner account ----
+     The company ships with its owner already provisioned, so a fresh
+     install can be signed into straight away rather than needing the web
+     platform to have been opened on this device first.
+
+     The password is not stored here — only a random salt and the SHA-256
+     of salt + '::' + password, exactly as any other account holds. That
+     resists a glance at the source; it is not proof against an offline
+     attack, so changing it from Settings is worth doing. */
+  OWNER: {
+    driverId: 'GMN-001',
+    name: 'Jeff Boss',
+    email: 'jeffboss730@gmail.com',
+    country: 'Not set',
+    discord: '',
+    salt: '8d51ca23a73a9f1837e40727ce315e61',
+    hash: '77518c707f47de4beabffef308862da8c07d8a05e54a232692a384b98d7293f8',
+    /* the same password under the fallback digest, for a browser with no
+       SubtleCrypto — without this the owner could never sign in there */
+    weakHash: 'weak-d9d8055e',
+    ownerSeed: true,
+  },
+
+  /* Reconciles rather than only creating: an install carried over from an
+     earlier build may already hold an account on this id or address with a
+     different password, and it would shadow the owner for good. Once the
+     password is changed from Settings, `ownerSeed` is false and this leaves
+     the account alone. */
+  provisionOwner() {
+    const list = this.accounts();
+    const created = new Date().toISOString();
+    const existing = list.find((a) => a.driverId === this.OWNER.driverId
+      || String(a.email).toLowerCase() === this.OWNER.email.toLowerCase());
+    let wrote = false;
+
+    if (existing) {
+      if (existing.ownerSeed !== false) {
+        const stale = existing.salt !== this.OWNER.salt
+          || existing.hash !== this.OWNER.hash
+          || String(existing.email).toLowerCase() !== this.OWNER.email.toLowerCase();
+        if (stale) {
+          Object.assign(existing, {
+            driverId: this.OWNER.driverId, email: this.OWNER.email,
+            salt: this.OWNER.salt, hash: this.OWNER.hash, weakHash: this.OWNER.weakHash,
+            status: 'active', ownerSeed: true,
+          });
+          wrote = true;
+        }
+      }
+    } else {
+      list.push(Object.assign({}, this.OWNER, { created, status: 'active' }));
+      wrote = true;
+    }
+    if (wrote) {
+      try { localStorage.setItem(HQ_ACCOUNTS, JSON.stringify(list)); }
+      catch (e) { return false; }
+    }
+
+    /* and the driver record that account signs in to */
+    const db = this.hqDb() || { drivers: [], applications: [], events: [] };
+    db.drivers = Array.isArray(db.drivers) ? db.drivers : [];
+    const rec = db.drivers.find((d) => d.id === this.OWNER.driverId);
+    if (rec) {
+      if (rec.role !== 'super_admin' || rec.accountStatus !== 'active' || !rec.clientAccess) {
+        rec.role = 'super_admin';
+        rec.accountStatus = 'active';
+        rec.clientAccess = true;
+        this.saveHqDb(db);
+      }
+    } else {
+      db.drivers.push({
+        id: this.OWNER.driverId, name: this.OWNER.name, country: this.OWNER.country,
+        joined: created, status: 'offline',
+        km: 0, deliveries: 0, convoys: 0, attendance: 100,
+        role: 'super_admin', accountStatus: 'active',
+        discord: '', truckersmp: '', rankIdx: 0, email: this.OWNER.email,
+        clientAccess: true,
+      });
+      this.saveHqDb(db);
+    }
+    return wrote;
+  },
+
+
+  /* The client shares the company record, so it sweeps the same leftovers:
+     a driver nobody can sign in as is not a person, it is sample data from an
+     older build showing up on the standings and the fleet list. */
+  purgeOrphanDrivers() {
+    const db = this.hqDb();
+    if (!db || !Array.isArray(db.drivers)) return 0;
+    const ids = new Set(this.accounts().map((a) => a.driverId));
+    const orphans = db.drivers.filter((d) => !ids.has(d.id));
+    if (!orphans.length) return 0;
+
+    const gone = new Set(orphans.map((d) => d.id));
+    db.drivers = db.drivers.filter((d) => !gone.has(d.id));
+    (db.events || []).forEach((e) => {
+      if (Array.isArray(e.registered)) e.registered = e.registered.filter((r) => !gone.has(r.driverId));
+    });
+    db.applications = (db.applications || []).filter((a) => !a.submittedBy || !gone.has(a.submittedBy));
+    this.saveHqDb(db);
+    Store.log('info', 'Removed ' + orphans.length + ' driver record(s) with no account behind them');
+    return orphans.length;
+  },
+
+
+  /* Clear the company back to its owner, once per install. The client shares
+     the same records as the platform, so it does the same tidy-up — a phone
+     or a desktop that was signed into during testing starts clean. */
+  resetToOwner() {
+    const STAMP = 'gmn.resetToOwner.v2';
+    try { if (localStorage.getItem(STAMP)) return 0; } catch (e) { return 0; }
+
+    const keepId = this.OWNER.driverId;
+    const accounts = this.accounts();
+    const others = accounts.filter((a) => a.driverId !== keepId);
+    if (others.length) {
+      try { localStorage.setItem(HQ_ACCOUNTS, JSON.stringify(accounts.filter((a) => a.driverId === keepId))); }
+      catch (e) { return 0; }
+    }
+
+    const db = this.hqDb();
+    let removed = 0;
+    if (db && Array.isArray(db.drivers)) {
+      removed = db.drivers.filter((d) => d.id !== keepId).length;
+      db.drivers = db.drivers.filter((d) => d.id === keepId);
+      const mine = (v) => !v || v === keepId;
+      db.applications = (db.applications || []).filter((a) => mine(a.driverId));
+      db.tickets = (db.tickets || []).filter((t) => mine(t.driverId));
+      db.notifications = (db.notifications || []).filter((n) => mine(n.driverId));
+      db.activity = (db.activity || []).filter((a) => mine(a.driverId));
+      db.assignments = (db.assignments || []).filter((a) => mine(a.driverId));
+      db.jobs = (db.jobs || []).filter((j) => mine(j.driverId));
+      (db.events || []).forEach((e) => {
+        if (Array.isArray(e.registered)) e.registered = e.registered.filter((r) => mine(r.driverId));
+      });
+      this.saveHqDb(db);
+    }
+    try { localStorage.setItem(STAMP, new Date().toISOString()); } catch (e) {}
+    if (removed + others.length) {
+      Store.log('info', 'Company cleared back to its owner — removed ' + removed
+        + ' driver record(s) and ' + others.length + ' login(s)');
+    }
+    return removed + others.length;
+  },
+
+
+  /* Put the owner's sign-in back, whatever state the store is in.
+
+     provisionOwner() repairs a stale account on its own, but only from a
+     build that carries that code — an app installed before it will keep
+     refusing the password with no way out from inside the app. This is the
+     way out: it is on the sign-in screen, and it rewrites the owner account
+     to exactly what this build ships with. */
+  restoreOwner() {
+    const keep = this.OWNER.driverId;
+    const list = this.accounts().filter((a) =>
+      a.driverId !== keep && String(a.email).toLowerCase() !== this.OWNER.email.toLowerCase());
+    list.push(Object.assign({}, this.OWNER, {
+      created: new Date().toISOString(), status: 'active',
+    }));
+    try { localStorage.setItem(HQ_ACCOUNTS, JSON.stringify(list)); }
+    catch (e) { return false; }
+
+    const db = this.hqDb() || { drivers: [], applications: [], events: [] };
+    db.drivers = Array.isArray(db.drivers) ? db.drivers : [];
+    const rec = db.drivers.find((d) => d.id === keep);
+    if (rec) {
+      Object.assign(rec, { role: 'super_admin', accountStatus: 'active', clientAccess: true });
+    } else {
+      db.drivers.push({
+        id: keep, name: this.OWNER.name, country: this.OWNER.country,
+        joined: new Date().toISOString(), status: 'offline',
+        km: 0, deliveries: 0, convoys: 0, attendance: 100,
+        role: 'super_admin', accountStatus: 'active',
+        discord: '', truckersmp: '', rankIdx: 0, email: this.OWNER.email, clientAccess: true,
+      });
+    }
+    this.saveHqDb(db);
+    Store.log('ok', 'Owner sign-in restored to the details this build ships with');
+    return true;
+  },
+
+  find(handle) {
+    const h = String(handle || '').trim().toLowerCase();
+    if (!h) return null;
+    return this.accounts().find((a) =>
+      String(a.email || '').toLowerCase() === h ||
+      String(a.driverId || '').toLowerCase() === h ||
+      String(a.name || '').toLowerCase() === h) || null;
+  },
+
+  /* the same salted SHA-256 the platform writes, so one password works in both */
+  async hash(password, salt) {
+    const subtle = window.crypto && window.crypto.subtle;
+    const data = new TextEncoder().encode(salt + '::' + password);
+    if (subtle) {
+      const buf = await subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(buf)).map((x) => x.toString(16).padStart(2, '0')).join('');
+    }
+    let h = 0x811c9dc5;
+    for (let i = 0; i < data.length; i++) { h ^= data[i]; h = Math.imul(h, 0x01000193) >>> 0; }
+    return 'weak-' + h.toString(16);
+  },
+
+  /* Make the driver record for somebody who has an Auth user and none.
+
+     The same job Accounts.provision() does on the website, and for the
+     same reason: with email confirmation on, the row cannot be written at
+     sign-up because there is no session yet to satisfy the insert policy.
+     It is written at the first sign-in instead — and a driver may well
+     make that first sign-in here, in the client, rather than on the site.
+
+     Everything it needs was put into the signUp metadata by the website's
+     registration: full_name, driver_code, role and country. */
+  async provision(user) {
+    if (!window.gmnSupabase || !user) return { driver: null };
+
+    const meta = user.user_metadata || {};
+    const name = meta.full_name || (user.email || '').split('@')[0] || 'Driver';
+
+    /* driver_code is unique and this end cannot see what is taken, so a
+       clash is a matter of time. Retry with a fresh code rather than
+       stranding somebody whose random number came up twice. */
+    let code = meta.driver_code || ('GMN' + String(Math.floor(1000 + Math.random() * 9000)));
+
+    for (let tries = 0; tries < 6; tries++) {
+      const { data, error } = await window.gmnSupabase
+        .from('drivers')
+        .insert({
+          auth_user_id: user.id,
+          driver_code: code,
+          full_name: name,
+          email: user.email || '',
+          role: meta.role || 'driver',
+          /* Not approved. A recruiter decides, and until they do this is
+             what keeps the client download shut. */
+          status: 'pending',
+        })
+        .select()
+        .maybeSingle();
+
+      if (!error) return { driver: data };
+
+      if (error.code === '23505') {            /* the code was taken */
+        code = 'GMN' + String(Math.floor(1000 + Math.random() * 9000));
+        continue;
+      }
+
+      console.warn('[GMN] could not provision a driver record:', error);
+      return { driver: null, error };
+    }
+
+    return { driver: null };
+  },
+
+  async verify(handle, password) {
+    const email = String(handle || '').trim().toLowerCase();
+    const pass = String(password || '');
+    if (!email || !pass) return { error: 'Enter your email and password.' };
+
+    /* The website and the driver app must authenticate against the same
+       Supabase account. Keep the local seed only for offline installations. */
+    if (window.gmnSupabase && email.indexOf('@') > -1) {
+      try {
+        const result = await window.gmnSupabase.auth.signInWithPassword({ email, password: pass });
+        if (result.error) {
+          /* Supabase says "Invalid login credentials" both for a wrong
+             password and for an address with no account, deliberately —
+             telling them apart tells an attacker which addresses are
+             real. Said in plainer words here, kept just as vague. */
+          const raw = result.error.message || '';
+          return {
+            error: /invalid login/i.test(raw)
+              ? 'That email and password do not match a Gaming Nation account.'
+              : raw || 'Login failed.',
+          };
+        }
+        const user = result.data && result.data.user;
+        if (!user) return { error: 'Login failed. No user was returned.' };
+        let lookup = await window.gmnSupabase.from('drivers').select('*')
+          .eq('auth_user_id', user.id).maybeSingle();
+
+        /* No driver record, but the password was right.
+
+           This is somebody who registered while email confirmation was on.
+           signUp() hands back a user and NO session, so at that moment
+           there was no auth.uid() and the insert policy —
+           with check (auth.uid() = auth_user_id) — refused the row to the
+           one person entitled to it.
+
+           The website makes the record at first sign-in for exactly this
+           reason. The client did not, so a driver who confirmed their
+           email and opened the app before the website was told their
+           account "is not linked" and given nothing to do about it. There
+           IS a session now, so make it here too. */
+        if (!lookup.error && !lookup.data) {
+          const made = await this.provision(user);
+          if (made.driver) lookup = { data: made.driver, error: null };
+        }
+
+        if (lookup.error || !lookup.data) {
+          await window.gmnSupabase.auth.signOut();
+          return {
+            error: 'Your sign-in works, but no driver record could be made for it. '
+              + 'Sign in on the GMN website once, then come back.',
+          };
+        }
+        const row = lookup.data;
+        if (row.status === 'suspended' || row.account_status === 'suspended') {
+          await window.gmnSupabase.auth.signOut();
+          return { error: 'This account is suspended. Contact Gaming Nation management.' };
+        }
+        /* The photo, from the driver's own row.
+
+           select('*') already fetched it, so this costs nothing — and
+           without it the app rebuilt the driver record on every sign-in
+           with no avatar on it at all, which is why a photo set on the
+           website never showed up here however many times it was set.
+
+           Kept on this machine too, so it survives the next launch even
+           when the database has no column to hold it. */
+        if (avatarSrc(row.avatar)) {
+          keepAvatar(row.driver_code, row.avatar);
+        }
+
+        return {
+          account: { email: user.email || email, driverId: row.driver_code },
+          driver: {
+            id: row.driver_code, name: row.full_name || user.email || 'Driver',
+            email: row.email || user.email || email, role: row.role || 'driver',
+            accountStatus: row.account_status || 'active', status: row.status || 'offline',
+            joined: row.created_at || new Date().toISOString(), km: row.km || 0,
+            deliveries: row.deliveries || 0, truckersmp: row.truckersmp || '',
+            avatar: avatarSrc(row.avatar) || keptAvatar(row.driver_code) || '',
+          }, user, session: result.data.session,
+        };
+      } catch (error) {
+        return { error: error.message || 'Login failed.' };
+      }
+    }
+
+    if (!this.accounts().length) {
+      return { error: 'No Gaming Nation account exists on this device yet. Open the GMN dashboard to create one.' };
+    }
+    const account = this.find(handle);
+    if (!account) return { error: 'No account found with those details.' };
+    const hash = await this.hash(password, account.salt);
+    /* a browser with no SubtleCrypto produces the fallback digest, which can
+       never equal a SHA-256 one; only a shipped account carries both forms */
+    const matches = hash === account.hash
+      || (hash.indexOf('weak-') === 0 && !!account.weakHash && hash === account.weakHash);
+    if (!matches) return { error: 'That password is not right.' };
+    const driver = this.driverRecord(account.driverId);
+    if (driver && driver.accountStatus === 'suspended') {
+      return { error: 'This account is suspended. Contact Gaming Nation management.' };
+    }
+    return { account, driver };
+  },
+
+  /* fill the client's identity from the platform's driver record */
+  signIn(account, driver, remember) {
+    const db = Store.db;
+    db.driver = {
+      name: (driver && driver.name) || account.name,
+      display: (driver && driver.name) || account.name,
+      gmnId: account.driverId,
+      rank: driver ? rankNameFor(driver) : 'Driver',
+      joined: (driver && driver.joined) || account.created,
+      truck: '', plate: '', trailer: '',
+      steamId: '', tmpId: (driver && driver.truckersmp) || '', discord: account.discord || '',
+      email: account.email,
+      role: (driver && driver.role) || 'driver',
+      authed: true,          /* set here and nowhere else */
+    };
+    db.conn.gmn = 'connected';
+    if (driver) { db.stats.totalKm = driver.km || 0; db.stats.totalJobs = driver.deliveries || 0; }
+    if (remember) {
+      try { localStorage.setItem(LS_TRK_SESSION, JSON.stringify({ id: account.driverId })); } catch (e) {}
+    } else {
+      try { localStorage.removeItem(LS_TRK_SESSION); } catch (e) {}
+    }
+    Store.log('ok', 'Signed in as ' + db.driver.name + ' (' + db.driver.gmnId + ')');
+    Store.save();
+  },
+
+  /* a remembered session only needs the account to still exist */
+  restore() {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(LS_TRK_SESSION) || 'null'); } catch (e) { return false; }
+    if (!s || !s.id) return false;
+    const account = this.accounts().find((a) => a.driverId === s.id);
+    if (!account) return false;
+    this.signIn(account, this.driverRecord(s.id), true);
+    return true;
+  },
+
+  signOut() {
+    try { localStorage.removeItem(LS_TRK_SESSION); } catch (e) {}
+    /* Hang up before the identity that placed the call goes away, or the
+       other end is left holding a connection nobody will ever answer for. */
+    try { Calls.teardown(); RoomCall.leave(true); } catch (e) { /* nothing open */ }
+    ServiceAuth.logout();
+    Store.db.driver = null;
+    Store.db.conn.gmn = 'offline';
+    Telemetry.stop();
+    GameWatch.stop();
+    Fleet.stop();
+    Store.save();
+    render();
+  },
+
+  /* Being signed in means having actually signed in. An identity left behind
+     by an older build satisfied "there is a driver record here" and walked
+     straight past the sign-in screen, so the marker below is what counts —
+     and only signIn() sets it. */
+  signedIn() { return !!(Store.db && Store.db.driver && Store.db.driver.authed); },
+};
+
+
+/* ---------- what this account is allowed to do ----------
+   The same ladder the platform uses. The client reads the role off the
+   driver record it signed in with, so an administrator gets the run of
+   the company here as well as on the web. */
+const ROLE_LEVELS = {
+  driver: 1, recruiter: 4, dispatcher: 4, event_manager: 5,
+  moderator: 6, management: 8, admin: 9, super_admin: 10,
+};
+const ROLE_NAMES = {
+  driver: 'Driver', recruiter: 'Recruiter', dispatcher: 'Dispatcher',
+  event_manager: 'Event Manager', moderator: 'Moderator',
+  management: 'Management', admin: 'Administrator', super_admin: 'Super Administrator',
+};
+const PERM_LEVELS = {
+  'admin.view': 4, 'recruitment.manage': 4, 'events.manage': 5,
+  'content.manage': 6, 'drivers.manage': 8, 'roles.manage': 9,
+};
+
+function myRole() {
+  const d = Store.db.driver;
+  return (d && d.role) || 'driver';
+}
+function roleName(role) { return ROLE_NAMES[role] || 'Driver'; }
+function can(perm) {
+  return (ROLE_LEVELS[myRole()] || 0) >= (PERM_LEVELS[perm] ?? 99);
+}
+function isStaff() { return (ROLE_LEVELS[myRole()] || 0) > 1; }
+
+/* The platform's rank ladder, kept in step with RANKS in script.js. The
+   driver record carries the rank the company actually awarded, so that is
+   what the client shows; the conditions are only a fallback for a record
+   that predates the field.
+
+   It used to hold distance alone, and a fallback on distance alone PROMOTES
+   people the website has not: the platform also requires convoys attended
+   and an attendance figure. A client that hands somebody Senior Driver and a
+   website that does not is worse than a client that says nothing. */
+const RANK_LADDER = [
+  { i: 0, km: 0,      convoys: 0,   att: 0,  abbr: 'RCT', name: 'Recruit',             color: '#8b98ab' },
+  { i: 1, km: 2500,   convoys: 1,   att: 50, abbr: 'TRN', name: 'Trainee Driver',      color: '#9fb4cc' },
+  { i: 2, km: 10000,  convoys: 4,   att: 60, abbr: 'JNR', name: 'Junior Driver',       color: '#5eb0e8' },
+  { i: 3, km: 25000,  convoys: 10,  att: 65, abbr: 'DRV', name: 'Driver',              color: '#b9e87a' },
+  { i: 4, km: 50000,  convoys: 20,  att: 70, abbr: 'SNR', name: 'Senior Driver',       color: '#3ecf8e' },
+  { i: 5, km: 100000, convoys: 40,  att: 75, abbr: 'PRO', name: 'Professional Driver', color: '#8b7cf0' },
+  { i: 6, km: 175000, convoys: 65,  att: 80, abbr: 'ELT', name: 'Elite Driver',        color: '#d99b2b' },
+  { i: 7, km: 275000, convoys: 90,  att: 85, abbr: 'VET', name: 'Veteran Driver',      color: '#8bd62b' },
+  { i: 8, km: 400000, convoys: 130, att: 90, abbr: 'CPT', name: 'GMN Captain',         color: '#9db8ff' },
+];
+function rankNameFor(d) {
+  const i = d && d.rankIdx;
+  if (Number.isFinite(i) && RANK_LADDER[i]) return RANK_LADDER[i].name;
+  /* every condition, not distance alone - see the ladder above */
+  const r = { km: (d && d.km) || 0, convoys: (d && d.convoys) || 0,
+    attendance: Number.isFinite(d && +d.attendance) ? +d.attendance : 100 };
+  let name = RANK_LADDER[0].name;
+  RANK_LADDER.forEach((R) => {
+    if (r.km >= R.km && r.convoys >= R.convoys && r.attendance >= R.att) name = R.name;
+  });
+  return name;
+}
+
+/* ---------------- sign-in screen ----------------
+   Shown instead of the whole client until somebody is signed in. */
+function signInHTML() {
+  const none = !Auth.accounts().length;
+  return `
+  <div class="signin">
+    <div class="signin-card">
+      <div class="row gap-14 mb-20">
+        ${gmnEmblem('md', 'framed')}
+        <div><div class="brand-1">GAMING NATION</div><div class="brand-2">Trucker</div></div>
+      </div>
+
+      <h1 class="si-title">Sign in to Gaming Nation</h1>
+      <p class="t2 sm mt-4">Use the details you registered with on the Gaming Nation platform.</p>
+
+      ${none ? `<div class="si-note mt-16">
+        ${icon('info')}
+        <div><div class="b6">No Gaming Nation account on this device</div>
+          <div class="t3 xs mt-4">Accounts are created on the GMN dashboard. Open it, create yours,
+            then come back and sign in here.</div>
+          <button class="btn btn-sm mt-12" data-act="open-gmn" data-href="login.html#/auth">
+            ${icon('link')}Open the GMN dashboard</button></div>
+      </div>` : ''}
+
+      <form id="signInForm" class="mt-20" novalidate>
+        <div class="field">
+          <label for="si-id">Email or Driver ID</label>
+          <input class="input" id="si-id" autocomplete="username" placeholder="you@example.com">
+        </div>
+        <div class="field">
+          <label for="si-pw">Password</label>
+          <div class="pw-wrap">
+            <input class="input" id="si-pw" type="password" autocomplete="current-password"
+              autocapitalize="off" autocorrect="off" spellcheck="false">
+            <button type="button" class="pw-eye" id="siEye" data-act="pw-reveal"
+              aria-label="Show the password" aria-pressed="false">
+              ${icon('eye')}</button>
+          </div>
+          <span class="hint">Capitals and brackets count. Use the eye to check what you typed.</span>
+          <span class="si-caps" id="siCaps">${icon('alert')}Caps Lock is on.</span>
+        </div>
+        <label class="row gap-8 mb-16" style="cursor:pointer">
+          <input type="checkbox" id="si-remember" checked style="accent-color:var(--accent)">
+          <span class="t2 sm">Keep me signed in on this device</span>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">${icon('bolt')}Sign in</button>
+        <div class="si-err hide" id="siErr"></div>
+        <div class="si-rescue hide" id="siRescue"></div>
+      </form>
+
+      <p class="xs t3 mt-20">The client reads the account store the Gaming Nation platform writes in this
+        browser profile. It does not send your password anywhere.</p>
+    </div>
+  </div>`;
+}
+
+function bindSignIn() {
+  const f = $('#signInForm');
+  if (!f) return;
+  const err = (msg) => {
+    const el = $('#siErr');
+    if (el) { el.textContent = msg || ''; el.classList.toggle('hide', !msg); }
+  };
+
+  /* Caps Lock. The hint under the field says capitals count, which is
+     advice; this is the answer. The browser will not volunteer it, and it
+     is the commonest reason a password somebody typed correctly is
+     refused. */
+  const pwEl = $('#si-pw');
+  const caps = $('#siCaps');
+
+  if (pwEl && caps) {
+    const look = (e) => {
+      const on = typeof e.getModifierState === 'function' && e.getModifierState('CapsLock');
+      caps.classList.toggle('on', !!on);
+    };
+    pwEl.addEventListener('keydown', look);
+    pwEl.addEventListener('keyup', look);
+    /* Not a warning about a field nobody is in any more. */
+    pwEl.addEventListener('blur', () => caps.classList.remove('on'));
+  }
+
+  /* Typing again clears the last failure, so a stale error never sits
+     under a field that has already been corrected. */
+  [$('#si-id'), pwEl].forEach((el) => {
+    if (el) el.addEventListener('input', () => err(''));
+  });
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const handle = $('#si-id').value.trim();
+    const pw = $('#si-pw').value;
+    if (!handle || !pw) { err('Enter your details to sign in.'); return; }
+    err('');
+    const btn = f.querySelector('button[type="submit"]');
+    const label = btn.innerHTML;
+
+    /* Disabled alone reads as a dead button. Say what it is doing. */
+    btn.disabled = true;
+    btn.innerHTML = '<span class="si-spin" aria-hidden="true"></span>Signing in';
+
+    const res = await Auth.verify(handle, pw);
+
+    btn.disabled = false;
+    btn.innerHTML = label;
+    if (res.error) {
+      err(res.error);
+      /* Say which of the two things is actually wrong. If this device already
+         holds exactly the details this build ships with, then restoring them
+         changes nothing and the password typed is simply not that password —
+         telling somebody to press a button that cannot help is worse than
+         telling them nothing. */
+      const rescue = $('#siRescue');
+      const owner = handle.trim().toLowerCase() === Auth.OWNER.email.toLowerCase()
+        || handle.trim().toLowerCase() === Auth.OWNER.driverId.toLowerCase();
+      if (rescue && owner) {
+        const held = Auth.find(handle);
+        const shipped = held && held.salt === Auth.OWNER.salt && held.hash === Auth.OWNER.hash;
+        rescue.innerHTML = shipped
+          ? `<div class="b6">This device already holds the owner details</div>
+             <div class="t3 xs mt-4">The stored sign-in matches what this build ships with, so the
+               password entered is not that password. Check the capitals and the brackets — the eye
+               beside the field shows exactly what you typed.</div>`
+          : `<div class="b6">These sign-in details look out of date</div>
+             <div class="t3 xs mt-4">This account was set up by an older version, and its stored
+               password is out of step with the one this build ships with.</div>
+             <button type="button" class="btn btn-sm mt-8" data-act="restore-owner">
+               ${icon('refresh')}Restore the owner sign-in</button>`;
+        rescue.classList.remove('hide');
+      }
+      return;
+    }
+    Auth.signIn(res.account, res.driver, $('#si-remember').checked);
+    toast('Signed in as ' + Store.db.driver.name, 'ok');
+
+    /* Two sign-ins, one password. The one above unlocks this client; this
+       one gets an identity the company service will answer to, which is
+       what messages and calls need — without it every /api/dm and
+       /api/call request is a 401 and the driver is signed in to an app
+       that cannot reach anybody.
+
+       Not awaited: the service may be down, and a client that will not
+       finish signing in because messaging is unavailable is a worse
+       client than one whose Messages tab says so. */
+    /* The Supabase session first, and the password only if the service is
+       too old to know about it.
+
+       That order matters. The password check on the service compares
+       against a hash in the company record, and since accounts moved to
+       Supabase that hash is not the driver's password — so trying it
+       first meant the ordinary path was the one that could not succeed,
+       and the driver was sent to a dialog to type the same wrong thing
+       again. */
+    ServiceAuth.connect().then((ok) => {
+      if (ok) { render(); return null; }
+      return ServiceAuth.login(handle, pw);
+    }).then((ok) => {
+      if (ok === false && Sync.url()) {
+        Store.log('warn', 'Signed in here, but the company service did not accept it — '
+          + 'messages and calls will be unavailable');
+      }
+      render();
+    });
+
+    startServices();
+    render();
+  });
+}
+
+
+/* Clear the boot splash once there is something behind it. Kept to a minimum
+   on screen time, but never shorter than the draw-on, so it does not flash. */
+function dismissSplash() {
+  const s = document.getElementById('splash');
+  if (!s || s.classList.contains('gone')) return;
+  clearTimeout(window.__gmnSplash);
+  const shown = Date.now() - (window.__gmnSplashAt || Date.now());
+  const wait = Math.max(0, 1500 - shown);
+  setTimeout(() => {
+    s.classList.add('gone');
+    setTimeout(() => { if (s.parentNode) s.parentNode.removeChild(s); }, 600);
+  }, wait);
+}
+
+function boot() {
+  Store.load();
+  /* Before anything paints. Applied after the first render, the client
+     would flash the wrong theme at every driver who chose the other one. */
+  Theme.apply();
+  Platform.init();
+
+  /* manifest shortcuts deep-link with #view */
+  const wanted = (location.hash || '').replace('#', '');
+  if (wanted && VIEWS[wanted]) state.view = wanted;
+  window.addEventListener('hashchange', () => {
+    const v = (location.hash || '').replace('#', '');
+    if (v && VIEWS[v] && v !== state.view) { state.view = v; render(); }
+  });
+
+  document.addEventListener('click', (e) => {
+    const win = e.target.closest('[data-win]');
+    if (win) { windowControl(win.dataset.win); return; }
+    const t = e.target.closest('[data-act]');
+    if (!t) return;
+    e.preventDefault();
+    try { handle(t.dataset.act, t); }
+    catch (err) { console.error('[JT] action failed', t.dataset.act, err); toast('Something went wrong', 'err'); }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeModals(); closeMenus(); }
+  });
+
+  /* the owner exists on every install, so there is always a way in */
+  Auth.provisionOwner();
+  Auth.resetToOwner();      /* once per install */
+  Auth.purgeOrphanDrivers();
+
+  /* a remembered sign-in brings the client straight up */
+  if (!Auth.signedIn()) Auth.restore();
+  if (Auth.signedIn()) startServices();
+
+  render();
+  dismissSplash();
+}
+
+/* nothing polls, tracks or reports until a driver is behind the client */
+function startServices() {
+  const job = Store.db.job;
+
+  /* Where the games are, worked out rather than asked for. Ahead of the
+     icons, which are read out of those very executables. */
+  /* Whether this copy is the one the website is offering. Asked once a
+     boot; the answer is remembered for six hours. */
+  Updates.check();
+
+  /* And what the website knows about this driver - the photo above all,
+     which is set there and was only ever read at sign-in. */
+  ProfileSync.refresh(true);
+  MapMods.detect(true);
+  CrewChannel.load();
+  clearInterval(startServices.profileTimer);
+  startServices.profileTimer = setInterval(() => ProfileSync.refresh(), 5 * 60 * 1000);
+
+  GamePaths.fill();
+
+  /* Read once, kept in the store, and only re-read when a path changes -
+     so this costs nothing on the loads where nothing has moved. */
+  GameIcons.refresh();
+  GameProfiles.detect();
+
+  /* A machine that was hosting keeps hosting. Started before the probe
+     below, or the first look finds nothing and the driver waits out the
+     retry for something that was meant to be already running. */
+  if (Store.db.settings.hostService && HostedService.can()) {
+    HostedService.start(!!Store.db.settings.hostServiceLan);
+  } else {
+    HostedService.refresh();
+  }
+
+  /* A token kept from last time, and if there is none, one fetched with
+     the Supabase session this device already holds. Neither of those asks
+     the driver for anything. */
+  joinService();
+  RoomCall.poll();
+  clearInterval(startServices.roomTimer);
+  startServices.roomTimer = setInterval(() => RoomCall.poll(), 20000);
+
+  /* the client works out for itself when the game opens and closes */
+  GameWatch.start();
+  Sync.start();          /* and shares one company with every other machine */
+  Fleet.start();
+
+  /* If the service is running on this machine, everything above should be
+     using it. Started again once we know, rather than left off because the
+     answer had not arrived yet when boot ran. */
+  /* Looked for again, not just once at boot.
+
+     The service and the client are two things a person starts in whatever
+     order they think of them, and starting the client first used to mean
+     no messaging until it was restarted — with nothing on screen saying
+     so. Now it keeps looking, and joins up the moment the service appears.
+     The probe is one request to localhost with a 1.2s deadline, so a
+     minute between attempts costs nothing worth measuring. */
+  /* Nothing to find, and this build ships the thing that was missing.
+
+     The driver was shown a box asking for "http://your-server:7040" — an
+     address that does not exist until somebody runs the service, quite
+     possibly on the machine they are sitting at. The desktop app CARRIES
+     that service (service-host.js) and can start it, and until now would
+     only do so if the driver had already found the setting and ticked it.
+     So the app held the answer and asked the question anyway, and the
+     honest reply to "Company service address" was "I do not know, you tell
+     me" from the one program that did know.
+
+     Local-only unless they have asked for the network. Starting a server on
+     somebody's machine is a fair thing to do quietly while nothing outside
+     that machine can reach it; opening it to the LAN stays their decision.
+
+     An address set by hand always wins — a company with a real server is
+     never quietly replaced by a local one. */
+  const hostItOurselves = () => {
+    if (startServices.hosting) return;          /* once per session */
+    if (Sync.configured()) return;              /* they named a server */
+    if (!HostedService.can()) return;           /* browser or phone */
+    if (HostedService.status && HostedService.status.running) return;
+
+    startServices.hosting = true;
+
+    Store.log('info', 'No company service found — starting the one built into this app');
+    HostedService.start(!!Store.db.settings.hostServiceLan);
+  };
+
+  const findService = () => discoverLocalService().then((found) => {
+    if (!found) { hostItOurselves(); return; }
+
+    clearInterval(startServices.findTimer);
+    startServices.findTimer = null;
+
+    Sync.start();
+    Fleet.start();
+
+    /* The service was not there when we signed in, so none of this ran. */
+    joinService();
+    RoomCall.poll();
+
+    Store.log('ok', 'Company service found — messages and calls are available');
+    render();
+  });
+
+  /* This is why there is no "Connect a service" button on the fleet cards
+     any more. It looks now, starts the built-in service if nothing answers,
+     and keeps looking every minute until something does - so the button
+     offered a driver a job the client had already taken on, and sat there
+     on two screens saying so.
+
+     The status bar chip still opens the same dialog, for the address to
+     give the rest of the crew and the way to stop hosting. That is a thing
+     somebody goes looking for; this was a thing put in front of them. */
+  findService();
+  clearInterval(startServices.findTimer);
+  startServices.findTimer = setInterval(findService, 60000);
+
+  if (Store.db.settings.liveTelemetry) {
+    Telemetry.start();
+    Store.log('info', 'Watching for live telemetry on ' + Telemetry.endpoint());
+  }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();

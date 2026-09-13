@@ -1,0 +1,88 @@
+node_modules/
+dist/
+dist-*/
+*.log
+www/
+app-www/
+dist-apk/
+android/local.properties
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+release/
+# Runtime state the services write beside themselves: the company record,
+# the fleet room, the outbox, the read marks, and the session table.
+#
+# Matched by PREFIX, not by name. The named list that used to be here was
+# defeated by an ordinary rename: GMN -> GMN moved every one of these to a
+# gmn- name, none of which was listed, and the whole set — including 38
+# live bearer tokens — was committed to a public repo before anyone
+# noticed. A glob would have held through the rename. This one does.
+# The trailing * matters as much as the leading one. These were listed as
+# the bare names plus an explicit .tmp, which holds until somebody makes a
+# copy: gmn-company.json.before-gmn001.bak matched none of them and sat in
+# git status as untracked, one `git add -A` away from committing 77 real
+# driver records and their email addresses. A backup of a secrets-bearing
+# file is still a secrets-bearing file. Match anything derived from one.
+gmn-*.json*
+gmn-*.jsonl*
+gmn-*.json*
+gmn-*.jsonl*
+
+# The same records under a name the rules above cannot see.
+#
+# A company file is wherever GMN_COMPANY_FILE points, and the smoke tests
+# each name their own — so a run leaves .card-demo.json and
+# .discord-test-company.json beside the project, thirty kilobytes each of
+# real driver rows and their email addresses, matching none of the globs
+# above because nothing about them starts with gmn-. They sat in git
+# status as untracked, which is the same one `git add -A` away that the
+# note above was written about. gmn-files/ is the attachment store the
+# service writes when nothing tells it to use a temp directory.
+.*-company.json*
+.*-demo.json*
+.*-demo-s.json*
+.smoke-*.json*
+gmn-files/
+
+# and any backup at all, whatever it was taken from
+*.bak
+
+# screenshots from tools/shots.js — generated, not source
+.shots/
+
+
+# .NET intermediates for the telemetry adapter. obj/ and bin/ are rebuilt by
+# `dotnet build` every time and churn on every compile — two of them were
+# already showing as modified with nobody having touched the source.
+telemetry-adapter/obj/
+telemetry-adapter/bin/
+*.pdb
+
+# The adapter itself. It used to be tracked on purpose, and that was the
+# right call while it was 194 KB: telemetry-bridge.js spawns it at runtime,
+# so a clone without it could not read the game.
+#
+# It is 65 MB now. Making it self-contained is what made it work on a machine
+# with no .NET runtime — the framework-dependent build died on startup there,
+# which the app then reported as "the adapter stopped on its own", forever.
+# That is worth 65 MB in an installer. It is not worth 65 MB in git history
+# on every adapter change, permanently, with GitHub warning past 50 MB and
+# refusing past 100.
+#
+# Nothing breaks. CI only ever builds www/ and never touches the adapter, the
+# installer carries it through build.extraResources, and a developer rebuilds
+# it with `npm run telemetry:build` (needs the .NET 8 SDK). build-desktop.js
+# checks for it first and says exactly that if it is missing.
+gmn-telemetry-adapter.exe
+
+.fake
+telemetry-adapter/publish/
+
+# Wrangler's local build/temp state for Cloudflare Pages. Regenerated on every
+# `wrangler pages` run and specific to this machine.
+.wrangler/
+
+# Another generated payload, like www/ and app-www/ — built, never edited.
+site/

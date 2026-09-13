@@ -1,0 +1,633 @@
+# Gaming Nation — getting it running
+
+Everything needed to take this from a fresh clone to a working platform.
+
+---
+
+## 1. Install
+
+```bash
+npm install
+```
+
+Node 20 or newer. No build step — the pages load `script.js` directly.
+
+## 2. Set the database up
+
+The platform keeps its company, drivers and applications in Supabase. One
+script does the whole job:
+
+1. Open your project → **SQL Editor**
+2. Paste the contents of [`supabase/setup.sql`](supabase/setup.sql)
+3. Run it
+
+It is idempotent — safe on a fresh project, safe to re-run over an existing
+one, and it drops nothing. It creates the three tables, the keys and indexes,
+the `company` row the app reads on boot, the trigger that moves
+`company.version`, every row-level-security policy, and the `on_auth_user_created`
+trigger that makes a new driver's record and files their application.
+
+**The app does not work without this.** Supabase turns RLS on by default, and
+a table with RLS on and no policy behind it answers every read with nothing
+and refuses every write. That looks exactly like an empty database.
+
+**And that is the trap.** Every failure in this area is silent and reads as
+"nobody has signed up yet":
+
+- A select refused by RLS is a *successful* query returning zero rows.
+- Without `on_auth_user_created`, a new driver's row and application cannot
+  be written at all — email confirmation is on by default, so `signUp()`
+  returns no session, `auth.uid()` is null, and the policies correctly refuse
+  the one person entitled to write them. The browser cannot do it. Nothing it
+  sends can.
+
+Neither reports an error anywhere. If the recruitment screen is empty, run
+this script again before assuming it is true.
+
+### The `supabase/migrations/` directory
+
+`setup.sql` is the whole database and is the only thing a fresh project needs.
+
+The files in [`supabase/migrations/`](supabase/migrations/) are the same fixes
+delivered one at a time, for a project that is already running and should not
+be re-set-up wholesale. They are dated, idempotent, and each one opens with
+the symptom it cures. Running them on a project that already has `setup.sql`
+at this version changes nothing.
+
+This directory used to go unmentioned here, which is how a project set up from
+this page could be missing the trigger above and have no way of finding out.
+
+#### Run this one
+
+[`20260908_driver_messaging.sql`](supabase/migrations/20260908_driver_messaging.sql)
+is the one an existing project is most likely to be missing, because it carries
+two things that are visible to every driver:
+
+- **Messages.** Driver-to-driver conversation used to need `npm run service`
+  running somewhere — which meant, in practice, that a driver on the website
+  had no messages at all. It now goes through `public.conversations`,
+  `conversation_participants` and `messages`, and this file adds the row level
+  security, the realtime publication and the `dm_*` functions the browser
+  calls. Until it is run, the Messages screen says so and names the file.
+- **`drivers.avatar`.** Without the column there is nowhere to put a profile
+  photo, the write is refused, and the photo lives only as long as the browser
+  that took it — which is the whole of "my picture disappears when I reload",
+  and why one set on the website never reaches the driver app. The column is
+  also in
+  [`20260907_driver_avatar.sql`](supabase/migrations/20260907_driver_avatar.sql);
+  running either, or both, is fine. If you run nothing else, run this one line:
+
+  ```sql
+  alter table public.drivers add column if not exists avatar text;
+  ```
+
+  Until it exists the app says so, on the profile card in Settings, with the
+  same line ready to copy.
+
+Attachments need a storage bucket as well, and that part of the file is
+allowed to fail — some projects will not let the SQL editor write policies on
+`storage.objects`. Text messages work either way; if photos do not, the notice
+the script prints says why.
+
+### The company service signs devices in by itself
+
+`fleet-server.js` keeps its own session, separate from Supabase. It used to
+issue one only through `/api/auth/login`, which compares a password against a
+hash in the company record it holds — and that hash has not been anybody's
+password since accounts moved to Supabase. So "Connect this device" asked for
+a password and then refused the only one the driver had.
+
+`POST /api/auth/supabase` takes the access token the client already holds,
+asks Supabase whose it is, and issues a service session for that person. The
+website and the driver app both call it at boot, after signing in, and again
+if a token goes stale — so there is nothing to connect by hand. The password
+path is still there for a client older than this build.
+
+The service reads the project URL and publishable key out of
+`supabase-client.js`, so it needs no configuration when it runs beside the
+repo. Set `GMN_SUPABASE_URL` and `GMN_SUPABASE_KEY` to point it elsewhere.
+Nothing in the request is trusted: the token is verified upstream and the
+driver code is read from the `drivers` table, never from the caller.
+
+### Check it took
+
+```sql
+select id, driver_code, auth_user_id, full_name, email, role, status
+  from public.drivers order by id;
+
+select public.is_staff();      -- true when signed in as staff
+```
+
+## 3. Point the app at your project
+
+`supabase-client.js` holds the two values:
+
+```js
+const SUPABASE_URL = 'https://<your-project>.supabase.co';
+const SUPABASE_KEY = '<your publishable key>';
+```
+
+Both come from **Project Settings → API**. The publishable (anon) key is meant
+to be public — RLS is what protects the data, which is why step 2 matters.
+
+## 4. Run it
+
+```bash
+npm run serve
+```
+
+| | |
+|---|---|
+| Website | http://localhost:5173/ |
+| Admin console | http://localhost:5173/admin.html |
+| Driver client | http://localhost:5173/tracker.html |
+
+`npm run serve:lan` serves on the local network as well, for testing on a phone.
+
+## 5. Make the first account
+
+Register on the website. The first account to register owns the company. That
+one flow creates all four records:
+
+```
+Supabase Auth user  ──┐
+                      │  user.id
+drivers row  ─────────┘  auth_user_id, and hands back drivers.id
+applications row         driver_id, as the GMN driver code
+local record             what the platform actually draws with
+```
+
+Existing Auth users need their `drivers` row linked by hand — the row must
+carry the right `auth_user_id`, or sign-in reports *"Your login is valid, but
+your Gaming Nation driver account is not linked"*:
+
+```sql
+update public.drivers
+set auth_user_id = '<uuid from Authentication → Users>',
+    driver_code  = 'GMN001',
+    role         = 'super_admin',
+    status       = 'active'
+where email = 'you@example.com';
+```
+
+`role` decides what someone may do. `recruitment.manage` needs level 4, so a
+recruiter needs `recruiter`, `management`, `admin` or `super_admin` — a plain
+`driver` sees no recruitment screen at all.
+
+---
+
+## 6. Releasing the client to approved drivers only
+
+A driver is released the Gaming Nation Trucker download when you approve their
+application, and not before. Two things enforce that, and only the second one
+is real:
+
+| | Where | What it stops |
+|---|---|---|
+| The downloads page | the browser | Shows the buttons only to approved drivers |
+| `functions/api/download-link.js` | Cloudflare | Signs a link only for approved drivers |
+
+The first is an interface. Anybody can edit what their own browser believes,
+so on its own it decides what is *offered* and nothing more — while the
+installers sat on public GitHub Releases, a shared URL worked whoever clicked
+it. The second is the gate: the builds live in a private R2 bucket with no
+public address, and the only way to one is a link this site signs, which
+lasts five minutes.
+
+The Function asks Supabase **as the signed-in driver**, under row level
+security, so it holds no key that could read anybody else's record.
+
+### Set it up once
+
+**The order matters, and getting it wrong takes the site down rather than
+the gate.** Cloudflare validates every binding when it publishes a Function,
+so an `[[r2_buckets]]` block naming a bucket that does not exist fails the
+whole publish — the website does not go out either. So the bucket is made
+first and the binding is uncommented last.
+
+```bash
+# 1. the bucket — R2 must be switched on in the dashboard once before this
+#    works; the API refuses with code 10042 until it is
+npx wrangler r2 bucket create gaming-nation-releases
+
+# 2. the builds (after npm run dist and npm run android)
+npm run release:push          # add -- --dry to see what would go
+
+# 3. the signing secret — any long random string
+npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
+
+# 4. ONLY NOW: uncomment the [[r2_buckets]] block at the end of wrangler.toml
+```
+
+The deploy workflow checks this for you. If the binding is live and the
+bucket is not there, it stops before publishing and says so, rather than
+letting the publish fail and take the site with it.
+
+### About that token
+
+The token goes in **one** place: GitHub → Settings → Secrets and variables →
+Actions → `CLOUDFLARE_API_TOKEN`. Not in a file, not in a commit, not pasted
+into a chat window. It needs **Cloudflare Pages: Edit**, plus **Workers R2
+Storage: Read** once the bucket is bound so the deploy can check it exists.
+
+A token that has been shown anywhere else is spent — delete it in **My
+Profile → API Tokens** and make another. The same goes for R2 access keys,
+which are separate credentials under **R2 → Manage R2 API Tokens**.
+
+Then in the Cloudflare Pages dashboard → **Settings → Environment variables**:
+
+```
+SUPABASE_URL       https://<your-project>.supabase.co
+SUPABASE_ANON_KEY  sb_publishable_...
+```
+
+Neither is secret — the anon key is already in `supabase-client.js` and in
+every visitor's browser — but the Function reads them from the environment
+rather than having them baked in.
+
+Check it with `npm run smoke:downloads`, which runs the Function code against
+a stubbed Supabase and R2 and tries the ways round it: a forged link, an
+edited expiry, a link for the 6 MB APK replayed against the 80 MB installer,
+an expired one, and asking while still pending.
+
+> **Do not deploy with `--with-release`.** It copies the installers into
+> `www/` as public files, next to the site, where the Function cannot gate
+> them — the approval check is decorative again. It exists for local and
+> offline copies, which have no Functions and no bucket.
+
+Rotating `GMN_DOWNLOAD_SECRET` invalidates every link already handed out,
+which is how you revoke them.
+
+---
+
+## Checking it works
+
+```bash
+npm run scan            # static audit: actions, icons, ids, packaging
+```
+
+The runtime sweep loads every page, walks every screen and clicks every
+control, reporting anything the console complains about:
+
+```bash
+npm run smoke:errors
+```
+
+On Git Bash, clear the inherited Electron flag first, or it runs as plain Node
+and fails on `app.setPath`:
+
+```bash
+env -u ELECTRON_RUN_AS_NODE node_modules/electron/dist/electron.exe tools/smoke-errors.js .
+```
+
+A healthy run ends with `no errors` on all three pages.
+
+---
+
+## Troubleshooting
+
+**`new row violates row-level security policy` (42501)** — step 2 has not been
+run, or not for that table.
+
+**`No company record found in Supabase`** — the `id = 1` row is missing. Step 2
+inserts it.
+
+**Applications list is empty but rows exist in the table editor** — RLS again.
+`Staff can read every application` is the policy, and it depends on your
+`drivers.role`.
+
+**404s on `/api/company`, `/api/stream`, `/api/auth/login`** — a stale copy is
+being served. `www/` and `app-www/` are build outputs and can be older than the
+source; regenerate with `npm run www`. The live code calls Supabase, not
+`/api`.
+
+**Registration fails at "created but could not be read back"** — the row was
+written but there is no `SELECT` policy letting the new user read it. Step 2.
+
+---
+
+## What is where
+
+| Path | |
+|---|---|
+| `login.html` / `admin.html` | the website and the admin console |
+| `script.js` | the whole platform — routing, screens, sync |
+| `tracker.html` / `tracker.js` | the driver client |
+| `supabase-client.js` | the shared Supabase browser client |
+| `map-data.js` | cities, routes and map projection |
+| `serve.js` | the static dev server |
+| `supabase/setup.sql` | the complete database setup — tables, policies, signup trigger |
+| `supabase/migrations/` | the same fixes one at a time, for a project already running |
+| `tools/scan.js` | static audit |
+| `tools/smoke-*.js` | runtime harnesses |
+
+### The company service
+
+`fleet-server.js` is the self-hosted half of Gaming Nation: the live fleet
+channel, convoy chat, run records and the driver identity the client signs in
+with. Supabase holds the company record; this holds everything that has to be
+live.
+
+```bash
+npm run fleet              # http://localhost:8787
+npm run fleet -- --lan     # reachable from a phone on the same network
+```
+
+It serves the website too, and a page it serves is joined up automatically —
+it sets `window.GMN_SERVICE` in the HTML it hands over, so no address has to
+be typed anywhere. A page served by `npm run serve` or any other static host
+does not get that marker and stays quiet rather than firing `/api` calls at
+a host that has none.
+
+Three JSON files beside it hold the state: `gmn-company.json`,
+`gmn-sessions.json` and `gmn-chat.json`. Override the paths with
+`GMN_COMPANY_FILE`, `GMN_SESSION_FILE` and `GMN_CHAT_FILE`;
+`http://localhost:8787/status` shows what it is doing.
+
+### The app can run the service itself
+
+Somebody has to run `fleet-server.js` or there is no chat, and telling a
+driver to open a terminal is not an answer. The desktop client can host it:
+**Messages → Run it on this machine**, or **Run it for the whole crew** to
+let the rest of the network in.
+
+One machine hosts. Every other client finds it automatically on the same
+machine, and elsewhere on the network you paste the address the hosting
+machine shows into Settings — or just open it in a browser, since the
+service serves the website too and a page it serves is joined up with no
+address to type.
+
+Two machines both hosting is two separate companies that cannot see each
+other, which is why this is a switch and not a default. The choice is
+remembered, so a machine that hosts keeps hosting after a restart, and the
+service stops when the app does.
+
+Its files live under the app's own data directory rather than beside the
+executable — Program Files is not writable, and a service that starts and
+then dies on the first save is a horrible thing to debug.
+
+`npm run fleet` still does the same job from a checkout.
+
+### Calls: two things that will bite you
+
+Drivers can call each other and join a crew call, from the website and from
+the client. Both are peer-to-peer — no server carries the audio, which is why
+there is nothing to run and nothing to pay for. Two consequences follow, and
+neither is a bug you can fix by reinstalling anything.
+
+**A browser will not hand out a microphone on a plain `http://` address.**
+That is the browser's rule, not ours. Calling therefore works in the desktop
+app, in the Android app, and on `https://` or `localhost` — and does not work
+for somebody who opens the client on `http://192.168.1.50:8787` from another
+machine on the network. The app now says exactly that instead of blaming the
+device; the fix is to use the desktop app, or to put the service behind HTTPS.
+
+**Without a relay, calls fail on some networks.** STUN tells each end what its
+own public address is, which is enough almost everywhere. Behind symmetric NAT
+or a firewall that drops UDP, both ends learn addresses they still cannot
+reach: the call rings, both sides say connecting, and nothing happens.
+
+Getting through those needs a TURN relay, which is a server somebody pays for.
+If you have one — or rent one — the service hands it to every client, so there
+is nothing to configure per driver and nothing to rebuild:
+
+```bash
+GMN_TURN_URL=turn:relay.example.com:3478 \
+GMN_TURN_USER=someuser \
+GMN_TURN_PASS=somepassword \
+npm run fleet
+```
+
+`http://localhost:8787/api/call/ice` is what the clients ask (signed in only —
+TURN credentials are credentials). The service prints which of the two modes
+it is in at startup, so you are not guessing. Leave the three unset and calls
+behave exactly as they always have, on public STUN.
+
+### Builds and old versions
+
+```bash
+npm run dist            # Windows installer + portable, then prunes
+npm run android         # the APK, then prunes
+npm run prune           # tidy up on its own
+npm run prune -- --dry-run
+
+npm run prune:releases  # the same tidy-up on GitHub Releases
+npm run prune:releases -- --dry-run
+```
+
+Every build ends by removing the previous version. `release/` used to keep
+one set of installers per release — about 160 MB each — and the downloads
+page named one version while the directory held several, so the first
+question about any file was which one it was. Now the current version is
+whatever `package.json` says, and anything in `release/` or `dist-apk/`
+carrying a different version number is removed once the new build succeeds.
+
+It only touches files whose names carry a version it can read, and only in
+those two directories. Anything it cannot parse is left alone.
+
+`npm run prune:releases` does the same on the other side of the wire, and is
+the one to run **after** publishing a GitHub Release. That is where the
+downloads page actually sends a driver, so a pile of old releases there is a
+pile of answers to "which one am I supposed to have".
+
+It keeps **two** — the current version and the one before it — where the
+local prune keeps only one. The difference is deliberate: a local installer
+can be rebuilt from its tag in a couple of minutes, while a published release
+is the only build a driver can reach, and the client now tells everybody to
+upgrade the moment `version.json` moves. A release that turns out broken
+needs somewhere to fall back to that is still downloadable. `--keep=N`
+overrides it.
+
+**The tags are never deleted.** Only the release and its installers go; the
+tag stays pointing at its commit, so what any past version was built from is
+still checkable. It also refuses to delete anything at all unless the version
+in `package.json` is already published — pruning everything older than a
+release that does not exist is how you end up with no downloads.
+
+**Building on Windows:** electron-builder cannot write into `dist/` while a
+copy of the app is running, and this project lives under OneDrive, which
+holds `app.asar` for a while even after the app closes. If a build fails
+with *"the process cannot access the file"*, close every running Gaming Nation
+Trucker and build to a directory outside the synced tree:
+
+```bash
+npx electron-builder --win --publish never --config.directories.output=C:/gmn-build
+```
+
+### Test suite
+
+Every suite passes. Run them all:
+
+```bash
+npm run smoke:realtime     # the live channel
+npm run smoke:connector    # the game connector, end to end
+npm run smoke:outbox       # a delivery surviving the service being down
+npm run smoke:convoyauth   # identity, permissions, moderation, restart
+npm run smoke:convoy       # a convoy across two machines
+npm run smoke:company      # one company, two machines
+npm run smoke:liverun      # a run from game to console
+npm run smoke:errors       # every screen, every control, console errors
+```
+
+The Electron suites need the inherited flag cleared on Git Bash:
+
+```bash
+env -u ELECTRON_RUN_AS_NODE node_modules/electron/dist/electron.exe tools/smoke-convoy.js .
+```
+
+Any suite that registers somebody installs `tools/fake-supabase.js` in the
+page first — an in-memory stand-in for the Supabase client. Registration goes
+through Supabase Auth now, and pointing the tests at the real project would
+leave a real Auth user and a real drivers row behind on every run. Each window
+gets its own, so two windows share nothing through Supabase and whatever
+crosses between them has to cross through the company service, which is what
+those tests are actually about.
+
+---
+
+## Publishing it, free
+
+### What free actually gets you
+
+**Hosting is free. A .com is not.** Any of these publish the site at no cost,
+with HTTPS, and all of them are indexed by Google perfectly well:
+
+| Host | Free address | Config in repo |
+|---|---|---|
+| Cloudflare Pages | `gaming-nation.pages.dev` | none needed — point it at `www/` |
+| Netlify | `gaming-nation.netlify.app` | [netlify.toml](netlify.toml) |
+| Vercel | `gaming-nation.vercel.app` | [vercel.json](vercel.json) |
+| GitHub Pages | `<you>.github.io/Gaming-Nation` | [.github/workflows/pages.yml](.github/workflows/pages.yml) |
+
+A `.pages.dev` address ranks on its own merits. If you want a real domain
+later, all four support custom domains free — you pay only the registrar.
+
+### What is live now
+
+One Cloudflare Pages project, connected to this repository, so it rebuilds
+on every push to `main`:
+
+```
+https://gaming-nation.pages.dev    the address to hand to drivers
+```
+
+`siteUrl` names it, so the canonical link, the sitemap and the social cards
+all agree with where the site actually is.
+
+There were two of these for a while. The original `pages.dev` name went on
+answering right through the rename, off the same repository and the same
+commits. It is deleted now: nothing pointed at it any more, and two
+projects building one repository is two chances for a search engine to
+decide the site is a duplicate of itself. A released `pages.dev` name goes
+to whoever asks for it next, so it is not coming back.
+
+`gamingnation.pages.dev`, without the hyphen, belongs to somebody else's
+Cloudflare account. A `pages.dev` name is first-come and cannot be bought,
+which is the whole reason for the hyphen.
+
+### www.gamingnation needs a domain, and a domain needs buying
+
+There is no free path to `www.gamingnation.<anything>`. A custom domain on
+Cloudflare Pages requires the domain to be registered to you and added to
+your Cloudflare account as a zone; this account currently has none. Checked
+today:
+
+```
+gamingnation.com    registered by someone else
+gamingnation.net    registered by someone else
+gamingnation.org    registered by someone else
+gaming-nation.com   registered by someone else
+
+gamingnation.gg     AVAILABLE     (fitting for a gaming VTC)
+gamingnation.co     AVAILABLE
+gamingnation.io     AVAILABLE
+gamingnation.club   AVAILABLE
+```
+
+Around £10–35 a year for most, more for `.gg` and `.io`. Availability
+changes daily — check before you plan around it.
+
+Once one is bought: add it to Cloudflare (Websites -> Add a site), point the
+registrar at the nameservers Cloudflare gives you, then Workers & Pages ->
+`gaming-nation` -> Custom domains -> Set up a domain. Then change `siteUrl`
+below to `https://www.<the domain>` and push. Nothing else in the repository
+needs editing.
+
+### Setting the address
+
+One value, in [site.config.json](site.config.json):
+
+```json
+{ "siteUrl": "https://gaming-nation.pages.dev" }
+```
+
+Then `npm run www`. The build writes the canonical link, the Open Graph and
+Twitter cards, the JSON-LD, `robots.txt` and `sitemap.xml` from it, and a
+`CNAME` file when the host is a real domain.
+
+**Leave it empty until you control the address.** With it empty the build
+writes no canonical at all, which is deliberate: a canonical URL pointing at a
+host you do not own tells Google the real version of your page is over there,
+and it will rank that instead of yours. For a domain parked on a for-sale page
+that is the worst possible outcome. No canonical is far better than a wrong one.
+
+### If the site will not load for you
+
+It is published at `https://jeffboss315.github.io/Gaming-Nation/` and it works —
+verified by fetching it from outside this network, which returns the page,
+`robots.txt` and `sitemap.xml` correctly.
+
+If it times out for **you**, the site is not the problem: some networks cannot
+route to GitHub Pages. `*.github.io` resolves to four fixed addresses
+(`185.199.108–111.153`) and a number of ISPs simply do not carry them. The
+symptom is a timeout — "took too long to respond" — never a 404.
+
+Check it in one minute: open it on mobile data instead of wifi. If it loads
+there, it is the network.
+
+**The fix is to publish somewhere reachable.** Cloudflare Pages answers from
+whichever of its edges is nearest, on addresses that are effectively never
+blocked, and it is free:
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages →
+   Create → Pages → Connect to Git
+2. Pick `JeffBoss315/Gaming-Nation`
+3. Build command: `node tools/build-www.js` — **not** `npm run www`, which
+   runs the release audit and fails on a clean checkout
+4. Output directory: `www`
+
+That publishes to `https://gaming-nation.pages.dev` — free, reachable, and it
+carries the name.
+
+Then change one line in [site.config.json](site.config.json):
+
+```json
+{ "siteUrl": "https://gaming-nation.pages.dev" }
+```
+
+and push. The canonical, the cards, the sitemap and `robots.txt` are all
+regenerated from it — and on `pages.dev` the site sits at a host root, so
+`robots.txt` is honoured there, which it is not on a GitHub project page.
+
+Both can run at once. Two hosts serving the same site is fine as long as the
+canonical names one of them, which is exactly what that one line decides.
+
+### Then ask Google to look
+
+1. Publish, and confirm the site loads over HTTPS.
+2. Verify the address in [Google Search Console](https://search.google.com/search-console).
+3. Submit `<your address>/sitemap.xml`.
+
+That third step is what actually starts indexing. Without it you are waiting to
+be found by accident. Expect days to weeks, not hours.
+
+### A caveat worth knowing
+
+This is a single-page app: the server returns the same HTML for every route and
+JavaScript draws the rest. Google does run JavaScript, but on a second pass that
+can lag, and the hash routes (`#/convoys`, `#/drivers`) are not separate URLs —
+a crawler asking for one gets the landing page back. So what gets indexed is the
+landing page and its `<noscript>` content.
+
+That is enough to be found by name. Ranking for what the company *does* would
+need real pages at real paths, which is a build change rather than a tag change.

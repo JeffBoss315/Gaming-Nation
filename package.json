@@ -1,0 +1,188 @@
+{
+  "name": "gaming-nation-trucker",
+  "productName": "Gaming Nation Trucker",
+  "version": "1.1.9",
+  "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
+  "author": "Gaming Nation",
+  "main": "electron-main.js",
+  "private": true,
+  "scripts": {
+    "serve": "node serve.js",
+    "serve:lan": "node serve.js --lan",
+    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-brand-icons.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-ico.ps1",
+    "start": "node tools/run-electron.js .",
+    "dist": "node tools/scan.js && node tools/build-desktop.js && node tools/prune-builds.js",
+    "dist:portable": "node tools/scan.js && node tools/build-desktop.js --win portable && node tools/prune-builds.js",
+    "dist:linux": "node tools/scan.js && node tools/build-desktop.js --linux AppImage && node tools/prune-builds.js",
+    "dist:mac": "node tools/scan.js && node tools/build-desktop.js --mac && node tools/prune-builds.js",
+    "www": "node tools/scan.js && node tools/build-www.js",
+    "android": "node tools/scan.js && node tools/build-apk.js && node tools/collect-release.js && node tools/prune-builds.js",
+    "android:open": "npx cap open android",
+    "fleet": "node fleet-server.js",
+    "telemetry:build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-telemetry-adapter.ps1",
+    "telemetry": "node telemetry-bridge.js",
+    "connector": "node game-connector.js",
+    "scan": "node tools/scan.js",
+    "check:supabase": "node tools/check-supabase.js",
+    "smoke:realtime": "node tools/smoke-realtime.js",
+    "smoke:connector": "node tools/smoke-connector.js",
+    "smoke:outbox": "node tools/smoke-outbox.js",
+    "smoke:convoyauth": "node tools/smoke-convoy-auth.js",
+    "smoke:convoy": "node tools/run-electron.js tools/smoke-convoy.js .",
+    "smoke:liverun": "node tools/run-electron.js tools/smoke-live-run.js .",
+    "smoke:web": "node tools/run-electron.js tools/smoke-platform.js .",
+    "smoke:app": "node tools/run-electron.js tools/smoke-client.js .",
+    "smoke:recruit": "node tools/run-electron.js tools/smoke-recruitment.js .",
+    "smoke:sites": "node tools/run-electron.js tools/smoke-sites.js .",
+    "smoke:errors": "node tools/run-electron.js tools/smoke-errors.js .",
+    "smoke:company": "node tools/run-electron.js tools/smoke-company.js .",
+    "prune": "node tools/prune-builds.js",
+    "prune:releases": "node tools/prune-releases.js",
+    "smoke:messaging": "node tools/smoke-messaging.js",
+    "smoke:svcauth": "node tools/smoke-service-auth.js",
+    "smoke:dmweb": "node tools/run-electron.js tools/smoke-dm-web.js .",
+    "smoke:dmsupa": "node tools/run-electron.js tools/smoke-dm-supabase.js .",
+    "smoke:terminal": "node tools/run-electron.js tools/smoke-driver-terminal.js .",
+    "smoke:signup": "node tools/run-electron.js tools/smoke-signup-approval.js .",
+    "smoke:profile": "node tools/run-electron.js tools/smoke-profile.js .",
+    "smoke:avatar": "node tools/run-electron.js tools/smoke-avatar.js .",
+    "smoke:search": "node tools/run-electron.js tools/smoke-search.js .",
+    "smoke:downloadpage": "node tools/run-electron.js tools/smoke-download-page.js .",
+    "smoke:downloads": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-download-gate.mjs",
+    "release:collect": "node tools/collect-release.js --strict",
+    "release:push": "node tools/push-release.js",
+    "service": "node fleet-server.js",
+    "deploy:cf": "node tools/build-www.js && node tools/deploy-cloudflare.js",
+    "dev": "node tools/dev.js",
+    "smoke:dmapp": "node tools/run-electron.js tools/smoke-dm-app.js .",
+    "smoke:host": "node tools/run-electron.js tools/smoke-host-service.js .",
+    "smoke:launch": "node tools/smoke-launch.js .",
+    "smoke:tiles": "node tools/run-electron.js tools/smoke-launch-tiles.js .",
+    "smoke:career": "node tools/run-electron.js tools/smoke-career.js .",
+    "smoke:notify": "node tools/run-electron.js tools/smoke-notify-support.js .",
+    "smoke:convoysheet": "node tools/run-electron.js tools/smoke-convoy-client.js .",
+    "smoke:update": "node tools/run-electron.js tools/smoke-update-check.js .",
+    "smoke:offsets": "python tools/smoke-telemetry-offsets.py",
+    "smoke:plugin": "node tools/smoke-plugin-install.js .",
+    "smoke:apploss": "node tools/run-electron.js tools/smoke-application-loss.js .",
+    "smoke:ownercode": "node tools/run-electron.js tools/smoke-owner-code.js .",
+    "smoke:discord": "node tools/smoke-discord.js .",
+    "smoke:country": "node tools/smoke-city-country.js ."
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.gamingnation.trucker",
+    "productName": "Gaming Nation Trucker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "service-host.js",
+      "update-check.js",
+      "fleet-server.js",
+      "preload.js",
+      "game-connector.js",
+      "telemetry-bridge.js",
+      "telemetry-plugin.js",
+      "desktop-capture.js",
+      "tracker.html",
+      "tracker.css",
+      "tracker.js",
+      "map-data.js",
+      "manifest.webmanifest",
+      "sw.js",
+      "vendor/**/*",
+      "gmn.jpg",
+      "icons/**/*",
+      "login.html",
+      "admin.html",
+      "style.css",
+      "script.js",
+      "supabase-client.js",
+      "!node_modules/**/*",
+      "!android/**/*",
+      "!www/**/*",
+      "!app-www/**/*",
+      "!dist-apk/**/*",
+      "!release/**/*",
+      "!tools/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "gmn-telemetry-adapter.exe",
+        "to": "gmn-telemetry-adapter.exe"
+      },
+      {
+        "from": "game-plugin",
+        "to": "plugin"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/icon.ico",
+      "artifactName": "${productName} ${version} ${arch}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gaming Nation Trucker",
+      "installerIcon": "icons/icon.ico",
+      "uninstallerIcon": "icons/icon.ico",
+      "installerHeaderIcon": "icons/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "icons/icon-1024.png",
+      "category": "Utility"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "icons/icon-1024.png",
+      "category": "public.app-category.utilities"
+    },
+    "afterPack": "./tools/after-pack.js",
+    "electronLanguages": [
+      "en-GB",
+      "en-US"
+    ],
+    "compression": "maximum",
+    "asarUnpack": [
+      "fleet-server.js",
+      "supabase-client.js"
+    ]
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@supabase/supabase-js": "^2.112.4"
+  }
+}

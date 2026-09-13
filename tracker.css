@@ -1,0 +1,2135 @@
+/* ============================================================
+   GMN WORLD GAMING NATION TRUCKER — driver client
+   Shares the Gaming Nation house style: near-black surfaces, a single
+   orange accent, square industrial edges. Connection state lives in
+   a bottom status bar; the run is a waypoint rail with ring gauges.
+   ============================================================ */
+
+:root{
+  /* brand — a single accent, used sparingly */
+  --accent-rgb:139,214,43;
+  --accent:#8bd62b;
+  /* The client and the platform are one product and have to look like it.
+     These are style.css's values, to the digit — the hover colour here was
+     still the old orange, left behind when the accent changed, so a driver
+     hovering a button in the client saw a colour that exists nowhere else. */
+  --accent-hover:#a3e84d;
+  --accent-soft:rgba(var(--accent-rgb),.13);
+  --accent-line:rgba(var(--accent-rgb),.34);
+
+  /* surfaces */
+  --bg:#070910;
+  --panel:#0d111a;
+  --panel-2:#141926;
+  --panel-3:#1c2333;
+  --line:#212936;
+  --line-2:#2f3849;
+
+  /* text */
+  --text:#e9edf5;
+  --text-2:#9fabbf;
+  --text-3:#7f8b9e;
+
+  /* semantic — status only, never decoration */
+  --ok:#2ee0a0;
+  --info:#22d3ee;
+  --warn:#f7b32b;
+  --danger:#fb6a80;
+  --violet:#a78bfa;
+
+  /* The driver's own truck on the map. Deliberately not --accent: the trail
+     line behind it is that same green, so the pin and the history it had
+     just drawn were one colour and the truck disappeared into its own line
+     the moment it stopped moving. Amber is the one hue the map does not
+     already spend - cities are white, crew pins cyan or grey, the region
+     seams each their own. Same value as --warn today, kept separate because
+     they mean different things and only one of them is a warning. */
+  --me:#f7b32b;
+
+  /* The box holding the driver's name and speed above their own truck.
+     Red, not --me: the amber pill was asked to become something that jumps
+     out, and red is the loudest hue the map spends only on thin region
+     seams. The pin keeps --me. A shade under pure red so white text on it
+     still clears 4.5:1 - #ff3b3b managed 3.5 - and one value for both
+     themes, because it sits on the map tiles rather than on the page. */
+  --me-label:#e8192c;
+  --me-label-ink:#ffffff;  /* 4.6:1 */
+
+  /* The same five as channels, so a translucent status tint is derived
+     from its colour rather than being a second, drifting copy of it. */
+  --ok-rgb:46,224,160;
+  --info-rgb:34,211,238;
+  --warn-rgb:247,179,43;
+  --danger-rgb:251,106,128;
+  --violet-rgb:167,139,250;
+
+  /* geometry */
+  --r-sm:7px; --r:10px; --r-lg:14px; --r-xl:18px;
+  --sidebar:236px;
+  --topbar:60px;
+  --maxw:1480px;
+
+  --t-fast:.12s ease;
+  --t:.18s ease;
+
+  --font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+
+  /* the client has chrome the website does not: a title bar, a status strip
+     and a narrower rail */
+  --rail:#0d1015;
+  --rail-w:212px;
+  --title-h:32px;
+  --status-h:26px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;font-family:var(--font);font-size:13px;line-height:1.5;
+  color:var(--text);background:var(--bg);overflow:hidden;
+  -webkit-font-smoothing:antialiased;user-select:none;
+}
+img,svg{display:block;max-width:100%}
+input,textarea,select,.console,.msg,.thread,table.tbl,.mono{user-select:text}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+table{border-collapse:collapse;width:100%}
+:focus-visible{outline:1px solid var(--accent);outline-offset:1px}
+::selection{background:rgba(var(--accent-rgb),.3)}
+
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#272e38;border-radius:99px;border:3px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:#333c47;background-clip:content-box}
+
+.ic{width:1.05em;height:1.05em;flex:none;display:inline-block;vertical-align:-.15em}
+.row{display:flex;align-items:center;gap:8px}
+.row-b{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.col{display:flex;flex-direction:column}
+.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.t2{color:var(--text-2)}.t3{color:var(--text-3)}
+.xs{font-size:11px}.sm{font-size:12px}.lg{font-size:15px}
+.b6{font-weight:500}.b7{font-weight:600}
+.center{text-align:center}.right{text-align:right}
+.hide{display:none !important}
+.gap-4{gap:4px}.gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}
+.mt-4{margin-top:4px}.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mt-20{margin-top:20px}
+.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}
+.label{font-size:10px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--text-3)}
+
+/* ---------- window ---------- */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.titlebar{
+  height:var(--title-h);flex:none;display:flex;align-items:center;gap:8px;
+  background:var(--bg);border-bottom:1px solid var(--line);padding-left:11px;
+  -webkit-app-region:drag;
+}
+.titlebar .tb-icon{width:14px;height:14px;color:var(--accent);flex:none}
+.titlebar .tb-text{font-size:11.5px;color:var(--text-3);font-weight:500;letter-spacing:.02em}
+.tb-controls{margin-left:auto;display:flex;height:100%;-webkit-app-region:no-drag}
+.tb-btn{width:42px;height:100%;display:grid;place-items:center;color:var(--text-3);transition:background var(--t),color var(--t)}
+.tb-btn svg{width:10px;height:10px}
+.tb-btn:hover{background:var(--panel-2);color:var(--text)}
+.tb-btn.close:hover{background:#c42b1c;color:#fff}
+
+.body{flex:1;display:flex;min-height:0}
+
+/* ---------- left rail ---------- */
+.rail{width:var(--rail-w);flex:none;background:var(--rail);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.rail-brand{display:flex;align-items:center;gap:9px;padding:14px 13px 13px;border-bottom:1px solid var(--line)}
+.logo{width:30px;height:30px;flex:none;border-radius:var(--r-sm);overflow:hidden;background:var(--panel-2)}
+.logo svg{width:100%;height:100%}
+.brand-img{width:100%;height:100%;object-fit:cover;display:block}
+.brand-1{font-size:12.5px;font-weight:600;letter-spacing:.06em;line-height:1.2}
+.brand-2{font-size:9px;font-weight:600;letter-spacing:.15em;color:var(--accent);text-transform:uppercase}
+
+.rail-nav{flex:1;overflow-y:auto;padding:10px 8px}
+.rail-group{margin-bottom:14px}
+.rail-label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-3);
+  font-weight:600;padding:0 8px 6px}
+
+
+
+
+
+
+.nav-count{margin-left:auto;min-width:17px;height:17px;padding:0 5px;border-radius:99px;
+  background:var(--panel-3);color:var(--text-2);font-size:10px;font-weight:600;display:grid;place-items:center}
+
+
+.rail-foot{border-top:1px solid var(--line);padding:9px}
+.driver-chip{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:6px;
+  border-radius:var(--r);transition:background var(--t)}
+.driver-chip:hover{background:var(--panel-2)}
+.driver-chip .chev{width:14px;height:14px;color:var(--text-3);margin-left:auto;flex:none}
+
+
+
+
+
+/* ---------- main ---------- */
+.main{flex:1;min-width:0;overflow-y:auto;padding:18px 20px 24px}
+
+
+
+
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- cards ---------- */
+
+.card-head{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-body{padding:16px}
+
+/* ---------- run card ---------- */
+.run-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.run-cities{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.run-city{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.run-city.to{color:var(--accent)}
+.run-sep{color:var(--text-3);font-size:14px}
+.run-meta{font-size:12px;color:var(--text-2);margin-top:5px}
+.run-idle{font-size:19px;font-weight:600;color:var(--text-2)}
+
+.run-state{display:inline-flex;align-items:center;gap:7px;height:24px;padding:0 10px;border-radius:99px;
+  font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  background:var(--panel-3);color:var(--text-2);border:1px solid var(--line-2)}
+.run-state .beat{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.run-state.rolling{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.run-state.done{background:rgba(var(--ok-rgb),.1);color:var(--ok);border-color:rgba(var(--ok-rgb),.32)}
+.run-state.held{background:rgba(var(--warn-rgb),.1);color:var(--warn);border-color:rgba(var(--warn-rgb),.32)}
+
+/* waypoint rail — the run as a route, not a loading bar */
+.rrail{position:relative;margin:30px 0 6px;padding:0 2px}
+.rrail-track{position:relative;height:2px;background:var(--line-2);border-radius:2px}
+.rrail-fill{position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:2px;transition:width .6s ease}
+.rrail-node{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:var(--panel);
+  border:2px solid var(--line-2);transform:translate(-50%,-50%);z-index:2}
+.rrail-node.passed{border-color:var(--accent);background:var(--accent)}
+.rrail-node.end{border-color:var(--accent)}
+.rrail-marker{position:absolute;top:50%;transform:translate(-50%,-50%);z-index:3;
+  width:24px;height:24px;border-radius:50%;background:var(--panel);border:1px solid var(--accent);
+  display:grid;place-items:center;color:var(--accent);transition:left .6s ease}
+.rrail-marker svg{width:12px;height:12px}
+.rrail-ends{display:flex;justify-content:space-between;margin-top:15px;font-size:11px;color:var(--text-3)}
+.rrail-pct{position:absolute;right:0;top:-24px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.rrail-cap{position:absolute;left:0;top:-24px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-3);font-weight:600}
+
+/* gauges */
+.gauges{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.gauge{position:relative;display:grid;place-items:center;flex:none}
+.gauge svg{transform:rotate(-90deg)}
+.gauge-txt{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.gauge-val{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.gauge-lbl{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);font-weight:600}
+
+/* fact list */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:14px 18px;margin-top:20px}
+.fact .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);font-weight:600}
+.fact .v{font-size:13.5px;font-weight:500;margin-top:3px;font-variant-numeric:tabular-nums}
+
+/* ---------- console ---------- */
+.console{max-height:260px;overflow-y:auto;font-family:var(--mono);font-size:11.5px}
+.con-row{display:flex;gap:10px;padding:4px 0}
+.con-time{color:var(--text-3);flex:none}
+.con-lvl{flex:none;width:42px;font-weight:600;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding-top:1px}
+.con-lvl.info{color:var(--info)}
+.con-lvl.ok{color:var(--ok)}
+.con-lvl.warn{color:var(--warn)}
+.con-lvl.err{color:var(--danger)}
+.con-msg{color:var(--text-2);word-break:break-word}
+
+/* ---------- bottom status bar ---------- */
+.statusbar{
+  height:var(--status-h);flex:none;display:flex;align-items:center;
+  background:var(--rail);border-top:1px solid var(--line);padding:0 4px;font-size:11px;
+}
+.sb-item{display:flex;align-items:center;gap:6px;padding:0 10px;height:100%;color:var(--text-3);white-space:nowrap}
+.sb-item.btn-like{transition:background var(--t),color var(--t)}
+.sb-item.btn-like:hover{background:var(--panel-2);color:var(--text)}
+.sb-item svg{width:12px;height:12px}
+.sb-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--text-3)}
+.sb-dot.ok{background:var(--ok)}
+.sb-dot.warn{background:var(--warn)}
+.sb-dot.err{background:var(--danger)}
+.sb-item.on{color:var(--text-2)}
+.sb-sep{width:1px;height:13px;background:var(--line);flex:none;margin:0 2px}
+.sb-spacer{flex:1}
+
+/* ---------- buttons ---------- */
+
+
+
+
+/* What goes ON the accent.
+
+   The brand green is light: white on #8bd62b is about 1.9:1, which is
+   not readable at any size. The logo does not do it either — the lime is
+   the ink on black, never the ground under white. So every surface
+   filled with the accent takes near-black text instead. */
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#0a1403}
+.btn-primary svg{color:#0a1403}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-ok{background:transparent;border-color:rgba(var(--ok-rgb),.32);color:var(--ok)}
+.btn-ok svg{color:var(--ok)}
+.btn-ok:hover{background:rgba(var(--ok-rgb),.1)}
+.btn-danger{background:transparent;border-color:rgba(var(--danger-rgb),.32);color:var(--danger)}
+.btn-danger svg{color:var(--danger)}
+.btn-danger:hover{background:rgba(var(--danger-rgb),.1)}
+.btn-ghost{background:transparent}
+.btn-sm{height:25px;padding:0 9px;font-size:11.5px}
+.btn-sm svg{width:12px;height:12px}
+
+
+
+
+
+
+
+
+
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow-x:auto}
+table.tbl{font-size:12.5px;min-width:560px}
+table.tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--text-3);
+  font-weight:600;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:1;white-space:nowrap}
+table.tbl td{padding:9px 14px;border-bottom:1px solid var(--line)}
+table.tbl tbody tr:hover{background:var(--panel-2)}
+table.tbl tbody tr:last-child td{border-bottom:0}
+
+/* ---------- stats ---------- */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 14px}
+.stat .v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.stat .k{font-size:10.5px;color:var(--text-3);font-weight:500;margin-top:2px}
+
+/* ---------- forms ---------- */
+
+
+
+
+
+
+
+.setting-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--line)}
+.setting-row:last-child{border-bottom:0}
+
+
+
+
+
+/* ---------- split (messages / chats) ---------- */
+.split{display:grid;grid-template-columns:220px 1fr;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;min-height:330px}
+.split-list{background:var(--panel-2);border-right:1px solid var(--line);overflow-y:auto;max-height:440px}
+.split-item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background var(--t)}
+.split-item:hover{background:var(--panel-3)}
+.split-item.on{background:var(--panel-3);box-shadow:inset 2px 0 0 var(--accent)}
+.split-item.unread .split-title::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);margin-left:6px;vertical-align:middle}
+.split-title{font-size:12.5px;font-weight:500}
+.split-sub{font-size:11px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.split-body{display:flex;flex-direction:column;min-width:0;max-height:440px}
+.thread{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px}
+.msg{max-width:76%;padding:8px 11px;border-radius:var(--r);background:var(--panel-2);border:1px solid var(--line);font-size:12.5px;line-height:1.55}
+.msg.mine{align-self:flex-end;background:var(--accent-soft);border-color:var(--accent-line)}
+.msg .who{font-size:10px;color:var(--text-3);margin-bottom:3px;font-weight:500}
+.composer{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);background:var(--panel-2)}
+
+/* ---------- misc ---------- */
+
+
+.queue-item{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel-2);padding:13px 14px;margin-bottom:9px}
+
+.toasts{position:fixed;right:16px;bottom:calc(var(--status-h) + 12px);z-index:1300;display:flex;flex-direction:column;gap:8px;max-width:320px}
+
+
+
+
+
+
+
+
+.modal-head{padding:13px 16px;border-bottom:1px solid var(--line);font-weight:600}
+.modal-body{padding:16px}
+.modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+
+.menu{position:fixed;z-index:1220;min-width:186px;background:var(--panel);border:1px solid var(--line-2);
+  border-radius:var(--r-lg);padding:5px;box-shadow:0 18px 40px -18px #000;max-height:calc(100vh - 20px);overflow-y:auto}
+.menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 10px;
+  border-radius:var(--r);font-size:12.5px;color:var(--text-2);transition:background var(--t),color var(--t)}
+.menu button svg{width:14px;height:14px;color:var(--text-3)}
+.menu button:hover{background:var(--panel-2);color:var(--text)}
+.menu .sep{height:1px;background:var(--line);margin:4px 0}
+.menu button.danger{color:var(--danger)}
+
+@media (max-width:1020px){ .facts{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))} }
+@media (max-width:860px){
+  :root{--rail-w:56px}
+  .rail-brand{justify-content:center;padding:12px 6px}
+  .brand-text,.nav-item span:not(.nav-count),.rail-label,.driver-text{display:none}
+  .nav-item{justify-content:center;padding:9px 0}
+  .nav-item.active::before{left:0}
+  .driver-chip{justify-content:center}
+  .driver-chip .chev{display:none}
+  .split{grid-template-columns:1fr}
+  .split-list{max-height:160px}
+  .gauges{gap:14px}
+  .sb-item.optional{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+
+/* ============================================================
+   Installed-app + phone layout
+   ------------------------------------------------------------
+   Desktop keeps the frameless window look. On a phone the fake
+   title bar and side rail make no sense, so the shell switches to
+   a top app bar plus a bottom tab bar, with safe-area padding for
+   notches and the home indicator.
+   ============================================================ */
+
+/* the custom title bar is only meaningful in the desktop shell */
+body:not(.is-desktop-shell) .titlebar{display:none}
+/* ...but in a Chromium PWA with window-controls-overlay we keep a drag strip */
+@media (display-mode: window-controls-overlay){
+  .titlebar{display:flex;height:env(titlebar-area-height,32px)}
+  .titlebar .tb-controls{display:none}
+}
+
+/* install prompt button, shown only when the browser offers one */
+.install-cta{display:none;align-items:center;gap:6px}
+body.can-install .install-cta{display:inline-flex}
+
+/* top app bar — phones only */
+.appbar{display:none}
+
+/* bottom tab bar — phones only */
+.tabbar{display:none}
+
+@media (max-width:720px){
+  body{overflow:auto}
+  .app{height:100dvh}
+
+  /* the phone navigates by the tab bar and the Menu screen, so the desktop
+     rail is not shown at all */
+  .rail,.rail-scrim{display:none}
+
+  /* A solid coloured bar, not a dark one with a hairline.
+
+     On a phone the app bar is the only fixed thing on screen and it is
+     what tells you which app you are in. Painted the brand colour it does
+     that from across a cab; as another shade of near-black it was doing
+     nothing but holding a title. */
+  .appbar{
+    display:flex;align-items:center;gap:10px;flex:none;height:52px;padding:0 6px 0 4px;
+    padding-top:env(safe-area-inset-top);height:calc(52px + env(safe-area-inset-top));
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
+    border-bottom:1px solid rgba(139,214,43,.45);
+    box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(0,0,0,.35);
+    position:sticky;top:0;z-index:60;
+  }
+  /* White on the bar, not --text-2: the bar is a light-on-dark surface of
+     its own and the page's text tones are mixed for the page ground. */
+  .appbar .ab-btn{width:40px;height:40px;display:grid;place-items:center;
+    border-radius:var(--r);color:rgba(255,255,255,.92)}
+  .appbar .ab-btn:active{background:rgba(0,0,0,.22)}
+  .appbar .ab-btn svg{width:20px;height:20px}
+  .appbar .ab-title{font-size:15.5px;font-weight:650;letter-spacing:-.01em;
+    color:#fff;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .appbar .ab-dot{width:7px;height:7px;border-radius:50%;
+    background:rgba(255,255,255,.55);flex:none;margin-right:8px}
+  .appbar .ab-dot.ok{background:#5ef0b0}
+  .appbar .ab-dot.err{background:#ff9aa6}
+
+  .main{padding:14px 13px 16px}
+
+  /* the status bar is desktop furniture; the app bar carries state on phones */
+  .statusbar{
+    height:auto;flex-wrap:wrap;padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    order:3;
+  }
+  .sb-item{padding:0 8px;height:22px}
+  .sb-sep,.sb-spacer{display:none}
+
+  .tabbar{
+    display:grid;grid-template-columns:repeat(5,1fr);flex:none;
+    background:linear-gradient(180deg,#171a20 0%,#101319 100%);
+    border-top:1px solid rgba(139,214,43,.30);
+    padding-bottom:env(safe-area-inset-bottom);
+    position:sticky;bottom:0;z-index:70;
+  }
+  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:8px 2px;color:var(--text-3);font-size:10px;font-weight:500;position:relative;min-height:52px}
+  .tab svg{width:19px;height:19px}
+  .tab.active{color:var(--accent)}
+  .tab.active svg{color:var(--accent)}
+  /* The active tab gets a bar as well as a colour: on a small screen at
+     arm's length the colour alone is easy to miss. */
+  .tab.active::before{
+    content:'';position:absolute;top:0;left:22%;right:22%;height:2px;
+    border-radius:0 0 2px 2px;background:var(--accent);
+  }
+  .tab .tab-count{position:absolute;top:5px;right:calc(50% - 20px);min-width:15px;height:15px;
+    padding:0 4px;border-radius:99px;background:var(--accent);color:#0a1403;font-size:9px;
+    font-weight:600;display:grid;place-items:center}
+
+  /* Anything that only means something on a machine the game runs on.
+
+     Launching Euro Truck Simulator 2, pointing the client at
+     eurotrucks2.exe, waiting for a telemetry link — none of that exists
+     on a phone, and there is no path a driver can take to make it exist.
+     Offering it is offering a button that cannot work. The phone keeps
+     the parts that are real there: the logbook, the fleet, messages, the
+     map and the convoy. */
+  .game-only{display:none !important}
+
+  /* touch targets */
+  .btn{height:34px;padding:0 13px}
+  .btn-sm{height:30px}
+  .nav-item{font-size:13.5px}
+  .split{grid-template-columns:1fr;min-height:0}
+  .split-list{max-height:190px}
+  .split-body{max-height:none}
+  .view-head{gap:10px}
+  .actions{width:100%}
+  .actions .btn{flex:1}
+  .gauges{justify-content:space-between;gap:10px}
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .toasts{left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom));max-width:none}
+  table.tbl{min-width:520px}
+}
+
+@media (max-width:400px){
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .run-city{font-size:17px}
+  .tab{font-size:9px}
+}
+
+/* installed standalone window: no browser chrome, so reclaim the space */
+@media (display-mode: standalone){
+  .install-cta{display:none !important}
+}
+
+/* ---------- live map ---------- */
+.map-wrap{position:relative;border:1px solid var(--line);border-radius:var(--r-lg);
+  overflow:hidden;background:var(--panel-2)}
+.livemap{width:100%;display:block}
+.livemap .map-node{cursor:pointer}
+.livemap .map-lbl{fill:var(--text-2);font-size:9px;font-weight:500;font-family:var(--font);
+  paint-order:stroke;stroke:var(--panel-2);stroke-width:3;stroke-linejoin:round}
+.map-badge{position:absolute;left:10px;top:10px;pointer-events:none}
+#truckMarker{transition:transform .8s linear}
+
+/* ---------- tile map (Leaflet) ---------- */
+.leaflet-host{height:min(60vh,540px);border:1px solid var(--line);border-radius:var(--r-lg);
+  overflow:hidden;background:var(--panel-2);
+  /* Leaflet numbers its own panes 400-700 and its controls up to 1000. Without
+     a stacking context of its own those compete with the app's overlays, and
+     the map paints straight over an open dialog. Containing it here keeps
+     every one of those numbers inside the map. */
+  position:relative;z-index:0;isolation:isolate}
+@media (max-width:720px){ .leaflet-host{height:min(52vh,420px)} }
+
+/* fold Leaflet's default chrome into the app's palette */
+
+
+
+.leaflet-control-attribution{background:rgba(17,20,25,.85) !important;color:var(--text-3);
+  font-size:10px;border-top-left-radius:var(--r-sm)}
+.leaflet-control-attribution a{color:var(--text-2)}
+
+.leaflet-tooltip-top:before{border-top-color:var(--line-2)}
+
+/* The driver's own label under their own truck.
+
+   Scoped to its own class on purpose. The dark box every Leaflet tooltip
+   wears is set in style.css, which is the WEBSITE's stylesheet - tracker.html
+   loads it too - so restyling .leaflet-tooltip here would quietly change the
+   maps on gaming-nation.pages.dev as well. This changes one label instead.
+
+   The box itself is filled, in --me-label, so it is obviously the driver's
+   own and obviously not a crew member's. Coloured text on the stock dark
+   box was tried first and still read as one more grey tooltip. Small and
+   pill-shaped
+   because it is permanent now: it sits on the map the whole time rather than
+   only while hovered, so it has to stay out of the way of the roads
+   underneath. */
+.leaflet-tooltip.me-label{
+  background:var(--me-label);
+  border:1px solid color-mix(in srgb,var(--me-label) 70%,#000);
+  color:var(--me-label-ink);
+  font-size:11px;font-weight:700;letter-spacing:.01em;
+  padding:2px 8px;border-radius:999px;
+  box-shadow:0 1px 6px rgba(0,0,0,.55);
+  white-space:nowrap;
+}
+
+/* the truck pin, rotated to the live heading */
+.truck-pin-inner{width:34px;height:34px;display:grid;place-items:center;
+  transition:transform .5s ease-out}
+.truck-pin-inner svg{width:28px;height:28px;fill:var(--me);
+  stroke:#0a0c0f;stroke-width:1.4;filter:drop-shadow(0 0 3px rgba(0,0,0,.8))}
+
+/* ---------- other drivers on the map ---------- */
+.fleet-pin{background:none;border:0}
+.fleet-pin-inner{width:22px;height:22px;display:grid;place-items:center;transition:transform .6s ease-out}
+.fleet-pin-inner svg{width:16px;height:16px;fill:var(--text-2);stroke:#0a0c0f;stroke-width:1.4}
+.fleet-pin.hauling .fleet-pin-inner svg{fill:var(--info)}
+.fleet-pin-label{position:absolute;left:50%;top:20px;transform:translateX(-50%);
+  font-size:9.5px;font-weight:600;color:var(--text-2);white-space:nowrap;
+  background:rgba(10,12,15,.75);padding:0 4px;border-radius:3px;pointer-events:none}
+.fleet-pin.hauling .fleet-pin-label{color:var(--info)}
+.fleet-svg-marker{pointer-events:all}
+.fleet-svg-marker .map-lbl{fill:var(--info);font-size:11px;font-weight:700;paint-order:stroke;stroke:var(--bg);stroke-width:3px;stroke-linejoin:round}
+
+/* ---------- game map ---------- */
+
+
+
+
+/* labels would pile up when zoomed out; the roads carry the shape instead */
+
+
+/* mid zoom: the majors name the region, the rest stay as dots until closer */
+
+
+
+
+/* ---------- quick launch bar ---------- */
+.launchbar{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:10px;margin-bottom:14px;
+}
+.launch-tile{
+  position:relative;display:flex;align-items:center;gap:10px;
+  height:48px;padding:0 12px;border-radius:var(--r);
+  background:var(--panel-2);border:1px solid var(--line);
+  border-top:2px solid var(--line-2);
+  color:var(--text);text-align:left;overflow:hidden;
+  transition:background var(--t),border-color var(--t),transform var(--t);
+}
+.launch-tile:hover{background:var(--panel-3);border-top-color:var(--accent);transform:translateY(-1px)}
+.launch-tile:active{transform:translateY(0)}
+.launch-tile.game{border-top-color:var(--accent)}
+.launch-tile.tmp{border-top-color:#b9e87a}
+.lt-mark{width:26px;height:26px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
+.launch-tile.game .lt-mark{color:var(--accent)}
+.launch-tile.tmp .lt-mark{color:#b9e87a}
+.lt-mark svg{width:15px;height:15px}
+.lt-text{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.lt-1{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)}
+.lt-2{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lt-warn{
+  position:absolute;top:5px;right:6px;width:15px;height:15px;border-radius:50%;
+  background:var(--warn);color:#231a05;font-size:10px;font-weight:800;
+  display:grid;place-items:center;
+}
+@media (max-width:1100px){ .launchbar{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:720px){
+  .launchbar{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}
+  .launch-tile{height:44px;padding:0 10px}
+}
+
+
+/* THE SIZES.
+
+   This client asks for an avatar by size word - avatarFace(d, 'sm'),
+   'lg me', or nothing at all. Those words were never CSS classes. The
+   only size classes that exist are the platform's a-24 … a-120, so
+   .avatar in here had no width and no height whatsoever.
+
+   With initials it looked right, because the text gave the span its
+   size. With a photo it does not: .avatar-img is absolutely positioned
+   at inset:0 of a box that is zero by zero, so it collapsed to nothing -
+   and every driver photo in this client, on every screen, has been
+   invisible for as long as photos have existed. Only the initials ever
+   showed, which is exactly why nobody could tell the difference. */
+.avatar{width:38px;height:38px;font-size:13px}
+.avatar.sm{width:30px;height:30px;font-size:11px}
+.avatar.lg{width:48px;height:48px;font-size:16px}
+
+/* A driver photo fills the circle. The image is clipped rather than the
+   avatar itself, so a status dot on the edge is left alone.
+
+   These were inside a max-width:760px block, along with the sizes above,
+   so on any window wider than a phone nothing styled the photo at all. */
+.avatar.has-img{background:var(--panel-2);position:relative}
+.avatar-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:50%;
+}
+
+/* .rail-old was the "OUTDATED" pill beside the build number under the
+   driver's name. Both are gone - the status bar says it now, in the colour
+   the client uses for "this wants attention" rather than "this is broken",
+   because an old client still works, it is just old. */
+.sb-item.warn{color:var(--warn)}
+.sb-item.warn:hover{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
+
+/* ---------- rank ---------- */
+.rank-chip{
+  width:46px;height:46px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r);background:color-mix(in srgb,var(--rc) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--rc) 45%,transparent);
+  color:var(--rc);font-size:12px;font-weight:800;letter-spacing:.06em;
+}
+.rankbar{height:6px;border-radius:99px;background:var(--panel-3);overflow:hidden}
+.rankbar-fill{height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),#b9e87a)}
+
+/* the XP sum, shown as its parts so anyone can check it */
+.xpsplit{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.xprow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
+  padding:8px 12px;font-size:12px;border-top:1px solid var(--line)}
+.xprow:first-child{border-top:0}
+.xprow .mono{min-width:76px;text-align:right;font-variant-numeric:tabular-nums}
+.xprow.total{background:var(--panel-2);font-weight:700}
+
+/* ---------- achievements ----------
+   Each tier is a colour, and it has to be two colours: a metal that reads
+   on near-black is not the metal that reads on white. Set here rather than
+   written into the element, so the light theme further down can answer. */
+.ach.tier-bronze{--ac:#a8794f}
+.ach.tier-silver{--ac:#9aa3af}
+.ach.tier-gold{--ac:#e8913a}
+.ach.tier-plat{--ac:#6fb6c9}
+
+.achgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px}
+.ach{
+  display:flex;gap:11px;align-items:flex-start;padding:12px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--panel-2);
+}
+.ach.got{border-color:color-mix(in srgb,var(--ac) 42%,transparent);
+  background:color-mix(in srgb,var(--ac) 8%,var(--panel-2))}
+/* A BADGE THAT LOOKS LIKE A BADGE.
+
+   This was a flat tinted square, which reads as a list icon rather than
+   as something won. Earned, it is now a struck medallion in the tier's
+   metal, with a ring and a highlight off the top-left the way a real one
+   catches light. Locked, it is the same shape in the page's own greys, so
+   the wall reads as one set with some of it still to come rather than as
+   two different kinds of thing. */
+.ach-ico{
+  position:relative;width:38px;height:38px;flex:none;
+  display:grid;place-items:center;border-radius:50%;
+  background:var(--panel-3);color:var(--text-3);
+  border:1px solid var(--line-2);
+}
+.ach-ico svg{width:18px;height:18px;position:relative}
+.ach.got .ach-ico{
+  color:#0d1117;
+  border-color:color-mix(in srgb,var(--ac) 70%,transparent);
+  background:
+    radial-gradient(120% 120% at 30% 22%,
+      color-mix(in srgb,var(--ac) 95%,#fff) 0%,
+      var(--ac) 45%,
+      color-mix(in srgb,var(--ac) 72%,#000) 100%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb,var(--ac) 16%,transparent),
+    inset 0 1px 0 color-mix(in srgb,#fff 45%,transparent);
+}
+/* the milled edge, drawn rather than imagined */
+.ach.got .ach-ico::after{
+  content:'';position:absolute;inset:3px;border-radius:50%;
+  border:1px dashed color-mix(in srgb,#000 22%,transparent);
+  pointer-events:none;
+}
+
+/* Earned badges wherever a driver's record is shown, not only on the
+   Achievements screen - a badge nobody sees anywhere else is a badge that
+   may as well not have been won. */
+/* Each medallion carries the tier class, so it needs to be its own
+   element - but it must not also inherit the CARD's padding and border,
+   which is what .ach is. Stripped back to the mark alone. */
+.badgeslot{display:inline-flex;padding:0;border:0;background:none}
+.badgestrip{display:flex;flex-wrap:wrap;gap:8px}
+.badgestrip .ach-ico{width:34px;height:34px}
+.badgestrip .ach-ico svg{width:16px;height:16px}
+.badgestrip-more{align-self:center;font-size:11px;color:var(--text-3)}
+.ach-name{font-size:12.5px;font-weight:600}
+.ach-desc{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.4}
+.ach-bar{height:4px;border-radius:99px;background:var(--panel-3);overflow:hidden;margin-top:8px}
+.ach-fill{height:100%;border-radius:99px;background:var(--ac)}
+.ach-pct{font-size:10px;color:var(--text-3);margin-top:4px;font-variant-numeric:tabular-nums}
+.ach-got{display:inline-flex;align-items:center;gap:5px;margin-top:7px;
+  font-size:10.5px;font-weight:700;color:var(--ac)}
+.ach-got svg{width:12px;height:12px}
+.ach-manual{font-size:10.5px;color:var(--text-3);margin-top:7px;font-style:italic}
+.ach-tier{flex:none;align-self:flex-start;font-size:9px;font-weight:800;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ac);opacity:.85}
+@media (max-width:720px){
+  .achgrid{grid-template-columns:1fr}
+}
+
+
+/* ---------- notifications ---------- */
+.ntf-list{display:flex;flex-direction:column}
+.ntf{
+  position:relative;display:flex;gap:11px;align-items:flex-start;width:100%;
+  padding:12px 14px;text-align:left;color:var(--text);
+  border-top:1px solid var(--line);background:transparent;
+  transition:background var(--t);
+}
+.ntf:first-child{border-top:0}
+.ntf:hover{background:var(--panel-2)}
+.ntf.new{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.ntf.new:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.ntf-ico{width:28px;height:28px;flex:none;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:var(--panel-3);color:var(--text-3)}
+.ntf.new .ntf-ico{color:var(--accent)}
+.ntf-ico svg{width:15px;height:15px}
+.ntf-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.ntf-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.ntf-kind{font-size:9.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--text-3)}
+.ntf.new .ntf-kind{color:var(--accent)}
+.ntf-when{font-size:10px;color:var(--text-3);white-space:nowrap}
+.ntf-title{font-size:12.5px;font-weight:600;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntf-text{font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ntf-dot{flex:none;align-self:center;width:7px;height:7px;border-radius:50%;
+  background:var(--accent)}
+
+/* ---------- what the client reports about itself ----------
+   Fixed width so a wrapped line is the writer's, not the layout's. */
+.diagbox{
+  margin:0;padding:11px 12px;border-radius:var(--r);white-space:pre-wrap;
+  background:var(--panel-3);border:1px solid var(--line);
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-size:11px;line-height:1.55;color:var(--text-2);overflow-x:auto;
+}
+
+
+/* ---------- convoys ---------- */
+.split-main{border:0;border-radius:0;background:var(--panel);min-width:0}
+
+.cvrow{
+  display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;
+  padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text);
+  background:transparent;transition:background var(--t);
+}
+.cvrow:hover{background:var(--panel-3)}
+.cvrow.on{background:var(--panel-3);box-shadow:inset 2px 0 0 var(--accent)}
+.cvrow-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.cvrow-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvrow-sub{font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvrow-foot{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--text-3)}
+.cvrow-foot svg{width:12px;height:12px}
+
+/* the route, read as a line of stops rather than a sentence */
+.cvroute{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.cvstop{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+  border-radius:99px;background:var(--panel-2);border:1px solid var(--line);
+  font-size:11.5px;font-weight:500}
+.cvstop.first,.cvstop.last{border-color:var(--line-2);font-weight:600}
+.cvdot{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.cvstop.first .cvdot{background:var(--accent)}
+.cvstop.last .cvdot{background:#b9e87a}
+.cvline{width:14px;height:1px;background:var(--line-2)}
+
+.cvrules{margin:8px 0 0;padding-left:18px;color:var(--text-2);font-size:11.5px;line-height:1.6}
+.cvrules li{margin-top:3px}
+
+.cvcrew{display:flex;flex-wrap:wrap;gap:6px}
+.cvmember{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;
+  border-radius:99px;background:var(--panel-2);border:1px solid var(--line);
+  font-size:11.5px}
+.cvmember.me{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.cvlead{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent)}
+
+/* a row in the crew directory, hidden by the filter rather than removed */
+.crew-row[hidden]{display:none}
+
+/* who is about, in one dot: driving, online, or neither */
+.crewdot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-3)}
+.crewdot.online{background:var(--ok)}
+.crewdot.driving{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+
+@media (max-width:720px){
+  .cvroute{gap:4px}
+  .cvline{width:8px}
+}
+
+/* ---------- sign-in ----------
+   Stands in for the client until a driver signs in. It sits under the title
+   bar, so the window controls keep working while signed out. */
+.signin-host{display:none}
+#app.signed-out .signin-host{display:flex;flex:1;min-height:0;overflow:auto}
+#app.signed-out .body,
+#app.signed-out .appbar,
+#app.signed-out .statusbar,
+#app.signed-out .tabbar{display:none}
+
+.signin{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;
+  /* It centred horizontally and then sat at the very top, because a flex
+     child with no height is only as tall as its content. The sign-in is
+     the whole window until somebody is in, so it should use it. */
+  min-height:100%;
+  padding:32px 20px;
+  background:
+    radial-gradient(900px 420px at 78% -10%, rgba(var(--accent-rgb),.13), transparent 60%),
+    radial-gradient(700px 380px at 8% 108%, rgba(185,232,122,.09), transparent 62%);
+}
+
+/* The card was a group of controls painted straight onto the window, with
+   nothing behind it — so the one thing on screen read as the least
+   finished part of the client. It gets the same surface every other panel
+   here has. */
+.signin-card{
+  width:100%;max-width:400px;
+  padding:28px;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 55%),var(--panel);
+  border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(0,0,0,.3), 0 24px 60px -24px rgba(0,0,0,.85),
+             inset 0 1px 0 rgba(255,255,255,.05);
+}
+.signin-card .logo{width:38px;height:38px;display:block}
+.si-title{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0}
+
+.si-note{
+  display:flex;gap:12px;padding:14px;border-radius:12px;
+  background:var(--panel-2);border:1px solid var(--line);
+}
+.si-note svg{width:18px;height:18px;flex:0 0 auto;color:var(--info);margin-top:1px}
+
+.si-err{
+  margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;text-align:center;
+  color:var(--danger);background:rgba(var(--danger-rgb),.10);border:1px solid rgba(var(--danger-rgb),.30);
+}
+
+/* Caps Lock is the commonest reason a password that is right is refused,
+   and the field will not mention it on its own. */
+.si-caps{
+  display:none;margin-top:8px;gap:7px;align-items:center;
+  font-size:12px;color:var(--warn);
+}
+.si-caps.on{display:flex}
+.si-caps svg{width:14px;height:14px;flex:none}
+
+/* The button keeps its size while it works, so the card does not jump. */
+.si-spin{
+  width:14px;height:14px;flex:none;border-radius:50%;
+  border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+  animation:siSpin .6s linear infinite;
+}
+@keyframes siSpin{to{transform:rotate(360deg)}}
+
+@media (max-width:520px){
+  .signin{padding:20px 16px}
+  .signin-card{padding:22px 18px}
+  .si-title{font-size:21px}
+}
+
+/* A short window — a small client window, or a phone in landscape. The
+   card and the page were each carrying comfortable padding, and together
+   they made it taller than the viewport, so the one panel on screen was
+   clipped top and bottom and its border never showed. Give the space back
+   rather than making the reader scroll a sign-in form. */
+@media (max-height:640px){
+  .signin{padding:14px 16px;align-items:flex-start}
+  .signin-card{padding:20px 18px}
+  .si-title{font-size:20px}
+  .signin-card .row.mb-20{margin-bottom:12px}
+  .signin-card form.mt-20{margin-top:12px}
+  .signin-card .xs.t3.mt-20{margin-top:12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .si-spin{animation:none}
+}
+
+/* ---------- game map, drawn the way the games draw theirs ---------- */
+
+
+/* city names sit beside their dot in plain white, as on the in-game map */
+
+
+
+
+
+/* the region name, shouted beside its seam */
+
+
+
+@media (max-width:720px){
+  .region-label span{font-size:calc(var(--region-fs,16px) * .8)}
+}
+
+
+/* the driver's own row in the on-the-road table */
+
+
+
+
+/* ============================================================
+   PHONE
+   ------------------------------------------------------------
+   The phone build is its own thing rather than a squeezed desktop:
+   a deep navy ground, a header that says who you are and what you
+   are looking at, and six tabs along the bottom.
+   ============================================================ */
+@media (max-width:720px){
+  
+  /* ---- header ---- */
+  .appbar{
+    display:flex;align-items:center;gap:12px;flex:none;
+    height:calc(64px + env(safe-area-inset-top));
+    padding:0 14px;padding-top:env(safe-area-inset-top);
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
+    border-bottom:1px solid rgba(139,214,43,.45);
+    position:sticky;top:0;z-index:60;
+  }
+  .ab-face{position:relative;flex:none;width:46px;height:46px}
+  .ab-avatar{
+    width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+    background:linear-gradient(160deg,#1d3310,#101d08);
+    border:2px solid rgba(255,255,255,.34);color:#fff;
+    font-size:14px;font-weight:700;letter-spacing:.02em;
+    box-shadow:0 0 0 2px rgba(10,22,38,.9),0 2px 10px rgba(0,0,0,.45);
+  }
+  .ab-live{
+    position:absolute;right:1px;bottom:1px;width:11px;height:11px;border-radius:50%;
+    background:var(--text-3);border:2px solid var(--rail);
+  }
+  .ab-live.ok{background:#3ecf8e}
+
+  .ab-who{flex:1;min-width:0}
+  .ab-name{
+    font-size:16px;font-weight:600;letter-spacing:-.01em;line-height:1.2;color:var(--text);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .ab-sec{
+    font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-3);margin-top:3px;
+  }
+
+  .ab-rank{flex:none;display:grid;place-items:center;width:46px;height:46px;position:relative}
+  .ab-rank svg{width:38px;height:38px;fill:#c0392b;stroke:#e8b64c;stroke-width:.7}
+  .ab-rank svg .star{fill:#e8b64c;stroke:none}
+  .ab-rank.staff svg{fill:#8a6d1f;stroke:#f0d488}
+  .ab-rank.staff svg .star{fill:#f7e3a8}
+  .ab-rank-t{
+    position:absolute;bottom:-1px;left:0;right:0;text-align:center;
+    font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--accent);text-shadow:0 1px 3px #000;
+  }
+
+  /* ---- six tabs ---- */
+  .tabbar{
+    display:grid;grid-template-columns:repeat(6,1fr);flex:none;
+    background:var(--rail);border-top:1px solid var(--line);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    position:sticky;bottom:0;z-index:70;
+  }
+  .tab{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+    padding:7px 1px;color:var(--text-3);position:relative;min-height:54px;
+    border-radius:14px;transition:background .16s ease,color .16s ease;
+  }
+  .tab span{
+    font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .tab svg{width:21px;height:21px}
+  .tab.active{color:var(--accent);background:var(--accent-soft)}
+  .tab.active svg{color:var(--accent)}
+  .tab .tab-count{
+    position:absolute;top:2px;right:calc(50% - 20px);min-width:15px;height:15px;
+    padding:0 4px;border-radius:99px;background:#e05252;color:#fff;font-size:9px;
+    font-weight:700;display:grid;place-items:center;font-family:var(--font);letter-spacing:0;
+  }
+}
+
+@media (max-width:720px){
+  /* ---- menu ---- */
+  .menu-group{margin-bottom:18px}
+  .menu-label{
+    font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-3);margin:0 4px 8px;display:flex;align-items:center;gap:7px;
+  }
+  .menu-label svg{width:13px;height:13px}
+  .card-body.p-0{padding:0}
+  .menu-row{
+    display:flex;align-items:center;gap:12px;width:100%;
+    padding:14px 14px;color:var(--text);font-size:14.5px;text-align:left;
+    border-bottom:1px solid var(--line);
+  }
+  .menu-row:last-child{border-bottom:0}
+  .menu-row:active{background:var(--panel-2)}
+  .menu-row.danger{color:var(--danger)}
+  .menu-ico{
+    flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:var(--panel-2);color:var(--text-2);
+  }
+  .menu-ico.staff{background:rgba(232,182,76,.13);color:var(--accent)}
+  .menu-ico svg{width:17px;height:17px}
+  .menu-chev{width:15px;height:15px;color:var(--text-3);flex:none}
+
+  /* ---- convoy cards ---- */
+  .conv-name{
+    font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--text);line-height:1.3;
+  }
+  .conv-card{margin-bottom:12px}
+
+  /* ---- logbook search ---- */
+  .lb-search{display:flex;gap:10px;margin-bottom:14px}
+  .lb-search .input{
+    flex:1;height:52px;border-radius:14px;background:var(--panel-2);
+    border-color:var(--line-2);font-size:14px;
+  }
+  .lb-search .input::placeholder{color:var(--text-3)}
+  .lb-filters{
+    flex:none;height:52px;padding:0 18px;border-radius:14px;
+    background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);
+    font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .lb-filters.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+  /* the page title row is redundant when the header already names the section */
+  .view-head .vh-title{display:none}
+}
+
+/* ---- administration lists ---- */
+.adm-list{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto}
+.adm-row{
+  display:flex;align-items:center;gap:10px;padding:11px 12px;
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel-2);
+}
+.adm-row.col{flex-direction:column}
+
+
+@media (max-width:720px){
+  /* nothing may push the page wider than the phone: a single overflowing
+     row was cutting the tab bar and the rank badge off the screen */
+  html,body{overflow-x:hidden;max-width:100vw}
+  .app,.body,.main{max-width:100vw;min-width:0}
+  .main{overflow-x:hidden;padding:14px 13px 18px}
+  .card,.stat,.fact{min-width:0}
+
+  /* action rows wrap instead of running off the edge */
+  .view-head{flex-direction:column;align-items:stretch;gap:10px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+  .actions .btn{flex:1 1 auto;min-width:0}
+
+  /* figures go two-up rather than in one long row */
+  .stat-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .launchbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+  /* wide tables scroll inside their own box */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl{min-width:520px}
+
+  /* the desktop status strip is replaced by the dot in the header */
+  .statusbar{display:none}
+}
+
+
+/* ---------- medals ---------- */
+
+
+
+
+
+
+
+/* the way back in when an older build left a stale owner account */
+.si-rescue{
+  margin-top:14px;padding:12px;border-radius:10px;
+  background:var(--panel-2);border:1px solid var(--line-2);
+}
+
+/* ============================================================
+   BOOT SPLASH
+   ------------------------------------------------------------
+   Covers the app while it starts. The mark draws itself, the bar
+   fills, and the whole thing fades out once the app has painted.
+   ============================================================ */
+
+
+
+.splash-inner{width:min(88vw,460px);text-align:center;padding:0 20px}
+
+.splash-truck{
+  display:block;width:100%;height:auto;color:#f2f5f9;
+  filter:drop-shadow(0 6px 26px rgba(0,0,0,.6));
+}
+/* pathLength="1" on every shape, so one dash value drives them all.
+
+   The resting state is the finished one: drawn, and fully opaque. The
+   animation runs FROM invisible rather than holding there, so if it never
+   runs — a webview that ignores it, a reduced-motion setting, a headless
+   capture — the splash still shows a truck instead of an empty screen. */
+.splash-truck path,.splash-truck circle{
+  stroke-dasharray:1;stroke-dashoffset:0;
+  animation:splashDraw 1.5s ease;
+}
+.splash-truck circle{animation-duration:.85s}
+@keyframes splashDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+
+.splash-word{
+  margin-top:14px;font-size:27px;font-weight:900;letter-spacing:.20em;
+  color:#fff;animation:splashIn .9s ease;
+}
+.splash-sub{
+  margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.42em;
+  color:#f2884a;animation:splashIn 1.15s ease;
+}
+@keyframes splashIn{from{opacity:0}to{opacity:1}}
+
+/* ---- the loading bar: a lorry driving a road ---- */
+.splash-road{
+  position:relative;margin:6px auto 0;width:min(88%,360px);height:96px;
+}
+/* the road itself */
+.splash-road::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+  border-radius:99px;background:rgba(255,255,255,.10);
+}
+/* what the lorry has already covered */
+.splash-fill{
+  position:absolute;left:0;bottom:0;height:3px;width:0;border-radius:99px;
+  background:linear-gradient(90deg,#8bd62b,#f2a05a);z-index:1;
+  animation:splashFill 3s linear infinite;
+}
+/* lane markings, sliding past to give it some speed */
+.splash-lane{
+  position:absolute;left:0;right:0;bottom:1px;height:1px;opacity:.5;
+  background:repeating-linear-gradient(90deg,
+    rgba(255,255,255,.34) 0 10px, transparent 10px 22px);
+  animation:splashLane .55s linear infinite;
+}
+.splash-lorry{
+  position:absolute;bottom:1px;left:0;width:132px;height:auto;
+  color:#f2f5f9;z-index:2;
+  filter:drop-shadow(0 4px 14px rgba(0,0,0,.6));
+  animation:splashDrive 3s linear infinite;
+}
+@keyframes splashDrive{
+  from{transform:translateX(-140px)}
+  to{transform:translateX(min(88vw,360px))}
+}
+@keyframes splashFill{
+  from{width:0}
+  to{width:100%}
+}
+@keyframes splashLane{
+  from{background-position:0 0}
+  to{background-position:-22px 0}
+}
+
+.splash-note{
+  margin-top:14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:#6f7c8d;animation:splashIn 1.3s ease;
+}
+
+/* Nothing here should keep somebody waiting on an animation they asked
+   not to see: the resting state is already the finished one. */
+@media (prefers-reduced-motion:reduce){
+  .splash-truck path,.splash-truck circle,
+  .splash-word,.splash-sub,.splash-note{animation:none}
+  .splash-lorry,.splash-lane{animation:none}
+  .splash-lorry{transform:translateX(min(40vw,160px))}
+  .splash-fill{animation:none;width:55%}
+}
+
+
+/* reveal the password, so a mistyped capital or bracket is visible */
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap .input{flex:1;padding-right:42px}
+.pw-eye{
+  position:absolute;right:6px;width:30px;height:30px;border-radius:8px;
+  display:grid;place-items:center;color:var(--text-3);
+}
+.pw-eye:hover{color:var(--text-2);background:var(--panel-3)}
+.pw-eye.on{color:var(--accent)}
+.pw-eye svg{width:15px;height:15px}
+
+/* ---- the website's design, applied to the client's own names ----
+   The rail groups and page heads use different class names here, so they are
+   pointed at the website's rules rather than restyled a second time. */
+.rail-group{margin-bottom:18px}
+.rail-label{
+  font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-3);font-weight:600;padding:0 10px 7px;display:block;
+}
+.view-head{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:20px;flex-wrap:wrap;margin-bottom:20px;
+}
+.view-title{font-size:21px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+.view-sub{color:var(--text-2);font-size:13px;margin-top:4px}
+
+
+/* ---- the delivery progress row ----
+   The label sits above the rail on both the idle and the running card, so the
+   panel keeps its shape rather than rearranging when a load is picked up. */
+.run-progress .k{
+  font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-3);
+}
+.run-progress + .rrail{margin-top:8px}
+.rrail.empty .rrail-track{opacity:.5}
+.rrail.empty .rrail-marker{opacity:.45}
+
+
+/* ---- the logbook search row ----
+   Styled here for the desktop in the website's language; the phone block
+   below reshapes it. Without a base rule the Filters button fell out of the
+   row as bare text on the desktop. */
+.lb-search{display:flex;gap:10px;margin-bottom:16px}
+.lb-search .input{flex:1;min-width:0}
+.lb-filters{
+  flex:none;height:34px;padding:0 16px;border-radius:var(--r);
+  background:var(--panel-2);border:1px solid var(--line);color:var(--text-2);
+  font-size:12px;font-weight:500;letter-spacing:.04em;
+  display:inline-flex;align-items:center;transition:var(--t);
+}
+.lb-filters:hover{background:var(--panel-3);color:var(--text);border-color:var(--line-2)}
+.lb-filters.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+/* ============================================================
+   GAMING NATION ON A PHONE
+   ------------------------------------------------------------
+   Its own identity, not a borrowed one: the graphite-and-ember
+   palette the rest of Gaming Nation uses, warmed slightly so it reads
+   as its own build rather than a shrunk desktop. Inter throughout,
+   weight and spacing doing the work instead of a display face.
+
+   Everything here is inside the phone breakpoint.
+   ============================================================ */
+@media (max-width:720px){
+  :root{
+    /* a warm graphite ground — the desktop's charcoal, pulled deeper */
+    --bg:#0b0c0e;
+    --panel:#141619;
+    --panel-2:#1b1e22;
+    --panel-3:#23272c;
+    --rail:#0f1113;
+    --line:#24282d;
+    --line-2:#31363d;
+    --text:#eceef1;
+    --text-2:#a0a7b0;
+    --text-3:#6f767f;
+    /* Gaming Nation's ember, unchanged — the brand is the accent */
+    --accent:#8bd62b;
+    --accent-hover:#a3e84d;
+    --accent-soft:rgba(var(--accent-rgb),.13);
+    --accent-line:rgba(var(--accent-rgb),.34);
+  }
+
+  body{
+    background:
+      radial-gradient(1000px 520px at 50% -8%, rgba(var(--accent-rgb),.07), transparent 62%),
+      var(--bg);
+  }
+
+  /* ---- header ---- */
+  /* The bar every phone screen is under, and the last word on how it
+     looks — two earlier blocks set it and this one wins. Painted solid
+     rather than a dark translucent wash: on a phone it is the only fixed
+     thing on screen, and it is what says which app you are in. */
+  .appbar{
+    height:calc(66px + env(safe-area-inset-top));
+    padding:0 16px;padding-top:env(safe-area-inset-top);
+    background:linear-gradient(180deg,#12200a 0%,#0b1606 100%);
+    backdrop-filter:none;
+    border-bottom:1px solid rgba(139,214,43,.45);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 2px 12px rgba(0,0,0,.4);
+  }
+  /* Dark on the crimson, so the face reads as a hole in the bar rather
+     than a second bright thing competing with the title. */
+  .ab-avatar{
+    width:42px;height:42px;border-radius:13px;
+    background:linear-gradient(155deg,#1d3310,#101d08);
+    border:1px solid rgba(255,255,255,.22);
+    color:#fff;font-size:14px;font-weight:700;letter-spacing:.02em;
+    box-shadow:0 3px 10px rgba(0,0,0,.45);
+  }
+  /* The text on the bar is on a coloured surface now, not the page. */
+  .ab-name{color:#fff}
+  .ab-sec{color:rgba(255,255,255,.72)}
+  .ab-rank{color:#fff;background:rgba(0,0,0,.22);border-color:rgba(255,255,255,.22)}
+  .ab-rank svg{color:#fff}
+  .ab-live{border-color:#0b1606}
+  .ab-face{width:42px;height:42px}
+  .ab-live{
+    right:-1px;bottom:-1px;width:12px;height:12px;
+    border:2.5px solid var(--rail);background:var(--text-3);
+  }
+  .ab-live.ok{background:var(--ok);box-shadow:0 0 8px rgba(var(--ok-rgb),.6)}
+  /* White, not the page's text tones and NOT --accent.
+
+     The bar is crimson now, so the accent sits on top of itself: the
+     section label under the name was accent-on-accent and effectively
+     invisible. Both lines are set against the bar rather than against
+     the page. */
+  .ab-name{
+    font-size:16.5px;font-weight:650;letter-spacing:-.015em;line-height:1.2;color:#fff;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .ab-sec{
+    font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:rgba(255,255,255,.78);margin-top:3px;
+  }
+
+  /* the rank mark: a plain Gaming Nation chevron, no borrowed heraldry */
+  .ab-rank{width:44px;height:44px;border-radius:13px;
+    background:rgba(0,0,0,.24);
+    border:1px solid rgba(255,255,255,.22);transition:var(--t)}
+  .ab-rank:active{transform:scale(.94)}
+  .ab-rank svg{width:19px;height:19px;fill:none;stroke:var(--text-2);stroke-width:1.8}
+  .ab-rank svg .star{fill:var(--text-2);stroke:none}
+  .ab-rank.staff{background:var(--accent-soft);border-color:var(--accent-line)}
+  .ab-rank.staff svg{stroke:var(--accent)}
+  .ab-rank.staff svg .star{fill:var(--accent)}
+  .ab-rank-t{
+    position:static;font-size:8px;font-weight:700;letter-spacing:.08em;
+    color:var(--text-3);text-shadow:none;display:none;
+  }
+}
+
+@media (max-width:720px){
+  /* ---- the tab bar ----
+     A moving indicator rather than a static pill, so the bar responds to
+     where you are instead of just recolouring. */
+  .tabbar{
+    background:linear-gradient(0deg, rgba(11,12,14,.98), rgba(20,22,25,.94));
+    backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  .tab{
+    gap:5px;border-radius:14px;min-height:56px;
+    transition:color .18s ease, background .18s ease, transform .12s ease;
+  }
+  .tab span{
+    font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  }
+  .tab svg{width:20px;height:20px;transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
+  .tab:active{transform:scale(.93)}
+  .tab.active{color:var(--accent);background:var(--accent-soft)}
+  .tab.active svg{transform:translateY(-1px) scale(1.06)}
+  /* a short bar above the active tab, the way a real indicator behaves */
+  .tab.active::before{
+    content:'';position:absolute;top:2px;left:50%;transform:translateX(-50%);
+    width:20px;height:2.5px;border-radius:99px;background:var(--accent);
+    box-shadow:0 0 10px rgba(var(--accent-rgb),.6);
+  }
+  .tab .tab-count{
+    top:4px;right:calc(50% - 21px);background:var(--accent);color:#0a1403;
+    font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.5);
+  }
+
+  /* ---- things you touch respond ---- */
+  .card{transition:transform .12s ease, border-color .18s ease}
+  .menu-row{transition:background .16s ease, transform .12s ease}
+  .menu-row:active{background:var(--panel-2);transform:scale(.995)}
+  .launch-tile{transition:transform .12s ease, border-color .18s ease}
+  .launch-tile:active{transform:scale(.97)}
+  .btn:active{transform:scale(.97)}
+  .split-item{transition:background .16s ease}
+  .split-item:active{background:var(--panel-2)}
+
+  /* ---- menu ---- */
+  .menu-label{
+    font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 4px 9px;display:flex;align-items:center;gap:7px;
+  }
+  .menu-ico{border-radius:11px;background:var(--panel-2);color:var(--text-2)}
+  .menu-ico.staff{background:var(--accent-soft);color:var(--accent)}
+  .menu-row{padding:15px 14px;font-size:14.5px}
+
+  /* ---- the logbook search ---- */
+  .lb-search{gap:10px;margin-bottom:16px}
+  .lb-search .input{
+    height:50px;border-radius:14px;background:var(--panel-2);border-color:var(--line);
+    font-size:14px;transition:border-color .18s ease, background .18s ease;
+  }
+  .lb-search .input:focus{
+    background:var(--panel-3);border-color:var(--accent-line);
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  .lb-search .input::placeholder{color:var(--text-3)}
+  .lb-filters{
+    height:50px;padding:0 18px;border-radius:14px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-2);
+    font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    transition:var(--t);
+  }
+  .lb-filters:active{transform:scale(.97)}
+  .lb-filters.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+  /* ---- convoy cards ---- */
+  .conv-name{font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--text);line-height:1.3}
+  .conv-card{transition:transform .12s ease}
+  .conv-card:active{transform:scale(.99)}
+
+  /* stat tiles get a little more presence on a small screen */
+  .stat-row .stat .v{font-size:22px;font-weight:700;letter-spacing:-.02em}
+}
+
+@media (max-width:720px){
+  /* ---- tables become rows ----
+     A seven-column table on a 390px screen is a table nobody can read. Each
+     run becomes its own card: the route leads, the rest is labelled beneath.
+     The markup is unchanged — the labels come from the cells themselves. */
+  .tbl-wrap{overflow:visible;width:100%}
+  /* the table element keeps its own intrinsic width unless it stops being a
+     table too — without this the cards render but run off the screen */
+  /* `table.tbl` elsewhere sets a min-width, and element+class outranks a bare
+     class — so this has to match that specificity to undo it */
+  table.tbl,table.tbl tbody{display:block;width:100%;min-width:0;max-width:100%}
+  table.tbl{border-collapse:separate;border-spacing:0}
+  .tbl thead{display:none}
+  .tbl tbody tr{
+    display:block;width:100%;min-width:0;margin-bottom:10px;
+    padding:14px;border-radius:var(--r-lg);
+    background:var(--panel);border:1px solid var(--line);
+    transition:transform .12s ease, border-color .18s ease;
+  }
+  .tbl tbody tr:active{transform:scale(.99);border-color:var(--line-2)}
+  .tbl tbody tr.me-row{border-color:var(--accent-line);background:var(--accent-soft)}
+  .tbl td{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:5px 0;border:0;text-align:left !important;
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .tbl td::before{
+    content:attr(data-l);flex:none;
+    font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--text-3);
+  }
+  .tbl td:empty{display:none}
+
+  /* the route is the headline of the card, not another labelled row */
+  .tbl td.lb-route{
+    display:block;padding:0 0 8px;margin-bottom:6px;
+    border-bottom:1px solid var(--line);
+    font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--text);
+  }
+  .tbl td.lb-route::before{display:none}
+}
+
+/* a delivery photo in the media queue */
+.shot-thumb{width:46px;height:28px;object-fit:cover;border-radius:5px;border:1px solid var(--line);
+  cursor:zoom-in;flex:none;background:var(--panel-2)}
+.shot-thumb:hover{border-color:var(--accent)}
+
+
+/* ============================================================
+   LIVE — the parts that move on their own
+   ------------------------------------------------------------
+   Everything below is driven by the live channel: the fleet board,
+   the run's timeline, and the ticker of what the rest of the crew
+   is doing. The house rules still apply — one accent, colour only
+   ever means status — with one addition: anything genuinely live
+   carries a slow pulse, and nothing else in the client does. That
+   way "live" is something you can see rather than a label.
+   ============================================================ */
+
+@keyframes gmnPulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.35;transform:scale(.8)}
+}
+@keyframes gmnHalo{
+  0%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),.34)}
+  70%{box-shadow:0 0 0 7px rgba(var(--ok-rgb),0)}
+  100%{box-shadow:0 0 0 0 rgba(var(--ok-rgb),0)}
+}
+@keyframes gmnSweep{
+  from{transform:translateX(-100%)}
+  to{transform:translateX(320%)}
+}
+@keyframes gmnRise{
+  from{opacity:0;transform:translateY(5px)}
+  to{opacity:1;transform:none}
+}
+
+/* ---------- the live indicator ---------- */
+.livedot{
+  display:inline-flex;align-items:center;gap:6px;
+  height:21px;padding:0 9px 0 8px;border-radius:99px;
+  font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--line-2);color:var(--text-3);background:var(--panel-2);
+  white-space:nowrap;
+}
+.livedot::before{
+  content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;
+}
+.livedot.on{
+  color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.09);
+}
+.livedot.on::before{animation:gmnPulse 1.9s ease-in-out infinite}
+.livedot.wait{
+  color:var(--warn);border-color:rgba(var(--warn-rgb),.32);background:rgba(var(--warn-rgb),.09);
+}
+.livedot.wait::before{animation:gmnPulse 1.1s ease-in-out infinite}
+.livedot.off{color:var(--text-3)}
+
+/* ---------- the fleet board ---------- */
+.fleetlist{display:flex;flex-direction:column;gap:6px}
+
+.fleetrow{
+  display:grid;grid-template-columns:auto minmax(120px,1.05fr) minmax(0,2fr) auto;
+  align-items:center;gap:12px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--panel-2);
+  transition:border-color var(--t),background var(--t);
+  animation:gmnRise .22s ease both;
+}
+.fleetrow:hover{border-color:var(--line-2);background:var(--panel-3)}
+
+/* the driver's own truck is the one they care about, so it is marked out —
+   with the accent, which in this client always means "you" */
+.fleetrow.me{
+  border-color:var(--accent-line);
+  background:linear-gradient(90deg,var(--accent-soft),transparent 42%),var(--panel-2);
+}
+/* a truck actually rolling gets a live edge; a parked one does not */
+.fleetrow.rolling{border-left:2px solid var(--ok)}
+.fleetrow.moving{border-left:2px solid var(--info)}
+.fleetrow.held{border-left:2px solid var(--warn)}
+.fleetrow.idle{border-left:2px solid var(--line-2)}
+
+.fr-who{min-width:0}
+.fr-name{
+  display:flex;align-items:center;gap:6px;
+  font-weight:600;font-size:12.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fr-truck{
+  font-size:10.5px;color:var(--text-3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+.fr-run{min-width:0}
+.fr-route{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--text-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fr-route .to{color:var(--text);font-weight:600}
+.fr-arrow{color:var(--text-3);display:inline-flex}
+.fr-arrow .ic{width:13px;height:13px}
+.fr-cargo{
+  margin-left:2px;padding:1px 7px;border-radius:99px;
+  background:var(--panel-3);border:1px solid var(--line);
+  font-size:10px;color:var(--text-3);
+  overflow:hidden;text-overflow:ellipsis;
+}
+.fr-noload{font-size:12px;color:var(--text-3)}
+
+/* The progress bar. Its width is set from telemetry, so the transition is
+   what makes it glide rather than jump between frames. */
+.fr-bar{
+  position:relative;height:4px;margin-top:6px;
+  border-radius:99px;background:var(--panel-3);overflow:hidden;
+}
+.fr-bar i{
+  display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),var(--accent-hover));
+  transition:width .9s cubic-bezier(.4,0,.2,1);
+}
+/* a bar that is moving has light travelling along it */
+.fleetrow.rolling .fr-bar::after{
+  content:"";position:absolute;inset:0;width:28%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  animation:gmnSweep 2.4s ease-in-out infinite;
+}
+.fr-sub{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:5px;font-size:10.5px;color:var(--text-3);
+}
+.fr-sub b{color:var(--accent);font-weight:700;font-family:var(--mono)}
+
+.fr-state{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.fr-word{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);
+  white-space:nowrap;
+}
+.fr-word .beat{width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.fleetrow.rolling .fr-word{color:var(--ok)}
+.fleetrow.rolling .fr-word .beat{animation:gmnPulse 1.5s ease-in-out infinite}
+.fleetrow.moving .fr-word{color:var(--info)}
+.fleetrow.moving .fr-word .beat{animation:gmnPulse 1.5s ease-in-out infinite}
+.fleetrow.held .fr-word{color:var(--warn)}
+.fr-speed{font-family:var(--mono);font-size:14px;font-weight:600;white-space:nowrap}
+.fr-speed em{font-style:normal;font-size:9.5px;color:var(--text-3);margin-left:3px}
+
+/* ---------- the fleet ticker ---------- */
+.ticker{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.ticker-head{
+  display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-3);
+}
+.ticker-head .ic{width:13px;height:13px;color:var(--accent)}
+.ticker-list{display:flex;flex-direction:column;gap:1px}
+.ticker-row{
+  display:flex;align-items:baseline;gap:10px;
+  padding:5px 8px;border-radius:var(--r-sm);
+  font-size:11.5px;color:var(--text-2);
+  animation:gmnRise .25s ease both;
+}
+.ticker-row:hover{background:var(--panel-2)}
+.ticker-time{font-family:var(--mono);font-size:10px;color:var(--text-3);flex:none}
+.ticker-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ticker-row.ok .ticker-text{color:var(--ok)}
+.ticker-row.warn .ticker-text{color:var(--warn)}
+.ticker-row.err .ticker-text{color:var(--danger)}
+
+/* ---------- the run's own timeline ---------- */
+.runline{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.runline-empty{
+  display:flex;align-items:center;gap:8px;
+  font-size:11.5px;color:var(--text-3);
+}
+.runline-empty .ic{width:14px;height:14px}
+.runline-head{
+  display:flex;align-items:center;gap:6px;margin-bottom:9px;
+  font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-3);
+}
+.runline-head .ic{width:13px;height:13px;color:var(--accent)}
+
+.runline-list{display:flex;flex-direction:column;position:relative;padding-left:2px}
+.runline-row{
+  display:grid;grid-template-columns:22px 1fr auto;
+  align-items:center;gap:9px;
+  padding:5px 0;font-size:12px;color:var(--text-2);
+  animation:gmnRise .25s ease both;
+}
+.runline-row+.runline-row{border-top:1px solid rgba(255,255,255,.03)}
+.runline-dot{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;
+  border:1px solid var(--line-2);background:var(--panel-2);color:var(--text-3);
+}
+.runline-dot .ic{width:12px;height:12px}
+.runline-row.ok .runline-dot{color:var(--ok);border-color:rgba(var(--ok-rgb),.34);background:rgba(var(--ok-rgb),.08)}
+.runline-row.warn .runline-dot{color:var(--warn);border-color:rgba(var(--warn-rgb),.32);background:rgba(var(--warn-rgb),.08)}
+.runline-row.err .runline-dot{color:var(--danger);border-color:rgba(var(--danger-rgb),.32);background:rgba(var(--danger-rgb),.08)}
+/* the newest line is the one being read */
+.runline-row:first-child .runline-dot{animation:gmnHalo 2.4s ease-out 2}
+.runline-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runline-km{font-family:var(--mono);font-size:10.5px;color:var(--text-3);flex:none}
+
+/* ---------- narrow ---------- */
+@media (max-width:760px){
+  .fleetrow{
+    grid-template-columns:auto 1fr auto;
+    grid-template-areas:"av who state" ". run run";
+    row-gap:8px;
+  }
+  .fleetrow>.avatar{grid-area:av}
+
+/* A driver photo fills the circle. The image is clipped rather than the
+   avatar itself, so anything sitting on the edge of it is left alone. */
+  .fr-who{grid-area:who}
+  .fr-run{grid-area:run}
+  .fr-state{grid-area:state}
+}
+
+/* somebody who would rather the screen held still */
+@media (prefers-reduced-motion:reduce){
+  .livedot::before,
+  .fleetrow .fr-word .beat,
+  .fleetrow.rolling .fr-bar::after,
+  .runline-row:first-child .runline-dot{animation:none}
+  .fleetrow,.ticker-row,.runline-row{animation:none}
+  .fr-bar i{transition:none}
+}
+
+
+/* ============================================================
+   THE GAMING NATION EMBLEM
+   ------------------------------------------------------------
+   gmn.jpg — the company artwork every icon in this client is
+   derived from. Used where the company face belongs (the way in,
+   the About screen) and nowhere else, so it keeps meaning
+   "Gaming Nation" rather than becoming decoration. Square artwork in
+   a square box: it crops, it never stretches.
+   ============================================================ */
+.gmn-emblem{
+  display:inline-flex;flex:none;overflow:hidden;line-height:0;
+  border-radius:var(--r-lg);background:var(--panel-2);
+}
+.gmn-emblem img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.05) contrast(1.02)}
+.gmn-emblem.sm{width:26px;height:26px;border-radius:var(--r-sm)}
+.gmn-emblem.md{width:44px;height:44px}
+.gmn-emblem.lg{width:56px;height:56px;border-radius:var(--r-xl)}
+.gmn-emblem.framed{border:1px solid var(--accent-line);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+
+.brand-strap{
+  margin-top:6px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-3);
+}
+
+
+/* ============================================================
+   THE MODERN LAYER — client
+   ------------------------------------------------------------
+   The platform got depth and feedback; this is the same idea,
+   held back a little. A driver reads this while driving, so
+   nothing here draws the eye on its own: surfaces lift, controls
+   answer a press, and that is all.
+
+   Kept at the end and in one piece, the way style.css does it,
+   so it can be lifted out without unpicking anything.
+   ============================================================ */
+
+:root{
+  --sh-1:0 1px 2px rgba(0,0,0,.30), 0 1px 3px rgba(0,0,0,.18);
+  --sh-2:0 2px 4px rgba(0,0,0,.32), 0 6px 16px rgba(0,0,0,.28);
+  --sh-3:0 4px 8px rgba(0,0,0,.34), 0 16px 40px rgba(0,0,0,.42);
+  --edge:inset 0 1px 0 rgba(255,255,255,.045);
+  --edge-strong:inset 0 1px 0 rgba(255,255,255,.07);
+  --accent-grad:linear-gradient(180deg,#a3e84d 0%,#6fb01c 100%);
+  --panel-grad:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0) 60%);
+
+  --ease:cubic-bezier(.4,0,.2,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --t-fast:.13s var(--ease);
+  --t:.2s var(--ease);
+}
+
+/* ---- surfaces ---- */
+.card,.panel,.fact,.tile{
+  background-image:var(--panel-grad);
+  box-shadow:var(--sh-1),var(--edge);
+}
+
+/* ---- controls ----
+   A press that sinks. The client is used with a mouse in a hurry and
+   often on a second monitor, so a control has to confirm it was hit. */
+.btn,.btn-primary,.btn-ghost,.btn-ok,.btn-danger,.btn-sm{
+  transition:background var(--t-fast),border-color var(--t-fast),
+             box-shadow var(--t-fast),transform var(--t-fast);
+}
+.btn:hover,.btn-primary:hover,.btn-ok:hover,.btn-danger:hover{
+  transform:translateY(-1px);
+  box-shadow:var(--sh-2),var(--edge-strong);
+}
+.btn:active,.btn-primary:active,.btn-ghost:active,
+.btn-ok:active,.btn-danger:active{
+  transform:translateY(1px);box-shadow:none;transition-duration:.05s;
+}
+.btn-primary{
+  background:var(--accent-grad);
+  box-shadow:var(--sh-1),0 2px 10px rgba(var(--accent-rgb),.28),
+             inset 0 1px 0 rgba(255,255,255,.18);
+}
+.btn:disabled{opacity:.38;transform:none;box-shadow:none}
+
+/* ---- fields ----
+   A ring rather than a heavier border: the field must not change size
+   when it takes focus, or the row it sits in jumps. */
+.input,.select,.textarea{
+  transition:border-color var(--t-fast),box-shadow var(--t-fast);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22);
+}
+.input:focus,.select:focus,.textarea:focus{
+  border-color:var(--accent-line);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22),0 0 0 3px var(--accent-soft);
+}
+
+/* ---- focus, for a keyboard ---- */
+:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16);
+}
+
+/* ---- the status bar, which is the one thing always on screen ----
+
+   .appbar used to be in this rule and is deliberately no longer. It only
+   ever shows on a phone — it is display:none above 720px — so the only
+   thing this selector did there was reach past the phone block and
+   repaint the bar dark. Being later in the file with the same
+   specificity, it won, and the phone bar stayed near-black however many
+   times the breakpoint rule was changed. */
+.statusbar{
+  background:rgba(7,9,16,.78);
+  backdrop-filter:saturate(1.5) blur(12px);
+  -webkit-backdrop-filter:saturate(1.5) blur(12px);
+}
+
+/* ---- scrollbars ---- */
+*::-webkit-scrollbar-thumb{background:#2b333d;border-radius:99px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:#3b4553;background-clip:content-box}
+*{scrollbar-width:thin;scrollbar-color:#2b333d transparent}
+
+/* ---- and none of it when motion is not wanted ---- */
+@media (prefers-reduced-motion:reduce){
+  .btn:hover,.btn-primary:hover,.btn-ok:hover,.btn-danger:hover,
+  .btn:active,.btn-primary:active,.btn-ghost:active,
+  .btn-ok:active,.btn-danger:active{transform:none!important}
+}
+
+
+/* ============================================================
+   CALLS AND MESSAGES
+
+   The call bar sits above everything because a ringing phone that
+   is behind the screen you are on is a missed call. It lives
+   outside #app (see tracker.html) so a re-render cannot take the
+   audio element with it.
+   ============================================================ */
+
+.call-bar{
+    position:fixed;
+    left:50%;transform:translateX(-50%);
+    bottom:16px;
+    z-index:180;
+    width:min(520px,calc(100% - 24px));
+    display:flex;align-items:center;gap:14px;
+    padding:11px 14px;
+    border-radius:var(--r-lg);
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    box-shadow:var(--sh-3),var(--edge);
+}
+
+/* Ringing has to be findable out of the corner of an eye, so it
+   carries the accent rather than the panel colour. */
+.call-bar.ringing{
+    border-color:var(--accent-line);
+    background:var(--accent-soft);
+}
+
+.call-bar .call-who{display:flex;align-items:center;gap:11px;min-width:0;flex:1 1 auto}
+.call-bar .call-who svg{width:19px;height:19px;flex:none;color:var(--accent)}
+
+.call-name{font-size:13.5px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.call-sub{font-size:11.5px;color:var(--text-3);line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.call-timer{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-2);flex:none}
+
+.call-acts{display:flex;gap:7px;flex:none}
+
+/* Muted is a state you need to see at a glance, and there was no
+   button variant for "on, and you should know about it". */
+.btn-mute{
+    color:var(--warn);
+    border-color:rgba(240,180,60,.34);
+    background:rgba(240,180,60,.10);
+}
+
+/* ---- a conversation ---- */
+
+.dm-blocked{
+    display:flex;align-items:flex-start;gap:9px;
+    padding:11px 13px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;line-height:1.5;
+    color:var(--text-3);
+}
+.dm-blocked svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--warn)}
+
+/* Announcements are a list of subjects rather than a thread, so they
+   get chips under the one being read instead of bubbles. */
+.dm-notices{display:flex;flex-wrap:wrap;gap:7px}
+.dm-notice{
+    padding:5px 10px;
+    border-radius:99px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    font-size:11.5px;color:var(--text-2);
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.dm-notice.on{border-color:var(--accent-line);color:var(--accent);background:var(--accent-soft)}
+
+/* The crew room and the convoy channels are two kinds of thing in one
+   list, and without a divider the room reads as just another channel. */
+.split-label{
+    padding:12px 12px 5px;
+    font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-3);
+}
+
+/* Clear of the phone tab bar, which is 52px of button plus whatever the
+   device reserves at the bottom. Sitting on top of Menu and Convoy would
+   make the call bar the thing you hit trying to leave the screen. */
+@media (max-width:720px){
+    .call-bar{bottom:calc(52px + env(safe-area-inset-bottom) + 12px)}
+}
+
+@media (max-width:640px){
+    .call-bar{gap:10px;padding:10px 12px}
+    .call-timer{display:none}
+}
+
+/* Said at the top of Messages and Crew chat when the company service is
+   not reachable. The screen is otherwise indistinguishable from having
+   nobody to talk to, which is how "still cannot chat" got reported as a
+   bug in the app rather than as a service that was not running. */
+.dm-offline{
+    display:flex;align-items:flex-start;gap:11px;
+    margin-bottom:14px;
+    padding:12px 14px;
+    border-radius:var(--r);
+    border:1px solid rgba(240,180,60,.30);
+    background:rgba(240,180,60,.08);
+}
+.dm-offline svg{width:17px;height:17px;flex:none;margin-top:1px;color:var(--warn)}
+.dm-offline .mono{
+    padding:1px 5px;
+    border-radius:5px;
+    background:var(--panel-3);
+    border:1px solid var(--line);
+    font-size:11.5px;
+}
+
+/* Message and call, on a driver's row in the live fleet list. Held to the
+   right of the speed so the row still reads as a row of facts with two
+   actions at the end, rather than as a toolbar. */
+.fr-reach{display:flex;gap:6px;flex:none;align-items:center}
+.fr-reach .btn{padding:6px 8px}
+.fr-reach svg{width:15px;height:15px}
+@media (max-width:720px){
+    .fr-reach{gap:4px}
+    .fr-reach .btn{padding:6px}
+}
+
+/* Message and call inside a driver's pin popup on the live map. */
+.pin-reach{
+    display:flex;gap:6px;margin-top:9px;
+    padding-top:9px;
+    border-top:1px solid var(--line);
+}
+.pin-reach .btn{flex:1;justify-content:center;padding:6px 8px;font-size:11.5px}
+.pin-reach svg{width:14px;height:14px}
+
+/* The offer to run the service here. The green "this machine is hosting"
+   banner that used to sit beside it is gone — the service starts itself, so
+   the banner only ever reported a success nobody asked about. */
+.dm-offline .grow{min-width:0}
+.dm-offline-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+
+
+/* a launch tile wearing the game's own icon rather than a glyph */
+.lt-mark img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    border-radius:4px;
+}
+
+/* ============================================================
+   THE LIGHT THEME
+   ------------------------------------------------------------
+   Everything in this client draws its colour from about twenty
+   tokens, so a second theme is those twenty tokens again rather
+   than a second stylesheet. Kept last and in one piece: delete
+   this block and the client is exactly as it was.
+
+   THE MAP STAYS DARK, deliberately. It is a night road map with
+   a lit route drawn over it, and the trail, the pins and the
+   speed colours are all tuned against a dark ground. Inverting
+   it would not make it lighter, it would make it unreadable -
+   which is why every mapping product that offers a light UI
+   still offers a dark map.
+
+   The status colours are not the dark ones. #2ee0a0 is a good
+   green on #0d111a and about 1.8:1 on white, which is a colour
+   that means "fine" that nobody can read. Each has been taken
+   down to hold contrast on a pale panel.
+   ============================================================ */
+:root[data-theme="light"]{
+  --bg:#eef1f6;
+  --panel:#ffffff;
+  --panel-2:#f5f7fa;
+  --panel-3:#eaeef4;
+  --line:#dde3ec;
+  --line-2:#c4cdda;
+
+  --text:#111721;
+  --text-2:#4a5563;
+  --text-3:#66717f;      /* 4.6:1 on --panel-3, the lightest surface it lands on */
+
+  /* Legible on a pale panel. The hues are the dark theme's, taken down in
+     lightness rather than swapped, so "warn" is the same warn. */
+  --ok:#0b8f60;
+  --info:#0b7f96;
+  --warn:#96600a;
+  --danger:#c62a45;
+  --violet:#5f42c4;
+  --me:#96600a;
+  --ok-rgb:11,143,96;
+  --info-rgb:11,127,150;
+  --warn-rgb:150,96,10;
+  --danger-rgb:198,42,69;
+  --violet-rgb:95,66,196;
+
+  /* The brand green is a background colour, never text: white on it is
+     1.9:1 and the dark ink it carries is 12:1 either way. So the accent
+     itself is unchanged - only the line and the wash, which sat at
+     dark-theme opacities and vanish on white. */
+  --accent-soft:rgba(var(--accent-rgb),.18);
+  --accent-line:rgba(var(--accent-rgb),.55);
+
+  /* Shadows on a pale ground are a hint, not a hole. */
+  --sh-1:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.05);
+  --sh-2:0 2px 4px rgba(16,24,40,.06), 0 6px 16px rgba(16,24,40,.07);
+  --sh-3:0 4px 8px rgba(16,24,40,.07), 0 16px 40px rgba(16,24,40,.11);
+  /* the top highlight is a light from above; on white that is a shade */
+  --edge:inset 0 1px 0 rgba(16,24,40,.03);
+  --edge-strong:inset 0 1px 0 rgba(16,24,40,.05);
+  --panel-grad:linear-gradient(180deg,rgba(16,24,40,.014),rgba(16,24,40,0) 60%);
+
+  /* The rail and the status bar are their own surface, a shade off the
+     page either way. Missing this is what leaves a dark rail carrying dark
+     text on an otherwise light client - which is how this was found. */
+  --rail:#e6eaf1;
+}
+
+/* the scrollbar is drawn against the page, so it follows the page */
+:root[data-theme="light"] *::-webkit-scrollbar-thumb{background:#c8d0dc}
+:root[data-theme="light"] *::-webkit-scrollbar-thumb:hover{background:#adb7c6}
+:root[data-theme="light"] *{scrollbar-color:#c8d0dc transparent}
+
+/* The status bar carries a near-black plate of its own, under a blur, so
+   it does not follow --rail. Left alone it is a black strip along the
+   bottom of a light client with dark text on it. */
+:root[data-theme="light"] .statusbar{background:rgba(238,241,246,.82)}
+
+/* The tier metals, taken down until they hold on a pale card. Silver is
+   the one that forces this: #9aa3af is 2.1:1 on white, which is a label
+   nobody can read on a badge they earned. */
+:root[data-theme="light"] .ach.tier-bronze{--ac:#8a5c33}
+:root[data-theme="light"] .ach.tier-silver{--ac:#5e6875}
+:root[data-theme="light"] .ach.tier-gold{--ac:#a35f09}
+:root[data-theme="light"] .ach.tier-plat{--ac:#2f7c8f}
+
+/* Leaflet's attribution strip carries its own dark plate, which is a
+   dark smear on a pale map. */
+:root[data-theme="light"] .leaflet-control-attribution{
+  background:rgba(255,255,255,.86) !important;
+}
+
+/* Form controls, checkboxes and the native scrollbar corner all ask the
+   browser what kind of page this is. Telling it plainly is the difference
+   between a light page with dark dropdowns and a light page. */
+:root[data-theme="light"]{ color-scheme:light }

@@ -1,0 +1,8 @@
+release/
+*.exe
+*.zip
+*.7z
+*.rar
+node_modules/
+.git/
+.wrangler/
