@@ -330,6 +330,30 @@ app.whenReady().then(async () => {
       await js("Number(document.getElementById('fixCount').textContent) > 0"),
       'true');
 
+    /* ---- 6b. the back/forward cache ------------------------------ */
+    /* Chrome can keep this page frozen while the driver looks at another
+       one and hand it back on Back. pagehide stops the watch; pageshow has
+       to start it again for a driver who is still on shift, or they drop
+       off the map with nothing on screen saying so. */
+
+    await js("window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))");
+    await wait(300);
+
+    check('cached: gps watch stopped',
+      await js("document.getElementById('gpsStatus').textContent"),
+      'Idle');
+
+    await js("window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))");
+    await wait(1400);
+
+    check('restored: still on shift',
+      await js("document.getElementById('statusText').textContent"),
+      'ONLINE');
+
+    check('restored: gps active again',
+      await js("document.getElementById('gpsStatus').textContent"),
+      'Active');
+
     /* ---- 7. off shift ------------------------------------------ */
 
     await js("document.getElementById('offlineBtn').click()");

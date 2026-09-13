@@ -131,7 +131,13 @@ app.whenReady().then(async () => {
       r.chip.title.slice(0, 80));
 
     /* chip() being right is not the same as it reaching the screen - the
-       status bar and the rail interpolate it, and a typo there is silent. */
+       status bar interpolates it, and a typo there is silent.
+
+       The rail under the driver's name used to carry a second copy, with an
+       "outdated" badge. It was removed on purpose - see railFootHTML() in
+       tracker.js: the status bar's copy is the one that opens the download
+       page, and the rail's did nothing when pressed. So the rail is checked
+       for NOT repeating it, rather than for a badge that no longer exists. */
     const shown = await run(`(() => {
       const a = Auth.accounts()[0];
       if (a) Auth.signIn(a, Auth.driverRecord(a.driverId), false);
@@ -139,14 +145,14 @@ app.whenReady().then(async () => {
       render();
       return {
         bar: (document.querySelector('.statusbar') || {}).innerText || '',
-        rail: (document.querySelector('.rail-build') || {}).innerText || '',
+        rail: (document.querySelector('.rail-foot') || {}).innerText || '',
         clickable: !!document.querySelector('[data-act="open-update"]'),
       };
     })()`);
     check('and it actually reaches the status bar',
       /Outdated/.test(shown.bar), shown.bar.split(String.fromCharCode(10)).pop());
-    check('and sits beside the driver’s own name',
-      /outdated/i.test(shown.rail), shown.rail || 'NOTHING IN THE RAIL');
+    check('and is not repeated under the driver’s name',
+      !/outdated/i.test(shown.rail), 'rail shows ' + (shown.rail.replace(/\s+/g, ' ').trim() || 'nothing'));
     check('and it is something you can press',
       shown.clickable === true, 'opens the download page');
 

@@ -144,6 +144,11 @@
             display:flex;align-items:center;justify-content:space-between;
             gap:12px;
         }
+        /* The label in this row is not the field's direct child, so the
+           .field > label rule in style.css never reached it and it drew at
+           the browser's default size - larger and bolder than the email
+           label directly above it. */
+        #dt-root .dt-field-row label{font-size:12px;font-weight:500;color:var(--text-2)}
         #dt-root .dt-link{
             color:var(--text-3);font-size:11.5px;font-weight:500;
             transition:color var(--t-fast);
@@ -1421,6 +1426,7 @@
         var watchId      = null;
         var currentDriver = null;
         var channel      = null;
+        var reconnecting = false;   /* socket closed for the back/forward cache */
         var lastUploadAt = 0;
         var fixes        = 0;
         var uploading    = false;
@@ -1952,7 +1958,14 @@
 
                     if (state === 'SUBSCRIBED') {
                         paintRealtime('on');
-                        log('realtime connected', 'ok');
+                        log(reconnecting ? 'realtime reconnected' : 'realtime connected', 'ok');
+                        reconnecting = false;
+
+                    } else if (reconnecting && (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT')) {
+                        /* The socket was closed on purpose for the
+                           back/forward cache and realtime-js is already
+                           rejoining. Not the publication fault below. */
+                        paintRealtime('idle');
 
                     } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
                         paintRealtime('err');
@@ -1995,10 +2008,39 @@
             dtGo(LOGIN);
         });
 
-        /* The watch and the socket both outlive a navigation otherwise. */
-        window.addEventListener('pagehide', function () {
+        /* The watch and the socket both outlive a navigation otherwise.
+
+           Unless the page is only going into the back/forward cache, where
+           it can come straight back. supabase-client.js closes the socket
+           for that case and realtime-js rejoins the channel by itself after
+           Back, so the channel stays. */
+        window.addEventListener('pagehide', function (event) {
             stopGPS();
+            if (event.persisted) { reconnecting = true; return; }
             if (channel) { try { db.removeChannel(channel); } catch (e) {} }
+        });
+
+        /* Back from the cache. The watch was stopped on the way in, and
+           dispatch may have changed this driver's status while the page was
+           frozen - a change that was never delivered. So the driver is read
+           again and the watch follows from it, the way loadDriver ends. */
+        window.addEventListener('pageshow', async function (event) {
+
+            if (!event.persisted || !currentDriver) return;
+
+            try {
+                var res = await db
+                    .from('drivers')
+                    .select('*')
+                    .eq('auth_user_id', currentDriver.auth_user_id)
+                    .maybeSingle();
+
+                if (res.data) currentDriver = res.data;
+            } catch (e) { /* keep what the page already had */ }
+
+            paintStatus(currentDriver.status || 'offline');
+
+            if (currentDriver.status === 'online') startGPS();
         });
 
         /* ----------------------------------------------------------

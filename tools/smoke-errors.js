@@ -176,13 +176,19 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(ROOT, page));
     await new Promise((r) => setTimeout(r, 1600));
 
-    /* a control that hangs must fail the sweep, not stall it forever */
+    /* a control that hangs must fail the sweep, not stall it forever.
+
+       Four minutes, not two. The client's walk - 17 screens, some 380
+       clicks - takes under a minute on its own, but ran past 120s once while
+       other Electron harnesses were running beside it, and reported a hang
+       that was only a busy machine. A real hang still fails; it just waits
+       longer to say so. */
     let res;
     try {
       res = await Promise.race([
         win.webContents.executeJavaScript(WALK),
-        new Promise((_r, rej) => setTimeout(() => rej(new Error('the walk did not finish within 120s — '
-          + 'something it clicked is still waiting')), 120000)),
+        new Promise((_r, rej) => setTimeout(() => rej(new Error('the walk did not finish within 240s — '
+          + 'something it clicked is still waiting')), 240000)),
       ]);
     } catch (e) {
       res = { clicked: 0, screens: 0, thrown: ['walk failed: ' + e.message] };

@@ -47,6 +47,21 @@ const SIGN_IN = `(async () => {
   } catch (e) { return 'error: ' + e.message; }
 })()`;
 
+/* The driver app is a different program: it has no Accounts and no
+   state.route, so SIGN_IN threw "Accounts is not defined" there and the
+   shot was only ever the sign-in card. It signs in through Auth instead,
+   the way tools/smoke-client.js does. */
+const APP_SIGN_IN = `(async () => {
+  try {
+    const acc = Auth.accounts().find(a => a.email === 'jeffboss730@gmail.com')
+             || Auth.accounts()[0];
+    if (!acc) return 'no account';
+    Auth.signIn(acc, Auth.driverRecord(acc.driverId), false);
+    render();
+    return 'driver=' + (Store.db.driver && Store.db.driver.gmnId);
+  } catch (e) { return 'error: ' + e.message; }
+})()`;
+
 async function shot(win, name) {
   const img = await win.webContents.capturePage();
   fs.writeFileSync(path.join(OUT, name + '.png'), img.toPNG());
@@ -74,7 +89,7 @@ app.whenReady().then(async () => {
     /* the app has to have booted before Accounts and Store exist; give it
        time, then dismiss the splash whatever happened */
     await wait(3200);
-    const signedIn = await win.webContents.executeJavaScript(SIGN_IN).catch((e) => 'threw: ' + e.message);
+    const signedIn = await win.webContents.executeJavaScript(page === 'tracker.html' ? APP_SIGN_IN : SIGN_IN).catch((e) => 'threw: ' + e.message);
     console.log('    signed in: ' + signedIn);
     await win.webContents.executeJavaScript(
       '(function(){var s=document.getElementById("splash");if(s)s.remove();return true;})()').catch(() => {});

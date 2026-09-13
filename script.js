@@ -4077,6 +4077,26 @@ function userMenu(anchor) {
 }
 
 /* ---------------- 15. Auth screen ---------------- */
+
+/* The fleet in numbers, on the public front door - but only the numbers
+   that say something. A new company showed "1 · 0 · 0 km · 0" to every
+   visitor, which reads as nobody here rather than as just started. A zero
+   is dropped, and the row only appears with at least two figures left. */
+function authStatsHTML(db, totalKm) {
+  const fleet = db.trucks.length + db.trailers.length;
+  const convoys = Store.pastEvents().length;
+  const stats = [
+    ['Active drivers', db.drivers.length, fmt.n(db.drivers.length)],
+    ['Fleet units', fleet, fmt.n(fleet)],
+    ['Distance driven', totalKm, fmt.kmS(totalKm)],
+    ['Convoys run', convoys, fmt.n(convoys)],
+  ].filter(([, n]) => n > 0);
+  if (stats.length < 2) return '';
+  return `<div class="auth-stats">
+    ${stats.map(([k, , v]) => `<div class="auth-stat"><div class="v">${esc(v)}</div><div class="k">${esc(k)}</div></div>`).join('')}
+  </div>`;
+}
+
 function viewAuth() {
   const db = Store.db;
   const totalKm = sum(db.drivers.map((d) => d.km));
@@ -4093,7 +4113,7 @@ function viewAuth() {
         <div class="brand-strap">Virtual logistics · Real drivers · Real-time operations</div></div>
       </div>
 
-      <div style="position:relative;max-width:520px">
+      <div class="auth-hero" style="position:relative;max-width:520px">
         <div class="hero-motto mb-12">${db.meta.founded
           ? 'Est. ' + new Date(db.meta.founded).getFullYear() + ' · Europe-wide'
           : 'Virtual trucking company · Europe-wide'}</div>
@@ -4112,11 +4132,7 @@ function viewAuth() {
         </div>
       </div>
 
-      ${db.drivers.length ? `<div class="auth-stats">
-        ${[['Active drivers', fmt.n(db.drivers.length)], ['Fleet units', fmt.n(db.trucks.length + db.trailers.length)],
-           ['Distance driven', fmt.kmS(totalKm)], ['Convoys run', fmt.n(Store.pastEvents().length)]]
-          .map(([k, v]) => `<div class="auth-stat"><div class="v">${esc(v)}</div><div class="k">${esc(k)}</div></div>`).join('')}
-      </div>` : ''}
+      ${authStatsHTML(db, totalKm)}
     </section>
 
     <section class="auth-form-wrap">
@@ -13275,16 +13291,16 @@ function clientDownloadUrl(build) {
 }
 
 const CLIENT_RELEASE = {
-  version: '1.1.9',
+  version: '1.2.0',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Tracker-1.1.9-windows-setup.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.0-windows-setup.exe',
       size: '96.5 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Tracker-1.1.9-windows-portable.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.0-windows-portable.exe',
       size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Tracker-1.1.9-android.apk',
+      file: 'release/Gaming-Nation-Tracker-1.2.0-android.apk',
       size: '6.8 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
@@ -13543,19 +13559,20 @@ function viewDownloads() {
     ${allowed ? `
       <div class="grid g-3">
         ${CLIENT_RELEASE.builds.map((b, i) => `
-          <div class="card reveal d${i + 1}"><div class="card-body">
-            <span class="stat-ico">${icon(b.icon)}</span>
+          <div class="card dl-card reveal d${i + 1}"><div class="card-body">
+            <span class="dl-ico">${icon(b.icon)}</span>
             <div class="b8 lg mt-12">${esc(b.label)}</div>
             <p class="sm t2 mt-8">${esc(b.note)}</p>
-            <div class="row gap-8 mt-12 xs t3">
+            <div class="row gap-8 mt-12 xs t3 wrap dl-meta">
               <span class="badge">v${esc(CLIENT_RELEASE.version)}</span>
               <span class="badge">${esc(b.size)}</span>
+              ${b.key === 'win-setup' ? '<span class="badge brand">Recommended</span>' : ''}
             </div>
             ${CLIENT_DOWNLOAD_BASE || Downloads.state === 'ready' || Downloads.state === 'unknown'
-              ? `<button class="btn btn-primary btn-block mt-16"
+              ? `<button class="btn btn-primary btn-block dl-go"
                    data-act="download-client" data-id="${esc(b.key)}">
                    ${icon('download')}Download</button>`
-              : `<button class="btn btn-block mt-16" disabled>${icon('download')}Not available here</button>`}
+              : `<button class="btn btn-block dl-go" disabled>${icon('download')}Not available here</button>`}
           </div></div>`).join('')}
       </div>
 
@@ -14749,6 +14766,15 @@ const SupaDM = {
     }
   },
 
+  /* Back from the back/forward cache. supabase-client.js closed the socket
+     on the way in and realtime-js rejoins this channel by itself a few
+     seconds later, so there is nothing to re-create - but a message sent
+     while the page was frozen was never delivered, so the open
+     conversation is read again. */
+  resume() {
+    if (this.channel) Messages.supaChanged();
+  },
+
   unsubscribe() {
     if (!this.channel) return;
     try { window.gmnSupabase.removeChannel(this.channel); } catch (e) { /* gone anyway */ }
@@ -14757,6 +14783,10 @@ const SupaDM = {
     this.ids = {};
   },
 };
+
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) SupaDM.resume();
+});
 
 
 const Messages = {

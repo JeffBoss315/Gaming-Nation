@@ -133,7 +133,9 @@ table{border-collapse:collapse;width:100%}
   -webkit-app-region:drag;
 }
 .titlebar .tb-icon{width:14px;height:14px;color:var(--accent);flex:none}
-.titlebar .tb-text{font-size:11.5px;color:var(--text-3);font-weight:500;letter-spacing:.02em}
+.titlebar .tb-text{font-size:11.5px;color:var(--text-3);font-weight:500;letter-spacing:.02em;
+  /* one line however narrow the window: wrapped, it ran under the controls */
+  flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb-controls{margin-left:auto;display:flex;height:100%;-webkit-app-region:no-drag}
 .tb-btn{width:42px;height:100%;display:grid;place-items:center;color:var(--text-3);transition:background var(--t),color var(--t)}
 .tb-btn svg{width:10px;height:10px}
@@ -152,7 +154,12 @@ table{border-collapse:collapse;width:100%}
 .brand-1{font-size:12.5px;font-weight:600;letter-spacing:.06em;line-height:1.2}
 .brand-2{font-size:9px;font-weight:600;letter-spacing:.15em;color:var(--accent);text-transform:uppercase}
 
-.rail-nav{flex:1;overflow-y:auto;padding:10px 8px}
+.rail-nav{flex:1;overflow-y:auto;padding:10px 8px 26px;
+  /* The list scrolls, and a hard cut through its last item did not say so.
+     It fades out instead, with room under the last item to scroll it clear
+     of the fade. */
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent);
+  mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent)}
 .rail-group{margin-bottom:14px}
 .rail-label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-3);
   font-weight:600;padding:0 8px 6px}
@@ -1166,90 +1173,12 @@ body.can-install .install-cta{display:inline-flex}
 
 
 
-.splash-inner{width:min(88vw,460px);text-align:center;padding:0 20px}
-
-.splash-truck{
-  display:block;width:100%;height:auto;color:#f2f5f9;
-  filter:drop-shadow(0 6px 26px rgba(0,0,0,.6));
-}
-/* pathLength="1" on every shape, so one dash value drives them all.
-
-   The resting state is the finished one: drawn, and fully opaque. The
-   animation runs FROM invisible rather than holding there, so if it never
-   runs — a webview that ignores it, a reduced-motion setting, a headless
-   capture — the splash still shows a truck instead of an empty screen. */
-.splash-truck path,.splash-truck circle{
-  stroke-dasharray:1;stroke-dashoffset:0;
-  animation:splashDraw 1.5s ease;
-}
-.splash-truck circle{animation-duration:.85s}
-@keyframes splashDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
-
-.splash-word{
-  margin-top:14px;font-size:27px;font-weight:900;letter-spacing:.20em;
-  color:#fff;animation:splashIn .9s ease;
-}
-.splash-sub{
-  margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.42em;
-  color:#f2884a;animation:splashIn 1.15s ease;
-}
-@keyframes splashIn{from{opacity:0}to{opacity:1}}
-
-/* ---- the loading bar: a lorry driving a road ---- */
-.splash-road{
-  position:relative;margin:6px auto 0;width:min(88%,360px);height:96px;
-}
-/* the road itself */
-.splash-road::after{
-  content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
-  border-radius:99px;background:rgba(255,255,255,.10);
-}
-/* what the lorry has already covered */
-.splash-fill{
-  position:absolute;left:0;bottom:0;height:3px;width:0;border-radius:99px;
-  background:linear-gradient(90deg,#8bd62b,#f2a05a);z-index:1;
-  animation:splashFill 3s linear infinite;
-}
-/* lane markings, sliding past to give it some speed */
-.splash-lane{
-  position:absolute;left:0;right:0;bottom:1px;height:1px;opacity:.5;
-  background:repeating-linear-gradient(90deg,
-    rgba(255,255,255,.34) 0 10px, transparent 10px 22px);
-  animation:splashLane .55s linear infinite;
-}
-.splash-lorry{
-  position:absolute;bottom:1px;left:0;width:132px;height:auto;
-  color:#f2f5f9;z-index:2;
-  filter:drop-shadow(0 4px 14px rgba(0,0,0,.6));
-  animation:splashDrive 3s linear infinite;
-}
-@keyframes splashDrive{
-  from{transform:translateX(-140px)}
-  to{transform:translateX(min(88vw,360px))}
-}
-@keyframes splashFill{
-  from{width:0}
-  to{width:100%}
-}
-@keyframes splashLane{
-  from{background-position:0 0}
-  to{background-position:-22px 0}
-}
-
-.splash-note{
-  margin-top:14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
-  color:#6f7c8d;animation:splashIn 1.3s ease;
-}
-
-/* Nothing here should keep somebody waiting on an animation they asked
-   not to see: the resting state is already the finished one. */
-@media (prefers-reduced-motion:reduce){
-  .splash-truck path,.splash-truck circle,
-  .splash-word,.splash-sub,.splash-note{animation:none}
-  .splash-lorry,.splash-lane{animation:none}
-  .splash-lorry{transform:translateX(min(40vw,160px))}
-  .splash-fill{animation:none;width:55%}
-}
+/* The splash itself is style.css's, the same on all three pages: a route
+   and a light travelling it. This file went on styling the lorry that
+   design retired - a 96px-tall road, white type, an orange sub-line - and,
+   loaded after style.css, it won. The road kept the new design's fill and
+   rounded ends at the old height with no lorry on it, so the client started
+   behind a large grey pill at every window size. */
 
 
 /* reveal the password, so a mistyped capital or bracket is visible */
@@ -1287,8 +1216,17 @@ body.can-install .install-cta{display:inline-flex}
   color:var(--text-3);
 }
 .run-progress + .rrail{margin-top:8px}
-.rrail.empty .rrail-track{opacity:.5}
-.rrail.empty .rrail-marker{opacity:.45}
+/* Idle: the road is drawn, dashed, with the truck parked at its start.
+
+   The track had never shown. "empty" is also style.css's empty-state
+   class - display:flex, a centred column - so the idle rail became a flex
+   container, the track shrank to zero width in the middle of the card, and
+   the marker floated alone, half over the card's edge, 30px under its
+   label. The rail is a plain block again. */
+.rrail.empty{display:block;padding:0 2px;text-align:left;gap:0}
+.run-progress .rrail{margin:14px 0 4px}
+.rrail.empty .rrail-track{opacity:1;background:repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 7px,transparent 7px 13px)}
+.rrail.empty .rrail-marker{transform:translate(0,-50%);border-color:var(--line-2);color:var(--text-3);background:var(--panel-2)}
 
 
 /* ---- the logbook search row ----
