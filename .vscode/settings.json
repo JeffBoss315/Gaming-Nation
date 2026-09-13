@@ -2,5 +2,13 @@
     "liveServer.settings.port": 5502,
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.server.launchMode": "Standard",
-    "java.import.gradle.version": "8.14.3"
+    "java.import.gradle.version": "8.14.3",
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/android/app/build/**",
+        "**/android/build/**",
+        "**/.metadata/**",
+        "**/archetype-resources/**",
+        "**/META-INF/maven/**"
+    ]
 }
