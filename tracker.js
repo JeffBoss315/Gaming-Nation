@@ -161,6 +161,67 @@ function statTile({ label, value, icon: ic = 'info', tone = 'brand', sub, raw, t
   </div>`;
 }
 
+/* A chart, the same one the console draws.
+
+   Hand-rolled SVG rather than a charting library: the client ships offline
+   and a megabyte of dependency to draw twelve points is not a trade worth
+   making. The classes it paints with (.chart, .grid-line, .axis-lbl,
+   .area, .line) come from style.css, which this page already loads - the
+   same reason the tiles above needed no new CSS.
+
+   Kept to the console's shape so the two halves of the product draw the
+   same picture from the same numbers. */
+function areaChart(values, labels, opts = {}) {
+  const W = opts.w || 720, H = opts.h || 200;
+  const pad = { l: 44, r: 14, t: 14, b: 26 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const color = opts.color || 'var(--accent)';
+  const max = Math.max(1, ...values) * 1.12;
+  const x = (i, n) => pad.l + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const y = (v) => pad.t + ih - (v / max) * ih;
+
+  const gridN = 4;
+  const grid = Array.from({ length: gridN + 1 }, (_, i) => {
+    const gy = pad.t + (i / gridN) * ih;
+    const val = max - (i / gridN) * max;
+    return `<line class="grid-line" x1="${pad.l}" y1="${gy.toFixed(1)}" x2="${W - pad.r}" y2="${gy.toFixed(1)}"/>
+      <text class="axis-lbl" x="${pad.l - 8}" y="${(gy + 3.5).toFixed(1)}" text-anchor="end"
+        >${opts.fmtY ? opts.fmtY(val) : Math.round(val)}</text>`;
+  }).join('');
+
+  const xlabels = labels.map((l, i) => (labels.length > 10 && i % 2)
+    ? ''
+    : `<text class="axis-lbl" x="${x(i, labels.length).toFixed(1)}" y="${H - 6}"
+        text-anchor="middle">${esc(l)}</text>`).join('');
+
+  const n = values.length;
+  const pts = values.map((v, i) => [x(i, n), y(v)]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = `${line} L ${pts[n - 1][0].toFixed(1)} ${pad.t + ih} L ${pts[0][0].toFixed(1)} ${pad.t + ih} Z`;
+
+  /* one id per chart: two on a page would otherwise share a gradient and
+     the second would quietly paint with the first's colour */
+  const uid = 'gc' + Math.random().toString(36).slice(2, 8);
+
+  const dots = pts.map((p, i) => `<g class="map-node">
+    <circle class="pt" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3"
+      fill="${color}" stroke="var(--bg)" stroke-width="1.6"/>
+    <circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="10" fill="transparent"
+      ><title>${esc(labels[i] || '')}: ${opts.fmtT ? opts.fmtT(values[i]) : fmt.n(values[i])}</title></circle>
+  </g>`).join('');
+
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || 'Chart')}">
+    <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}${xlabels}
+    <path class="area" d="${area}" fill="url(#${uid})"/>
+    <path class="line" d="${line}" stroke="${color}"/>
+    ${dots}
+  </svg>`;
+}
+
 /* Nothing here yet, said properly.
 
    An empty screen is where a driver decides whether the thing works. One
@@ -178,7 +239,36 @@ function emptyState(ic, title, body, action = '') {
    landed - which is what a live client is claiming about itself. */
 function animateCounts(root) {
   const host = root || document;
-  host.querySelectorAll('[data-count]').forEach((el) => {
+  const tiles = [...host.querySelectorAll('[data-count]')];
+  if (!tiles.length) { animateCounts.last = ''; return; }
+
+  /* Only when there is something new to say.
+
+     This client redraws on everything - a fleet heartbeat, a telemetry
+     frame, a driver coming online - and animating on every draw meant the
+     figures rolled up from zero again every few seconds while somebody was
+     reading them. Which screen, and what the numbers are, is the whole
+     signature: same screen and same values, so paint them and be quiet. */
+  const signature = state.view + '|' + tiles.map((el) => el.dataset.count).join(',');
+  const settle = (el) => {
+    const target = parseFloat(el.dataset.count);
+    el.textContent = (target % 1 ? target.toFixed(1) : Math.round(target))
+      .toLocaleString('en-GB') + (el.dataset.suffix || '');
+  };
+
+  if (animateCounts.last === signature) {
+    /* Same figures as the last draw. If one is still counting up, leave it
+       alone - this client redraws within milliseconds of its first paint,
+       and snapping to the end here is what stopped the animation ever
+       being seen. Otherwise put the final figure straight on screen. */
+    if (performance.now() < (animateCounts.until || 0)) return;
+    tiles.forEach(settle);
+    return;
+  }
+  animateCounts.last = signature;
+  animateCounts.until = performance.now() + 700;
+
+  tiles.forEach((el) => {
     const target = parseFloat(el.dataset.count);
     if (!Number.isFinite(target)) return;
     const suffix = el.dataset.suffix || '';
@@ -195,7 +285,7 @@ function animateCounts(root) {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.2.2';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.2.3';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -5215,12 +5305,38 @@ function runCardInner() {
       </div>
 
       <div class="gauges mt-20" id="gaugeRow">${idleGaugesInner()}</div>
+
+      ${/* This screen used to stop at the gauges, which left a driver
+            waiting for a load looking at three dashes and half a card of
+            nothing. What is worth showing while they wait is what the
+            client already knows: what they have done, and the handful of
+            things worth pressing. */''}
+      <div class="stat-row mt-20">
+        ${statTile({ label: 'Distance driven', value: fmt.n(db.stats.totalKm), raw: db.stats.totalKm,
+          icon: 'map', tone: 'info' })}
+        ${statTile({ label: 'Runs recorded', value: fmt.n(db.stats.totalJobs), raw: db.stats.totalJobs,
+          icon: 'route' })}
+        ${statTile({ label: 'Earned', value: fmt.eur(db.stats.totalIncome), icon: 'chart', tone: 'ok' })}
+        ${statTile({ label: 'Waiting to send', value: fmt.n(db.pending.length), raw: db.pending.length,
+          icon: 'upload', tone: db.pending.length ? 'warn' : 'brand' })}
+      </div>
+
       ${last ? `<div class="facts">
         <div class="fact"><div class="k">Last run</div><div class="v">${esc(last.from)} → ${esc(last.to)}</div></div>
         <div class="fact"><div class="k">Distance</div><div class="v">${fmt.km(last.km)}</div></div>
         <div class="fact"><div class="k">Payout</div><div class="v">${fmt.eur(last.income)}</div></div>
         <div class="fact"><div class="k">Completed</div><div class="v">${esc(fmt.rel(last.finished))}</div></div>
-      </div>` : ''}`;
+      </div>` : ''}
+
+      <div class="row gap-8 wrap mt-16">
+        <button class="btn btn-sm" data-act="nav" data-view="livemap">${icon('map')}Live map</button>
+        <button class="btn btn-sm" data-act="nav" data-view="logbook">${icon('book')}Logbook</button>
+        ${Store.db.settings.ets2Exe && Launcher.api()
+          ? `<button class="btn btn-sm btn-primary" data-act="launch-game" data-kind="ets2"
+              >${icon('play')}Launch ETS2</button>` : ''}
+        ${Store.db.settings.atsExe && Launcher.api()
+          ? `<button class="btn btn-sm" data-act="launch-game" data-kind="ats">${icon('play')}Launch ATS</button>` : ''}
+      </div>`;
 }
 
   const pct = GameLink.progress(job);
@@ -5798,6 +5914,50 @@ function viewStats() {
       </div>
     </div>
   </section>
+
+  ${(() => {
+    /* Twelve weeks of driving, from the runs on this machine.
+
+       A figure is a number; a line is a habit. The console has drawn one
+       since the start and the client drew none, which is most of what made
+       this screen read as a table of totals rather than a record. */
+    const WEEKS = 12;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (WEEKS * 7 - 1));
+    const from = start.getTime();
+
+    const weeks = new Array(WEEKS).fill(0);
+    (Store.db.logbook || []).forEach((r) => {
+      const at = new Date(r.finished || 0).getTime();
+      if (!Number.isFinite(at) || at < from) return;
+      weeks[Math.min(WEEKS - 1, Math.floor((at - from) / (7 * 86400000)))] += Number(r.km) || 0;
+    });
+
+    const total = weeks.reduce((a, b) => a + b, 0);
+    const labels = weeks.map((_, i) => 'W' + (i + 1));
+
+    return `<section class="card">
+      <div class="card-head">
+        <div class="card-title">${icon('chart')}Distance — last 12 weeks</div>
+        <span class="label">${total ? fmt.km(total) + ' in total' : 'from this machine'}</span>
+      </div>
+      <div class="card-body">
+        ${total
+          ? areaChart(weeks, labels, {
+              fmtT: (v) => fmt.km(v),
+              aria: 'Distance driven in each of the last twelve weeks',
+            })
+          : emptyState('chart', 'Nothing to chart yet',
+              'Finish a run and the weeks fill in from your logbook — one point per week, twelve weeks back.')}
+      </div>
+      ${total ? `<div class="card-body row gap-18 wrap" style="border-top:1px solid var(--line)">
+        <div><div class="t3 xs">Twelve-week total</div><div class="b6">${fmt.km(total)}</div></div>
+        <div><div class="t3 xs">Weekly average</div><div class="b6">${fmt.km(Math.round(total / WEEKS))}</div></div>
+        <div><div class="t3 xs">Best week</div><div class="b6">${fmt.km(Math.max(...weeks))}</div></div>
+      </div>` : ''}
+    </section>`;
+  })()}
 
   <section class="card">
     <div class="card-head"><span class="label">Career</span></div>

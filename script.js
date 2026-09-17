@@ -2925,6 +2925,19 @@ function emptyState(ic, title, body, action = '') {
     <div><div class="b7 lg" style="color:var(--text-2)">${esc(title)}</div>
     <div class="sm mt-4" style="max-width:380px">${esc(body)}</div></div>${action}</div>`;
 }
+/* A missing value is not a value.
+
+   The fleet register learns a truck from telemetry the moment a driver
+   turns up in one: it gets a make and a model, and it does not get a
+   horsepower figure, a chassis or a model year, because the game does not
+   say. Printing those anyway put "null hp" and a Year of "null" on the
+   vehicle card of a live company - not a crash, so no test ever caught it,
+   just a page quietly telling somebody a number it does not have. */
+function orDash(v, suffix = '') {
+  if (v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v))) return '—';
+  return esc(String(v)) + suffix;
+}
+
 function kv(k, v) { return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`; }
 function crumbs(items) {
   return `<div class="breadcrumb">${items.map((it, i) =>
@@ -5132,7 +5145,7 @@ function viewDriver(id) {
                 <div class="card-body">
                   <div class="row-b"><div><div class="b7">${esc(truck.make)} ${esc(truck.model)}</div>
                     <div class="xs t3 mono">${esc(truck.id)} · ${esc(truck.plate)}</div></div>${statusBadge(truck.status)}</div>
-                  ${kv('Power', truck.hp + ' hp')}${kv('Gearbox', esc(truck.gearbox))}${kv('Chassis', esc(truck.chassis))}
+                  ${kv('Power', orDash(truck.hp, ' hp'))}${kv('Gearbox', orDash(truck.gearbox))}${kv('Chassis', orDash(truck.chassis))}
                   ${kv('Trailer', trailer ? esc(trailer.type + ' · ' + trailer.id) : '—')}
                   <button class="btn btn-block mt-12" data-act="go" data-href="#/vehicle/${truck.id}">${icon('eye')}Vehicle profile</button>
                 </div>` : `<div class="card-body">${emptyState('truck', 'No vehicle assigned', 'This driver has no truck allocated from the Gaming Nation fleet.')}</div>`}
@@ -5291,10 +5304,10 @@ function truckCard(t, i) {
         <span class="badge" style="color:${liv.a};border-color:${liv.a}44;background:${liv.a}14">${esc(liv.name)}</span>
       </div>
       <div class="spec-grid mt-16">
-        <div class="spec"><div class="k">Power</div><div class="v">${t.hp} hp</div></div>
-        <div class="spec"><div class="k">Chassis</div><div class="v">${esc(t.chassis)}</div></div>
-        <div class="spec"><div class="k">Odometer</div><div class="v">${fmt.kmS(t.mileage)}</div></div>
-        <div class="spec"><div class="k">Year</div><div class="v">${t.year}</div></div>
+        <div class="spec"><div class="k">Power</div><div class="v">${orDash(t.hp, ' hp')}</div></div>
+        <div class="spec"><div class="k">Chassis</div><div class="v">${orDash(t.chassis)}</div></div>
+        <div class="spec"><div class="k">Odometer</div><div class="v">${orDash(t.mileage == null ? null : fmt.kmS(t.mileage))}</div></div>
+        <div class="spec"><div class="k">Year</div><div class="v">${orDash(t.year)}</div></div>
       </div>
       <div class="row-b mt-16">
         ${d ? `<div class="row gap-8">${avatar(d, 32)}<div style="min-width:0">
@@ -5336,11 +5349,12 @@ function viewVehicle(id) {
 
         <div class="card reveal d1"><div class="card-head"><div class="card-title">${icon('gauge')}Specification</div></div>
           <div class="card-body grid g-3" style="gap:12px">
-            ${[['Make', t.make], ['Model', t.model], ['Model year', t.year], ['Power output', t.hp + ' hp'],
+            ${[['Make', t.make], ['Model', t.model], ['Model year', t.year],
+               ['Power output', t.hp == null ? null : t.hp + ' hp'],
                ['Cab', t.cab], ['Gearbox', t.gearbox], ['Chassis', t.chassis], ['Registration', t.plate],
-               ['Odometer', fmt.km(t.mileage)]].map(([k, v]) => `
+               ['Odometer', t.mileage == null ? null : fmt.km(t.mileage)]].map(([k, v]) => `
               <div class="spec" style="border-radius:12px;border:1px solid var(--line)">
-                <div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('')}
+                <div class="k">${esc(k)}</div><div class="v">${orDash(v)}</div></div>`).join('')}
           </div></div>
 
         <div class="card reveal d2"><div class="card-head"><div class="card-title">${icon('wrench')}Maintenance</div>
@@ -13322,16 +13336,16 @@ function clientDownloadUrl(build) {
 }
 
 const CLIENT_RELEASE = {
-  version: '1.2.2',
+  version: '1.2.3',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Tracker-1.2.2-windows-setup.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.3-windows-setup.exe',
       size: '96.5 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Tracker-1.2.2-windows-portable.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.3-windows-portable.exe',
       size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Tracker-1.2.2-android.apk',
+      file: 'release/Gaming-Nation-Tracker-1.2.3-android.apk',
       size: '6.8 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
