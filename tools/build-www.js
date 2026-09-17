@@ -226,6 +226,20 @@ if (!SITE_URL) {
     '/release/', '/tools/', '/vendor/', '/supabase/',
     '/script.js', '/tracker.js', '/map-data.js', '/supabase-client.js']);
 
+  /* The crawlers that take a site to train on rather than to index it.
+     They obey robots.txt by name and by name only - a blanket
+     "User-agent: *" does not reach them - so each one has to be listed,
+     and a new one appears every few months. This is a request rather than
+     a wall: it is honoured by the ones that publish a name, and LICENSE is
+     what speaks to the rest. */
+  const TRAINING_CRAWLERS = [
+    'GPTBot', 'OAI-SearchBot', 'ChatGPT-User',
+    'ClaudeBot', 'Claude-Web', 'anthropic-ai',
+    'Google-Extended', 'Applebot-Extended', 'Meta-ExternalAgent', 'FacebookBot',
+    'PerplexityBot', 'Bytespider', 'Amazonbot', 'CCBot',
+    'Diffbot', 'ImagesiftBot', 'Omgilibot', 'YouBot', 'cohere-ai',
+  ];
+
   site.write('robots.txt', [
     '# ' + (CFG.name || 'Gaming Nation') + ' — ' + SITE_URL,
     '#',
@@ -246,9 +260,13 @@ if (!SITE_URL) {
     '',
   ].concat(denied.map((d) => 'Disallow: ' + d)).concat([
     '',
-    'Sitemap: ' + SITE_URL + '/sitemap.xml',
+    '# Training crawlers. This is a product, not a dataset — see LICENSE.',
     '',
-  ]).join('\n'));
+  ]).concat(TRAINING_CRAWLERS.flatMap((ua) => ['User-agent: ' + ua, 'Disallow: /', '']))
+    .concat([
+      'Sitemap: ' + SITE_URL + '/sitemap.xml',
+      '',
+    ]).join('\n'));
   site.log.push('robots.txt        (search engines)');
 
   /* A robots.txt is only read at the root of a host. On a GitHub Pages

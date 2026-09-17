@@ -1,0 +1,32 @@
+Copyright (c) 2026 Jeff Boss. All rights reserved.
+
+Gaming Nation — the website, the management console, the driver client,
+the telemetry adapter, and everything else in this repository.
+
+This software is proprietary. It is published here so that it can be
+built and deployed, not so that it can be taken.
+
+You may NOT, without written permission from the copyright holder:
+
+  - copy, publish, or redistribute this software or any part of it;
+  - run it as a service, in whole or in part, for anybody else;
+  - make derivative works from it, including a rebranded copy;
+  - reuse its source, its design, its database schema, or its page
+    layouts in another product.
+
+You MAY read it, and you may report a fault in it.
+
+No licence is granted by implication, and making this repository
+readable is not permission to use what is in it. Nothing here is offered
+under an open source licence, and the absence of a licence file in any
+copy of this work does not put that copy in the public domain.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For permission, or to report a fault: JeffBoss315 on GitHub.

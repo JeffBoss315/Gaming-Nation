@@ -1,9 +1,40 @@
 # Sent with every response. Cloudflare Pages reads this from the site root,
 # so it is copied into www/ by the builder rather than kept there by hand.
+#
+# What these can and cannot do. A browser has to be given the HTML, the CSS
+# and the JavaScript in order to run them, so none of this hides the front
+# end from anybody determined to read it - nothing can. What it does is
+# stop the site being used as somebody else's raw material: no other page
+# may frame it, no script may be loaded from a host that is not listed
+# here, and the console pages are told not to be indexed at all. The thing
+# that actually protects the work is LICENSE, and the thing that keeps the
+# valuable half out of reach is that it runs on the server.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: SAMEORIGIN
+  Strict-Transport-Security: max-age=31536000
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Permissions-Policy: camera=(), geolocation=(), payment=(), usb=(), microphone=(self), fullscreen=(self)
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; worker-src 'self' blob:; manifest-src 'self'; connect-src 'self' https://sfzeauvkguywidrqjntk.supabase.co wss://sfzeauvkguywidrqjntk.supabase.co https://api.github.com https://github.com http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*
+
+# 'unsafe-inline' is in there because the pages carry inline <script> blocks
+# and the app writes style="" attributes as it renders. It is worth saying
+# plainly: that weakens the policy against injected script, and the parts
+# still doing real work are the host list and frame-ancestors. Taking it out
+# means giving every inline block a nonce at build time - worth doing, not
+# worth pretending is already done.
+
+# Not in the index, whoever links to them. robots.txt asks; this tells, and
+# it is the one that holds when somebody else links to the page.
+/admin.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/reset-password.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/supabase-test.html
+  X-Robots-Tag: noindex, nofollow, noarchive
 
 # The client asks this for the current build so it can tell a driver their
 # copy is out of date. It is fetched cross-origin - the desktop app's pages
