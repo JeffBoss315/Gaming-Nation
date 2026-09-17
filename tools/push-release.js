@@ -18,13 +18,30 @@ const { spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const RELEASE = path.join(ROOT, 'release');
 const DRY = process.argv.includes('--dry');
+/* Send up what has been built, rather than refusing until every target
+   has. The site falls back to the published release for anything the
+   bucket has not got, so a half-filled bucket is a working download page
+   and not a broken one. */
+const PARTIAL = process.argv.includes('--partial');
 
 /* Read the object names straight out of the Function, so this script and
    the thing that serves the files cannot drift apart. */
 function wantedObjects() {
   const src = fs.readFileSync(path.join(ROOT, 'functions', '_lib.js'), 'utf8');
-  const names = (src.match(/object:\s*'([^']+)'/g) || [])
-    .map((m) => m.replace(/object:\s*'/, '').replace(/'$/, ''));
+
+  /* The names are assembled there from a version and a suffix, so that
+     cutting a release is one line. This used to match whole quoted
+     strings, which is what they were before that helper arrived - and the
+     day it did, this matched nothing and said so in a way that sounded
+     like the file was broken. Built the same way instead. */
+  const version = (src.match(/RELEASE_VERSION\s*=\s*'([^']+)'/) || [])[1];
+  const template = (src.match(/const OBJECT = \(suffix\) =>\s*`([^`]+)`/) || [])[1];
+
+  const names = template && version
+    ? [...src.matchAll(/OBJECT\('([^']+)'\)/g)].map((m) => template
+        .replace('${RELEASE_VERSION}', version)
+        .replace('${suffix}', m[1]))
+    : [];
 
   if (!names.length) {
     console.log('Could not read any build names out of functions/_lib.js.');
@@ -65,10 +82,22 @@ for (const name of objects) {
 for (const p of plan) console.log('  ' + p.name.padEnd(48) + p.mb + ' MB');
 for (const m of missing) console.log('  ' + m.padEnd(48) + 'MISSING');
 
-if (missing.length) {
+if (missing.length && !PARTIAL) {
   console.log('\n' + missing.length + ' build(s) are not in release/.');
   console.log('Run npm run dist (and npm run android) first, or correct the');
   console.log('names in functions/_lib.js if a version was cut.');
+  console.log('Or pass --partial to send up the ones that are built.');
+  process.exit(1);
+}
+
+if (missing.length) {
+  console.log('\n' + missing.length + ' build(s) not built — --partial, so the rest');
+  console.log('goes up. The site serves the published release for anything the');
+  console.log('bucket has not got.');
+}
+
+if (!plan.length) {
+  console.log('\nNothing to upload.');
   process.exit(1);
 }
 

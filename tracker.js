@@ -133,7 +133,7 @@ function brandLogo() {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.2.0';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.2.1';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -565,6 +565,7 @@ const Telemetry = {
   /* fold a live frame into the app state */
   apply(frame) {
     const db = Store.db;
+    const prev = this.lastFrame;
     this.lastFrame = frame;
 
     /* one transform, and every map format is derived from it */
@@ -602,22 +603,27 @@ const Telemetry = {
        sitting on the disk. */
     if (mx != null) MapMods.seen(frame.game, mx, mz);
 
-    /* breadcrumb trail, thinned so it stays cheap to draw. The schematic
-       trail is in map units; the tile map needs raw world coords because its
-       transform is learned separately. */
-    db.trail = db.trail || [];
-    if (mx != null) {
-      const last = db.trail[db.trail.length - 1];
-      if (!last || Math.hypot(last[0] - mx, last[1] - mz) > 1.2) {
-        db.trail.push([+mx.toFixed(1), +mz.toFixed(1)]);
-        if (db.trail.length > 400) db.trail = db.trail.slice(-400);
-      }
-    }
-    db.worldTrail = db.worldTrail || [];
-    const lastW = db.worldTrail[db.worldTrail.length - 1];
-    if (!lastW || Math.hypot(lastW[0] - frame.pos.x, lastW[1] - frame.pos.z) > 40) {
-      db.worldTrail.push([Math.round(frame.pos.x), Math.round(frame.pos.z)]);
-      if (db.worldTrail.length > 600) db.worldTrail = db.worldTrail.slice(-600);
+    /* Breadcrumb trail, in raw game coordinates and thinned so it stays
+       cheap to draw. Every map projects it as it draws - see
+       trailSegments().
+
+       A null in it is a break. Further from the last frame than the truck
+       could have driven since is a ferry, a train or a reloaded save, not a
+       road, and joining the two sides is what drew straight lines across
+       the map. A trail also belongs to one game - ETS2 coordinates on the
+       ATS map land nowhere in particular - so a new game starts a new one.
+       A store from before trailGame has none, so its old trail, jumps and
+       all, goes on the first frame. */
+    if (db.trailGame !== frame.game) { db.worldTrail = []; db.trailGame = frame.game; }
+    const trail = db.worldTrail || (db.worldTrail = []);
+    const kept = trail[trail.length - 1];
+    const secs = prev ? Math.max(0, (frame.at - prev.at) / 1000) : 0;
+    const jumped = !prev || !(Math.hypot(frame.pos.x - prev.pos.x, frame.pos.z - prev.pos.z)
+      <= TRAIL_JUMP_M + TRAIL_TOP_SPEED * secs);
+    if (jumped && kept) trail.push(null);
+    if (jumped || !kept || Math.hypot(kept[0] - frame.pos.x, kept[1] - frame.pos.z) > 40) {
+      trail.push([Math.round(frame.pos.x), Math.round(frame.pos.z)]);
+      if (trail.length > 600) db.worldTrail = trail.slice(-600);
     }
 
     /* the driver record follows whatever they are actually driving */
@@ -1432,6 +1438,42 @@ function gameBounds(gameKey) {
    schematic view uses */
 
 /* ============================================================
+   THE BREADCRUMB
+   ------------------------------------------------------------
+   db.worldTrail as the separate stretches that were actually
+   driven, each point put through `place` into whatever the map
+   draws in - null from `place` means it cannot be shown.
+
+   It went on screen as one line through every point, so a ferry,
+   a train or a reloaded save drew a straight line from where the
+   truck had been to where it turned up, across half the map.
+   Telemetry.apply() writes a null where the truck jumped. A gap
+   no truck drove between two kept points - normally about 40 m
+   apart - is a break here as well, for a trail written before
+   those nulls were.
+   ============================================================ */
+const TRAIL_JUMP_M = 250;       /* metres of slack between two frames */
+const TRAIL_TOP_SPEED = 70;     /* m/s, about 250 km/h; faster than that is not driving */
+const TRAIL_GAP_M = 2000;       /* between two kept points */
+
+function trailSegments(gameKey, place) {
+  const db = Store.db;
+  if (db.trailGame && db.trailGame !== baseGameFor(gameKey)) return [];
+  const out = [];
+  let seg = [], prev = null;
+  const close = () => { if (seg.length > 1) out.push(seg); seg = []; };
+  for (const p of db.worldTrail || []) {
+    const at = p ? place(p[0], p[1]) : null;
+    if (!at) { close(); prev = null; continue; }
+    if (prev && Math.hypot(p[0] - prev[0], p[1] - prev[1]) > TRAIL_GAP_M) close();
+    seg.push(at);
+    prev = p;
+  }
+  close();
+  return out;
+}
+
+/* ============================================================
    TILE MAP
    ------------------------------------------------------------
    A real slippy map — pan, zoom, road tiles — with the truck
@@ -1671,12 +1713,9 @@ const TileMap = {
     const live = db.live;
     gameKey = gameKey || liveMapKey();
 
-    /* trail */
+    /* trail, one line per stretch - never one line through every jump */
     if (this.trailLine) {
-      const pts = (db.worldTrail || [])
-        .map((p) => this.latLngFor(gameKey, p[0], p[1]))
-        .filter(Boolean);
-      this.trailLine.setLatLngs(pts);
+      this.trailLine.setLatLngs(trailSegments(gameKey, (x, z) => this.latLngFor(gameKey, x, z)));
     }
 
     /* truck.
@@ -2188,15 +2227,10 @@ const Launcher = {
     }
     Store.log('ok', 'Launched ' + this.label(kind));
     toast('Starting ' + this.label(kind) + '…', 'ok');
-    /* the game takes a while to come up; the telemetry poller finds it */
-    if (kind !== 'tmp' && Store.db.settings.autoStartTracking) {
-      Store.log('info', 'Tracking will start as soon as telemetry answers');
-      if (!Store.db.settings.liveTelemetry) {
-        Store.db.settings.liveTelemetry = true;
-        Telemetry.start();
-        Store.save();
-      }
-    }
+    /* Launching the game does not open the telemetry link. It used to, and
+       so did the game merely being seen running (GameWatch.began), which is
+       how "Live on" came to switch itself on with nobody pressing it. The
+       driver opens it from the live map. */
     render();
   },
 
@@ -2280,13 +2314,6 @@ const GameWatch = {
     Store.log('ok', mapFor(game).label + ' started'
       + (source === 'process' ? '' : ' — telemetry connected'));
     toast(mapFor(game).short + ' detected', 'ok');
-
-    /* bring the telemetry link up so the run is tracked from the off */
-    if (db.settings.autoStartTracking && !db.settings.liveTelemetry) {
-      db.settings.liveTelemetry = true;
-      Telemetry.start();
-      Store.log('info', 'Tracking armed — waiting for the telemetry plugin');
-    }
 
     /* the driver is at the wheel — open a session on the company record and
        tell everyone, so the console shows them playing straight away */
@@ -3089,13 +3116,14 @@ function liveMapInner() {
       stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 5" opacity=".55"/>`;
   }
 
-  /* breadcrumb trail */
-  let trail = '';
-  if (db.trail && db.trail.length > 1) {
-    trail = `<polyline points="${db.trail.map((p) => p[0] + ',' + p[1]).join(' ')}"
+  /* breadcrumb trail, one polyline per stretch driven */
+  const trail = trailSegments(mapKey, (x, z) => {
+    const geo = Calib.toGeo(mapKey, x, z);
+    const ll = geo && geoToGameLatLng(mapKey, geo[0], geo[1]);
+    return ll ? ll.lng.toFixed(1) + ',' + (-ll.lat).toFixed(1) : null;
+  }).map((seg) => `<polyline points="${seg.join(' ')}"
       fill="none" stroke="var(--accent)" stroke-width="1.6" opacity=".75"
-      stroke-linejoin="round" stroke-linecap="round"/>`;
-  }
+      stroke-linejoin="round" stroke-linecap="round"/>`).join('');
 
   /* the truck */
   let marker = '';
@@ -3298,8 +3326,7 @@ function seed() {
     driver: null,         /* set by Auth.signIn from the Gaming Nation driver record */
     conn: { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' },
     live: null,           /* last decoded position frame */
-    trail: [],            /* breadcrumb in schematic map units */
-    worldTrail: [],       /* breadcrumb in raw game coords, for the tile map */
+    worldTrail: [],       /* breadcrumb in raw game coords, a null where the truck jumped */
     activityState: null,  /* delivering | stopped | driving | paused | idle */
     job: null,
     logbook: [],
@@ -3343,12 +3370,11 @@ function seed() {
 
       hostService: false,       /* run the company service on this machine */
       hostServiceLan: false,    /* and let the rest of the crew reach it */
-      liveTelemetry: true,      /* poll the real game when the server is reachable */
+      liveTelemetry: false,     /* poll the real game - off at every launch, see where the store clears db.live */
       pollRate: 400,            /* ms between telemetry polls — fast enough to read as live */
       ets2Exe: '',              /* eurotrucks2.exe */
       atsExe: '',               /* amtrucks.exe */
       tmpExe: '',               /* TruckersMP or TrucksBook - see tmpLabel() */
-      autoStartTracking: true,  /* arm the link as soon as the game is launched */
       jobUpdateSec: 10,         /* how often a running job is written to disk */
       heartbeatSec: 15,         /* how often we tell GMN we are alive */
       startMinimized: false,
@@ -3418,7 +3444,7 @@ const Store = {
       if (!(k in this.db.settings)) { this.db.settings[k] = fresh.settings[k]; added++; }
     }
     /* and the same for the top-level shape the views assume */
-    ['logbook', 'pending', 'uploads', 'activity', 'messages', 'trail', 'worldTrail']
+    ['logbook', 'pending', 'uploads', 'activity', 'messages', 'worldTrail']
       .forEach((k) => { if (!Array.isArray(this.db[k])) { this.db[k] = []; added++; } });
     if (!this.db.conn || typeof this.db.conn !== 'object') { this.db.conn = fresh.conn; added++; }
     if (!this.db.stats || typeof this.db.stats !== 'object') { this.db.stats = fresh.stats; added++; }
@@ -3439,6 +3465,10 @@ const Store = {
     }
     /* the schematic transform pointed at a layout that no longer exists */
     delete s.calibration;
+    /* nothing turns the telemetry link on by itself any more */
+    delete s.autoStartTracking;
+    /* the schematic view projects worldTrail now, like every other map */
+    delete this.db.trail;
 
     /* conn.gmn became conn.gmn with the rename. Carried over rather than
        just renamed in the seed: a store written by an older build has only
@@ -3459,6 +3489,11 @@ const Store = {
        that frame from a live one. */
     this.db.live = null;
 
+    /* The link itself is the driver's to open, the same way. It was saved on
+       with everything else, so every launch came up polling and the live map
+       read "Live on" before anybody had pressed it. */
+    this.db.settings.liveTelemetry = false;
+
     const d = this.db.driver;
     if (d && !d.authed) {
       console.info('[GMN] clearing a leftover identity (' + (d.gmnId || '?') + ') — sign in again');
@@ -3466,7 +3501,6 @@ const Store = {
       this.db.conn = { gmn: 'offline', ets2: 'stopped', link: 'ready', profile: null, telemetry: 'off' };
       this.db.live = null;
       this.db.activityState = null;
-      this.db.trail = [];
       this.db.worldTrail = [];
     }
 
@@ -7582,8 +7616,6 @@ function viewSettings() {
         <button class="btn" data-act="launch-game" data-kind="ets2">${icon('play')}Launch ETS2</button>
         <button class="btn" data-act="launch-game" data-kind="tmp">${icon('users')}Launch ${esc(tmpLabel())}</button>
       </div>
-      ${toggle('autoStartTracking', 'Start tracking after launching the game',
-               'Arm the telemetry link as soon as the game is started from here.')}
       ${/* A "Game profile" box stood here, and under it the client's own
             answer - "Found on this machine: AFRICA (playing), LAND". The
             box was asking a question the line beneath it had already
@@ -7614,7 +7646,7 @@ function viewSettings() {
           <input class="input" id="setBeatSec" type="number" min="5" max="300" step="5"
             value="${esc(String(s.heartbeatSec || 15))}"></div>
       </div>
-      ${toggle('liveTelemetry', 'Read the game live', 'Poll the telemetry server and follow the real truck. Falls back to the simulator when it is not answering.')}
+      ${toggle('liveTelemetry', 'Read the game live', 'Poll the telemetry server and follow the real truck. Off each time the client starts, until you turn it on here or with Live on the map.')}
       <div class="setting-row">
         <div><div class="b6">Map</div>
           <div class="t3 xs mt-4">${
@@ -7899,7 +7931,8 @@ function statusBarHTML() {
   const db = Store.db;
   const gmnOn = c.gmn === 'connected';
   const ets2On = c.ets2 === 'running';
-  const linkOn = c.link === 'connected';
+  const liveOff = !db.settings.liveTelemetry;
+  const linkOn = !liveOff && c.link === 'connected';
   const queued = db.pending.length + db.uploads.filter((u) => u.status !== 'done').length;
 
   return `
@@ -7915,13 +7948,15 @@ function statusBarHTML() {
          confident. A driver watching this while their load never appeared
          had every reason to believe the client was fine. -->
     <button class="sb-item btn-like ${linkOn ? 'on' : ''}" data-act="nav" data-view="livemap"
-      title="${Telemetry.mode === 'live'
+      title="${liveOff
+        ? 'Live telemetry is off - press Live on the live map to connect'
+        : Telemetry.mode === 'live'
         ? 'The game is sending telemetry and runs are being tracked'
         : linkOn
           ? 'Connected to the adapter, but the game has not sent a frame yet'
           : 'Nothing is arriving from the game — the telemetry plugin is usually missing from its plugins folder'}">
-      <span class="sb-dot ${Telemetry.mode === 'live' ? 'ok' : linkOn ? 'warn' : 'err'}"></span>${
-        Telemetry.mode === 'live' ? 'Telemetry live' : linkOn ? 'Telemetry waiting' : 'No telemetry'}</button>
+      <span class="sb-dot ${liveOff ? '' : Telemetry.mode === 'live' ? 'ok' : linkOn ? 'warn' : 'err'}"></span>${
+        liveOff ? 'Telemetry off' : Telemetry.mode === 'live' ? 'Telemetry live' : linkOn ? 'Telemetry waiting' : 'No telemetry'}</button>
     <span class="sb-sep"></span>
     <button class="sb-item btn-like ${Realtime.status === 'live' ? 'on' : ''}"
       data-act="fleet-setup"
@@ -10755,10 +10790,8 @@ function startServices() {
   clearInterval(startServices.findTimer);
   startServices.findTimer = setInterval(findService, 60000);
 
-  if (Store.db.settings.liveTelemetry) {
-    Telemetry.start();
-    Store.log('info', 'Watching for live telemetry on ' + Telemetry.endpoint());
-  }
+  /* Live telemetry is not started here. It is off at every launch - see
+     where the store clears db.live - and opens when the driver asks. */
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

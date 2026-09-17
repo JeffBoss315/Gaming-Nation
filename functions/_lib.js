@@ -23,7 +23,7 @@
    key here pointed at an object no longer in the bucket. Split into a
    version and a stem so a release moves one line, and tools/scan.js now
    fails the build if it stops matching the download page. */
-export const RELEASE_VERSION = '1.2.0';
+export const RELEASE_VERSION = '1.2.1';
 const OBJECT = (suffix) => `Gaming-Nation-Tracker-${RELEASE_VERSION}-${suffix}`;
 
 export const BUILDS = {
@@ -45,6 +45,52 @@ export const BUILDS = {
    phone, short enough that a link pasted into Discord is dead before
    anybody clicks it. */
 export const LINK_TTL_SECONDS = 300;
+
+/* Where a build is when the bucket has not got it.
+
+   Neither Pages nor Workers will host a 96 MB asset beside the site, so
+   the installers are not part of the payload and R2 is where they belong.
+   Until a deployment has that bucket bound - or in the window between a
+   version bump and its upload - the newest published release still has
+   the file, and reading it HERE means the driver is never sent to
+   github.com to fetch their own update.
+
+   Matched by exact name first, then by the build's suffix, so a site that
+   has moved on to 1.2.1 still hands out the 1.2.0 installer rather than
+   nothing at all. */
+const RELEASES_FEED =
+  'https://api.github.com/repos/JeffBoss315/Gaming-Nation/releases?per_page=20';
+
+export async function publishedAsset(objectName) {
+  const suffix = String(objectName).replace(/^Gaming-Nation-Tracker-[0-9.]+-/, '');
+
+  let body;
+  try {
+    const res = await fetch(RELEASES_FEED, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        /* GitHub refuses an API request with no User-Agent */
+        'User-Agent': 'gaming-nation-site',
+      },
+    });
+    if (!res.ok) return null;
+    body = await res.json();
+  } catch (e) {
+    return null;
+  }
+
+  if (!Array.isArray(body)) return null;
+
+  const assets = body
+    .filter((r) => r && !r.draft && Array.isArray(r.assets))
+    .flatMap((r) => r.assets)
+    .filter((a) => a && a.name && a.browser_download_url);
+
+  const found = assets.find((a) => a.name === objectName)
+    || assets.find((a) => a.name.endsWith('-' + suffix));
+
+  return found ? { url: found.browser_download_url, name: found.name } : null;
+}
 
 export const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {

@@ -42,6 +42,10 @@ export async function onRequestPost({ request, env }) {
   if (!ready) {
     return json({
       gate: 'off',
+      /* Ungated is not the same as unavailable. The same route serves the
+         file without a token when nothing can sign one, so the page sends
+         the driver there rather than out to github.com. */
+      url: `/api/download/${build}`,
       reason: !env.GMN_DOWNLOAD_SECRET
         ? 'GMN_DOWNLOAD_SECRET is not set on this project.'
         : 'No R2 bucket is bound to this project as RELEASES.',

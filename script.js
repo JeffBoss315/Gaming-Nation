@@ -13282,25 +13282,56 @@ function saveFleetService() {
 const CLIENT_DOWNLOAD_BASE =
   'https://github.com/JeffBoss315/Gaming-Nation/releases/download/v';
 
+/* What has actually been published. Read-only, needs no key, and GitHub
+   allows it from a page. */
+const CLIENT_RELEASES_API =
+  'https://api.github.com/repos/JeffBoss315/Gaming-Nation/releases?per_page=20';
+
 /* the file, wherever it is: a full URL when one is configured, otherwise
-   the relative path this page has always used */
+   the relative path this page has always used.
+
+   The tag is the version this page was built as, and that release exists
+   on GitHub only once somebody publishes it. So between bumping the
+   version and publishing that release, every Download button pointed at a
+   tag that was not there and GitHub answered the driver with a 404 - the
+   page promising a build nobody could have. Downloads.loadReleases() asks
+   what is really published; when the named version is not among it, the
+   newest release that has this build is handed over instead. */
 function clientDownloadUrl(build) {
+  /* This site serves the file itself wherever it can. A driver updating
+     their client came to the website, and the download belongs on the
+     website - functions/api/download/[build].js streams it from R2, or
+     from the published release, without the browser ever leaving here. */
+  if (Downloads.sameOrigin) return '/api/download/' + build.key;
+
   if (!CLIENT_DOWNLOAD_BASE) return build.file;
   const name = String(build.file).split('/').pop();
-  return CLIENT_DOWNLOAD_BASE + CLIENT_RELEASE.version + '/' + name;
+  const direct = CLIENT_DOWNLOAD_BASE + CLIENT_RELEASE.version + '/' + name;
+
+  const releases = Downloads.releases;
+  if (!releases || !releases.length) return direct;
+
+  /* 'Gaming-Nation-Tracker-1.2.1-windows-setup.exe' -> 'windows-setup.exe',
+     which is what makes the same build recognisable across versions */
+  const suffix = name.split('-' + CLIENT_RELEASE.version + '-').pop();
+  const assetIn = (r) => r && (r.assets.find((a) => a.name === name)
+    || r.assets.find((a) => a.name.endsWith('-' + suffix)));
+  const named = releases.find((r) => r.tag === 'v' + CLIENT_RELEASE.version);
+  const asset = assetIn(named) || releases.map(assetIn).find(Boolean);
+  return asset ? asset.url : direct;
 }
 
 const CLIENT_RELEASE = {
-  version: '1.2.0',
+  version: '1.2.1',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Tracker-1.2.0-windows-setup.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.1-windows-setup.exe',
       size: '96.5 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Tracker-1.2.0-windows-portable.exe',
+      file: 'release/Gaming-Nation-Tracker-1.2.1-windows-portable.exe',
       size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Tracker-1.2.0-android.apk',
+      file: 'release/Gaming-Nation-Tracker-1.2.1-android.apk',
       size: '6.8 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
@@ -13318,6 +13349,38 @@ const CLIENT_RELEASE = {
 const Downloads = {
   state: 'unknown',      /* unknown | local | ready | missing */
   missing: [],
+
+  /* Does this host have the download route? When it does, every button
+     points at it and nothing links out to github.com. */
+  sameOrigin: false,
+
+  /* The releases GitHub actually has, newest first. Null until asked; an
+     empty list when it could not be asked, and both mean the same thing to
+     clientDownloadUrl() - use the tag this page names and hope. */
+  releases: null,
+
+  async loadReleases() {
+    if (!CLIENT_DOWNLOAD_BASE || this.releases) return;
+    this.releases = [];
+    try {
+      const res = await fetch(CLIENT_RELEASES_API, {
+        headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      /* a host that rewrites unknown paths answers this with a page, and a
+         page is not a list of releases */
+      if (!Array.isArray(body)) return;
+      this.releases = body
+        .filter((r) => r && !r.draft && Array.isArray(r.assets))
+        .map((r) => ({
+          tag: r.tag_name,
+          assets: r.assets
+            .filter((a) => a && a.name && a.browser_download_url)
+            .map((a) => ({ name: a.name, url: a.browser_download_url })),
+        }));
+    } catch (e) { /* offline, rate-limited or blocked — the named tag it is */ }
+  },
 
   /* Whether the approval gate is actually in front of the builds here.
 
@@ -13344,6 +13407,10 @@ const Downloads = {
   },
 
   async check() {
+    /* which releases exist is worth knowing wherever this page is opened
+       from, including off the disk, where nothing else here applies */
+    await this.loadReleases();
+
     if (location.protocol === 'file:') { this.state = 'local'; return; }
 
     /* Is the gated endpoint here?
@@ -13369,6 +13436,9 @@ const Downloads = {
         try { body = await res.json(); } catch (e) { body = null; }
 
         this.gated = (body && body.gate === 'off') ? 'off' : 'on';
+        /* JSON came back, so the Function is here — gated or not, it is
+           what hands out the file */
+        this.sameOrigin = true;
         this.state = 'ready';
         this.missing = [];
         return;
@@ -13457,6 +13527,9 @@ const Downloads = {
        that refuses everybody is worse than no Function at all. */
     if (body.gate === 'off') {
       Downloads.gated = 'off';
+      /* The Function answered, so it is here to serve the file ungated —
+         clientDownloadUrl() now points at it rather than at GitHub. */
+      Downloads.sameOrigin = true;
       return fallback();
     }
 

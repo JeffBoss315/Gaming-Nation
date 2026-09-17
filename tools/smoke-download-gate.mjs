@@ -210,10 +210,35 @@ check('an APK link cannot fetch the installer', res.status, 403);
 res = await getFile('win-setup', token, ENV({ RELEASES: bucket(false) }));
 check('a build missing from the bucket — 404', res.status, 404);
 
-/* The file endpoint is only ever reached with a signed link, which only
-   exists when the gate was on — so there it IS right to fail loudly. */
+/* No bucket is not a dead end any more.
+
+   It used to answer 500: the file endpoint was only ever reached with a
+   signed link, so a missing bucket could only be a misconfiguration. Now
+   the same route also serves an ungated deployment, and the point of it
+   is that a driver updating their client is never handed off to
+   github.com — so with no bucket it reads the published release itself
+   and streams that out of this origin. */
+const releaseFeed = (asset) => async (url) => {
+  const href = String(url && url.url ? url.url : url);
+  if (href.includes('api.github.com')) {
+    return Response.json(asset ? [{
+      draft: false,
+      tag_name: 'v1.2.0',
+      assets: [{ name: asset, browser_download_url: 'https://example.invalid/' + asset }],
+    }] : []);
+  }
+  return new Response('PRETEND-BINARY', { status: 200 });
+};
+
+globalThis.fetch = releaseFeed('Gaming-Nation-Tracker-1.2.0-windows-setup.exe');
 res = await getFile('win-setup', token, ENV({ RELEASES: null }));
-check('serving with no bucket — refused', res.status, 500);
+check('with no bucket, the published release is served', res.status, 200);
+check('by this site, under the name that was published',
+  (res.headers.get('Content-Disposition') || '').includes('1.2.0-windows-setup.exe'), 'true');
+
+globalThis.fetch = releaseFeed(null);
+res = await getFile('win-setup', token, ENV({ RELEASES: null }));
+check('and with nothing published either — 404', res.status, 404);
 
 /* ---------- report --------------------------------------------- */
 

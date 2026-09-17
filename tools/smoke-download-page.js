@@ -150,8 +150,11 @@ app.whenReady().then(async () => {
     /* ---- the host that rewrites everything: the one that broke ---- */
     const spa = await run(win, 'spa');
     check('a page answering the API is not a gate', spa.gated, 'off');
+    /* Either the site's own download route, or - on a host that has no
+       Functions at all - the published release. Never nothing. */
     check('and the driver still gets their download',
-      /Gaming-Nation-Tracker-\d+\.\d+\.\d+-windows-setup\.exe$/.test(spa.asked || ''), 'true');
+      /(Gaming-Nation-Tracker-\d+\.\d+\.\d+-windows-setup\.exe|\/api\/download\/win-setup)$/
+        .test(spa.asked || ''), 'true');
     check('with nothing shouted at them', spa.toasts.length, 0);
 
     /* The banner has to know the difference between "there is no gate on
@@ -178,8 +181,10 @@ app.whenReady().then(async () => {
        must not lock everybody out. */
     const half = await run(win, 'halfbuilt');
     check('a gate that cannot gate says so', half.gated, 'off');
+    /* and it serves the build itself rather than sending the driver to
+       github.com, which is what "the website has your update" means */
     check('and the download still works',
-      /windows-setup\.exe$/.test(half.asked || ''), 'true');
+      /\/api\/download\/win-setup$/.test(half.asked || ''), 'true');
     check('without refusing anybody', half.toasts.length, 0);
 
     /* ---- the Function there, and refusing ---- */
