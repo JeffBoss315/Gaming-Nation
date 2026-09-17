@@ -227,6 +227,10 @@ const releaseFeed = (asset) => async (url) => {
       assets: [{ name: asset, browser_download_url: 'https://example.invalid/' + asset }],
     }] : []);
   }
+  /* The version this site names has not been published - which is the
+     whole reason the feed is consulted - so its own address is a 404 and
+     only the older asset answers. */
+  if (href.includes(lib.RELEASE_VERSION)) return new Response('Not Found', { status: 404 });
   return new Response('PRETEND-BINARY', { status: 200 });
 };
 

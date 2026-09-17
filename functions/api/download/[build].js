@@ -25,7 +25,7 @@
    release links already had, and the downloads page tells staff, in as
    many words, that the gate is off.
 */
-import { BUILDS, publishedAsset, verify } from '../../_lib.js';
+import { BUILDS, directAssetUrl, publishedAsset, verify } from '../../_lib.js';
 
 const fail = (status, why) =>
   new Response(why + '\n', {
@@ -88,22 +88,31 @@ export async function onRequestGet({ request, params, env }) {
     }
   }
 
-  const published = await publishedAsset(spec.object);
+  /* This version by its own address first, and only then by asking which
+     releases exist: the API allows 60 questions an hour from one place,
+     and a download that depends on one is a download that fails on the
+     day it is busiest. The feed is for the window where this site has
+     moved on to a version nobody has published yet. */
+  const reach = async (candidate) => {
+    if (!candidate) return null;
+    const res = await fetch(candidate.url, {
+      headers: range ? { Range: range } : {},
+      redirect: 'follow',
+    });
+    if (res.ok || res.status === 206) return { res, name: candidate.name };
+    return null;
+  };
 
-  if (!published) {
+  const got = await reach({ url: directAssetUrl(spec.object), name: spec.object })
+    || await reach(await publishedAsset(spec.object));
+
+  if (!got) {
     return fail(404, bucket
       ? 'That build is not in the release store, and no release has it either.'
       : 'That build has not been published yet.');
   }
 
-  const upstream = await fetch(published.url, {
-    headers: range ? { Range: range } : {},
-    redirect: 'follow',
-  });
-
-  if (!upstream.ok && upstream.status !== 206) {
-    return fail(502, 'The release store did not answer. Try again in a moment.');
-  }
+  const upstream = got.res;
 
   const headers = new Headers();
   for (const h of ['Content-Length', 'Content-Range', 'etag', 'Last-Modified']) {
@@ -111,7 +120,7 @@ export async function onRequestGet({ request, params, env }) {
     if (v) headers.set(h, v);
   }
   headers.set('Content-Type', spec.type);
-  headers.set('Content-Disposition', `attachment; filename="${published.name}"`);
+  headers.set('Content-Disposition', `attachment; filename="${got.name}"`);
   headers.set('Cache-Control', 'private, no-store');
   headers.set('Accept-Ranges', 'bytes');
 

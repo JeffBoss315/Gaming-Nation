@@ -61,6 +61,17 @@ export const LINK_TTL_SECONDS = 300;
 const RELEASES_FEED =
   'https://api.github.com/repos/JeffBoss315/Gaming-Nation/releases?per_page=20';
 
+/* Where the file for THIS version lives, without asking anybody.
+
+   The API has a rate limit - 60 an hour from one address, and a download
+   route that needs it is a download route that stops working on a busy
+   day. A release asset has a plain address, so the common case (the
+   version this site names is the version that was published) costs no API
+   call at all, and publishedAsset() below is only for the window where
+   the site has moved ahead of the last release. */
+export const directAssetUrl = (objectName) =>
+  `https://github.com/JeffBoss315/Gaming-Nation/releases/download/v${RELEASE_VERSION}/${objectName}`;
+
 export async function publishedAsset(objectName) {
   const suffix = String(objectName).replace(/^Gaming-Nation-Tracker-[0-9.]+-/, '');
 
