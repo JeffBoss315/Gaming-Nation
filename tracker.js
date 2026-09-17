@@ -285,7 +285,7 @@ function animateCounts(root) {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.2.3';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.2.4';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -1187,6 +1187,110 @@ const JobTracker = {
    or point it at your own endpoint. With no server configured there
    is nobody to show, and the view says so rather than inventing a crew.
    ============================================================ */
+/* ============================================================
+   THE CREW, WITH NOTHING TO RUN
+   ------------------------------------------------------------
+   Fleet below talks to fleet-server.js - a program somebody has to
+   keep running on a machine somewhere. A driver who has not set
+   one up sees "No fleet service connected" and an empty map, which
+   is most of the client's crew half switched off by default.
+
+   Supabase is already running, and public.driver_locations already
+   holds positions - it is what the management console's live map
+   reads. So with no service configured the crew comes from there:
+   this client writes its own position in, and reads everybody's
+   back out of public.fleet_positions, the view that hands out a
+   code, a name and a position while the tables underneath stay
+   shut behind row level security. See
+   supabase/migrations/20260918_fleet_positions_view.sql.
+
+   It is not everything the service does - rooms, files and calls
+   still need one. It is the map and who is on it, which is the
+   part every driver actually looks at.
+   ============================================================ */
+const FleetCloud = {
+  lastPush: 0,
+  warned: false,
+
+  /* signed in to Supabase, and knowing which row in drivers is us */
+  available() {
+    return !!(window.gmnSupabase && Store.db.driver && Store.db.driver.supabaseId);
+  },
+
+  /* One row every twenty seconds at most. The table keeps history and is
+     pruned on a schedule, so writing on every telemetry frame would be
+     tens of thousands of rows a day from a single truck. */
+  async push() {
+    if (!this.available()) return;
+    if (Date.now() - this.lastPush < 20000) return;
+
+    /* null when the driver has location sharing off, and that decision is
+       theirs: nothing about where they are leaves the machine. */
+    const f = Fleet.frame();
+    if (!f || typeof f.lat !== 'number' || typeof f.lon !== 'number') return;
+
+    this.lastPush = Date.now();
+    try {
+      const { error } = await window.gmnSupabase.from('driver_locations').insert({
+        driver_id: Store.db.driver.supabaseId,
+        latitude: f.lat,
+        longitude: f.lon,
+        speed: f.speed || 0,
+        heading: f.heading || 0,
+      });
+      if (error) throw error;
+      this.warned = false;
+    } catch (e) {
+      /* once, not every twenty seconds */
+      if (!this.warned) {
+        this.warned = true;
+        Store.log('warn', 'Could not share this position with the company — '
+          + (e.message || e));
+      }
+    }
+  },
+
+  async step() {
+    if (!this.available()) { Fleet.drivers = []; Fleet.online = false; return; }
+
+    await this.push();
+
+    try {
+      const { data, error } = await window.gmnSupabase
+        .from('fleet_positions')
+        .select('driver_id, driver_code, full_name, latitude, longitude, speed, heading, updated_at')
+        .limit(200);
+      if (error) throw error;
+
+      Fleet.absorb((data || []).map((r) => ({
+        id: r.driver_code || ('GMN-' + r.driver_id),
+        name: r.full_name || r.driver_code || 'Driver',
+        lat: r.latitude,
+        lon: r.longitude,
+        speed: Math.round(r.speed || 0),
+        heading: r.heading || 0,
+        at: new Date(r.updated_at).getTime(),
+      })), true);
+
+      if (!Fleet.online) {
+        Fleet.online = true;
+        Store.log('ok', 'Crew map live from Gaming Nation — '
+          + Fleet.drivers.length + ' driver(s) reporting');
+      }
+      Fleet.lastError = null;
+    } catch (e) {
+      /* The view arrives with a migration. Until that is applied this is a
+         404 from PostgREST, and saying which beats an empty map. */
+      const msg = e && e.message ? e.message : String(e);
+      Fleet.online = false;
+      Fleet.drivers = [];
+      Fleet.lastError = /fleet_positions|does not exist|not find/i.test(msg)
+        ? 'the crew map is not set up in the database yet'
+        : msg;
+    }
+  },
+};
+
 const Fleet = {
   drivers: [],        /* [{id,name,game,x,z,heading,speed,job,at,self}] */
   timer: null,
@@ -1198,7 +1302,9 @@ const Fleet = {
     /* same rule as the company record: a page served by the service uses it */
     return url ? url.replace(/\/$/, '') : defaultServiceUrl();
   },
-  enabled() { return !!this.endpoint(); },
+  /* A company service when one is configured; otherwise Supabase, which is
+     already running and needs nobody to start it. */
+  enabled() { return !!this.endpoint() || FleetCloud.available(); },
 
   start() {
     this.stop();
@@ -1268,6 +1374,8 @@ const Fleet = {
 
   pushNow() {
     if (!this.enabled()) return;
+    /* the same push, to the place the crew is actually being read from */
+    if (!this.endpoint()) { FleetCloud.push(); return; }
     const since = Date.now() - this.lastPush;
     if (since < this.MIN_PUSH_MS) {
       if (this.pushQueued) return;
@@ -1360,6 +1468,9 @@ const Fleet = {
 
   async step() {
     if (!this.enabled()) { this.drivers = []; return; }
+
+    /* no service to ask: the crew is in Supabase */
+    if (!this.endpoint()) return FleetCloud.step();
 
     this.pushNow();
 
@@ -3378,7 +3489,9 @@ function liveFactsInner() {
 function fleetPanelInner() {
   const others = Fleet.drivers.filter((d) => !d.self);
   if (!others.length) {
-    return Fleet.enabled()
+    return Fleet.enabled() && Fleet.lastError
+      ? emptyState('alert', 'The crew map is not answering', Fleet.lastError)
+      : Fleet.enabled()
       ? emptyState('users', 'No other drivers reporting',
           'Yours is the only client sending a position at the moment.')
       : emptyState('users', 'The crew is not connected',
@@ -5042,7 +5155,11 @@ function liveDriversInner() {
   const rows = fleetRows();
 
   if (!rows.length) {
-    return Fleet.enabled()
+    return Fleet.enabled() && Fleet.lastError
+      /* "Nobody is on the road" would be a lie when the truth is that the
+         question could not be asked. */
+      ? emptyState('alert', 'The crew map is not answering', Fleet.lastError)
+      : Fleet.enabled()
       ? emptyState('users', 'Nobody is on the road',
           'Drivers appear here the moment their client sends a position — no refreshing, no waiting.')
       : emptyState('users', 'No fleet service connected',
@@ -10583,6 +10700,10 @@ const Auth = {
             joined: row.created_at || new Date().toISOString(), km: row.km || 0,
             deliveries: row.deliveries || 0, truckersmp: row.truckersmp || '',
             avatar: avatarSrc(row.avatar) || keptAvatar(row.driver_code) || '',
+            /* The numeric key, kept because driver_locations is keyed by it
+               and not by the driver code. Without this the client can read
+               the crew map but has no way to put itself on it. */
+            supabaseId: row.id,
           }, user, session: result.data.session,
         };
       } catch (error) {
@@ -10621,6 +10742,8 @@ const Auth = {
       steamId: '', tmpId: (driver && driver.truckersmp) || '', discord: account.discord || '',
       email: account.email,
       role: (driver && driver.role) || 'driver',
+      /* what public.driver_locations is keyed by — see FleetCloud */
+      supabaseId: (driver && driver.supabaseId) || null,
       authed: true,          /* set here and nowhere else */
     };
     db.conn.gmn = 'connected';

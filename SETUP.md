@@ -332,6 +332,59 @@ from then on.
 If the tiles are ever unreachable, the client falls back to the schematic
 rather than showing nothing.
 
+## 8. The crew map, with nothing to run
+
+The client can show the rest of the fleet in two ways.
+
+**With a company service.** `npm run fleet` (or the client hosting it
+itself) gives the crew everything: the live map, rooms, chat, files and
+calls. It is also a program somebody has to keep running, and every
+driver has to be pointed at its address.
+
+**Without one.** Supabase is already running, and
+`public.driver_locations` already holds positions — it is what the
+management console's live map reads. With no service address set, the
+client writes its own position there and reads the fleet back out. No
+host, no address to hand round, nothing to start.
+
+That second path needs one migration, because row level security is
+doing its job: a driver may read their own positions and staff may read
+everyone's, so an ordinary driver asking for the fleet gets their own
+truck and nothing else. Rather than opening `drivers` — which holds
+email addresses and account status — there is a view that hands out
+only what a map needs:
+
+```
+supabase/migrations/20260918_fleet_positions_view.sql
+```
+
+Paste it into the Supabase SQL editor (Dashboard → SQL Editor → New
+query) and run it. It is safe to run more than once. It creates
+`public.fleet_positions`: the newest position per driver from the last
+ten minutes, with their code, name and role, readable by anyone signed
+in and by nobody anonymous.
+
+Until it is run, the client says *"the crew map is not set up in the
+database yet"* rather than showing an empty road, which means something
+quite different.
+
+**What the driver controls.** Nothing is shared unless *Share location*
+is on in the client — `Fleet.frame()` returns nothing when it is off, so
+no position is written at all. A position is written at most every
+twenty seconds, and the table is pruned on a schedule by the migration
+that created it.
+
+**Checking it:**
+
+```
+npm run smoke:fleetcloud
+```
+
+drives the whole path against a stubbed Supabase — that a position is
+written with the columns that table has, that the view's rows become
+crew the map can draw, that this driver is marked as themselves, and
+that sharing off means nothing leaves the machine.
+
 ## Checking it works
 
 ```bash
