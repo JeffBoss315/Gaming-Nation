@@ -13351,8 +13351,15 @@ const Downloads = {
   missing: [],
 
   /* Does this host have the download route? When it does, every button
-     points at it and nothing links out to github.com. */
-  sameOrigin: false,
+     points at it and nothing links out to github.com.
+
+     True to begin with on any real host, and set false only where asking
+     for it proves there is nothing to ask - a page opened off the disk,
+     or a host with no Functions. It started false and was turned on by
+     the answer, which left a window: a click before that answer arrived
+     built a github.com link, and a link to a version whose release has
+     no files on it is the 404 a driver then sees. */
+  sameOrigin: typeof location !== 'undefined' && /^https?:$/.test(location.protocol),
 
   /* The releases GitHub actually has, newest first. Null until asked; an
      empty list when it could not be asked, and both mean the same thing to
@@ -13443,9 +13450,13 @@ const Downloads = {
         this.missing = [];
         return;
       }
+      /* answered, but not as JSON: this host has no Functions, so there
+         is no download route here either */
       this.gated = 'off';
+      this.sameOrigin = false;
     } catch (e) {
       this.gated = 'off';   /* no Functions, or offline */
+      this.sameOrigin = false;
     }
 
     const missing = [];
