@@ -260,6 +260,78 @@ which is how you revoke them.
 
 ---
 
+## 7. The real game map
+
+The map in the client draws from `map-data.js`: every city in roughly the
+right place, with straight lines between them. It is a diagram, and it is
+honest about being one — but it is not the map people mean when they say
+the ETS2 map.
+
+The real one is a picture rendered from the games' own files. Sites that
+show it render it themselves; those renders belong to whoever made them, so
+this company renders its own and serves it from its own address.
+
+**Render it** — once per game, on a machine with the game installed:
+
+```
+# github.com/dariowouters/ts-map  (MIT)
+# Point it at the game folder and export a tiled web map.
+# It writes <folder>/<z>/<x>/<y>.png — nothing else is needed.
+```
+
+Zoom 0–8 is plenty for a live map and keeps the pyramid to a size that
+uploads in minutes rather than hours. Higher zooms mostly add tiles nobody
+looks at.
+
+**Put it in the bucket** — the same bucket the installers are in:
+
+```
+npm run tiles:push -- path\to\export --game ets2 --dry   # says what would go
+npm run tiles:push -- path\to\export --game ets2
+npm run tiles:push -- path\to\ats-export --game ats
+```
+
+The S3 API is used rather than `wrangler r2 object put`, because a pyramid
+is tens of thousands of objects and one process each would take hours. It
+needs a key pair, which the wrangler login is not:
+
+```
+CLOUDFLARE_ACCOUNT_ID    R2 -> Overview, top right
+R2_ACCESS_KEY_ID         R2 -> Manage API tokens -> Create (Object Read & Write)
+R2_SECRET_ACCESS_KEY     shown once, when the token is made
+```
+
+An interrupted run resumes: finished keys are written to a manifest beside
+the export and skipped next time.
+
+**Serve it.** `functions/api/tiles/[[tile]].js` hands the tiles back out at
+
+```
+/api/tiles/<game>/<z>/<x>/<y>.png
+```
+
+from the `RELEASES` binding, cached for a year — a tile under a given key
+never changes, and a new render goes to a new prefix. They are not behind
+the download gate: a map picture is not the client, and a browser asking
+for two hundred tiles a minute cannot carry a signed link for each one.
+
+**Point the client at it.** Live map → **Map** → **Gaming Nation map** →
+Save. That fills in
+
+```
+https://gaming-nation.pages.dev/api/tiles/{game}/{z}/{x}/{y}.png
+```
+
+where `{game}` becomes `ets2` or `ats` as the driver switches games, so the
+address is set once. Then **Line up** on the map, twice, once per game: the
+renderer publishes no mapping between game coordinates and tiles, so the
+client learns it from two clicks — drive somewhere, click where the truck
+actually is, do it again well away from the first, and the fit is exact
+from then on.
+
+If the tiles are ever unreachable, the client falls back to the schematic
+rather than showing nothing.
+
 ## Checking it works
 
 ```bash

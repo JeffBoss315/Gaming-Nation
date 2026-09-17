@@ -132,8 +132,70 @@ function brandLogo() {
   return `<img src="icons/mark.png" alt="Gaming Nation" class="brand-img">`;
 }
 
+/* A figure worth looking at.
+
+   The console has had these since the start - an icon in the brand, the
+   number big enough to read from across a desk, and a count-up as the
+   screen draws - while the client wrote bare boxes with 19px numbers in
+   them. Both pages load style.css, so the classes were there all along
+   and only this was missing. That gap is most of why the two halves of
+   the same product did not look like one. */
+function statTile({ label, value, icon: ic = 'info', tone = 'brand', sub, raw, title }) {
+  /* Count up only from a plain number: "€0" and "—" stay as they are. */
+  const numeric = raw != null && /^[\d,]+(\.\d+)?/.test(String(value))
+    ? String(value).match(/^[\d,]+(?:\.\d+)?(.*)$/) : null;
+  /* The colour goes on as a style, not as a class, because "brand" is
+     already the sidebar lock-up's class - two of these tiles came out with
+     a 32px box and an icon squeezed to nothing before that was noticed.
+     The console has always done it this way; this is the same reason. */
+  const tones = {
+    brand: 'var(--accent)', info: 'var(--info)', ok: 'var(--ok)',
+    warn: 'var(--warn)', danger: 'var(--danger)',
+  };
+  return `<div class="stat"${title ? ` title="${esc(title)}"` : ''}>
+    <span class="stat-ico" style="color:${tones[tone] || tones.brand}">${icon(ic)}</span>
+    <div class="stat-val"${numeric ? ` data-count="${raw}" data-suffix="${esc(numeric[1] || '')}"` : ''}
+      >${esc(String(value))}</div>
+    <div class="stat-lbl">${esc(label)}</div>
+    ${sub ? `<div class="t3 xs mt-8">${sub}</div>` : ''}
+  </div>`;
+}
+
+/* Nothing here yet, said properly.
+
+   An empty screen is where a driver decides whether the thing works. One
+   grey line in the middle of a void reads as broken; a title, a sentence
+   saying why it is empty, and the button that fills it reads as waiting. */
+function emptyState(ic, title, body, action = '') {
+  return `<div class="empty"><span class="empty-ico">${icon(ic)}</span>
+    <div><div class="b6" style="font-size:14px;color:var(--text-2)">${esc(title)}</div>
+    ${body ? `<div class="t3 sm mt-4" style="max-width:400px">${esc(body)}</div>` : ''}</div>
+    ${action}</div>`;
+}
+
+/* The numbers roll up when a screen draws. Cheap, and it is the
+   difference between a figure that was always there and one that just
+   landed - which is what a live client is claiming about itself. */
+function animateCounts(root) {
+  const host = root || document;
+  host.querySelectorAll('[data-count]').forEach((el) => {
+    const target = parseFloat(el.dataset.count);
+    if (!Number.isFinite(target)) return;
+    const suffix = el.dataset.suffix || '';
+    const dur = 700, t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min((t - t0) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const v = target * eased;
+      el.textContent = (target % 1 ? v.toFixed(1) : Math.round(v)).toLocaleString('en-GB') + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.2.1';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.2.2';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -1473,6 +1535,20 @@ function trailSegments(gameKey, place) {
   return out;
 }
 
+/* One address for both games.
+
+   The real map is two renders - Europe and America - and a driver should
+   not have to retype the tile address every time they switch game. {game}
+   in the URL becomes ets2 or ats as the map is drawn, so
+
+     https://gaming-nation.pages.dev/api/tiles/{game}/{z}/{x}/{y}.png
+
+   is the whole setting. ProMods renders under the ETS2 world, so it asks
+   for the same tiles as ETS2 does. */
+function tileUrlFor(gameKey) {
+  return String(Store.db.settings.tileUrl || '').replace(/\{game\}/g, baseGameFor(gameKey));
+}
+
 /* ============================================================
    TILE MAP
    ------------------------------------------------------------
@@ -1576,7 +1652,7 @@ const TileMap = {
           attribution: s.worldAttribution || '',
           errorTileUrl: '',
         }).addTo(this.map)
-      : L.tileLayer(s.tileUrl, {
+      : L.tileLayer(tileUrlFor(gameKey), {
           minZoom: Number(s.tileMinZoom) || 0,
           maxZoom: Number(s.tileMaxZoom) || 8,
           tileSize: Number(s.tileSize) || 256,
@@ -2076,9 +2152,17 @@ function openTileSource() {
       <div class="field"><label for="tsWorld">Road tile URL</label>
         <input class="input" id="tsWorld" value="${esc(s.worldTileUrl || '')}"></div>
       <p class="t2 mt-12">The settings below only apply to your own tile pyramid.</p>
+      ${/* Two answers that are already true, rather than a blank box and a
+            format to guess at. The company's own render is the one most
+            drivers want; a folder beside the app is the one that still
+            works with the internet down. */''}
+      <div class="row gap-8 wrap mt-12">
+        <button class="btn btn-sm" data-act="tile-preset" data-v="gmn">${icon('map')}Gaming Nation map</button>
+        <button class="btn btn-sm" data-act="tile-preset" data-v="local">${icon('folder')}Tiles beside the app</button>
+      </div>
       <div class="field mt-12"><label for="tsUrl">Tile URL template</label>
         <input class="input" id="tsUrl" value="${esc(s.tileUrl || '')}"
-          placeholder="https://your-host/tiles/{z}/{x}/{y}.png"></div>
+          placeholder="https://your-host/tiles/{game}/{z}/{x}/{y}.png"></div>
       <div class="row gap-8 wrap">
         <div class="field" style="min-width:96px"><label for="tsMin">Min zoom</label>
           <input class="input" id="tsMin" type="number" min="0" max="12" value="${esc(String(s.tileMinZoom ?? 0))}"></div>
@@ -3204,9 +3288,12 @@ function liveFactsInner() {
 function fleetPanelInner() {
   const others = Fleet.drivers.filter((d) => !d.self);
   if (!others.length) {
-    return `<div class="empty">${icon('users')}<div>${Fleet.enabled()
-      ? 'No other drivers reporting'
-      : 'Connect a fleet service to see the rest of the crew'}</div></div>`;
+    return Fleet.enabled()
+      ? emptyState('users', 'No other drivers reporting',
+          'Yours is the only client sending a position at the moment.')
+      : emptyState('users', 'The crew is not connected',
+          'One company service, every client pointed at it, and the whole fleet appears here together.',
+          `<button class="btn btn-sm btn-primary" data-act="fleet-setup">${icon('link')}Connect the crew</button>`);
   }
   return `
     <div class="tbl-wrap"><table class="tbl">
@@ -4865,12 +4952,12 @@ function liveDriversInner() {
   const rows = fleetRows();
 
   if (!rows.length) {
-    return `<div class="empty">${icon('users')}
-      <div>${Fleet.enabled() ? 'Nobody is reporting a position' : 'No fleet service connected'}</div>
-      <div class="t3 xs">${Fleet.enabled()
-        ? 'Drivers appear here the moment their client sends a position.'
-        : 'Point every client at the same company service and the whole crew shows up here, live.'}</div>
-    </div>`;
+    return Fleet.enabled()
+      ? emptyState('users', 'Nobody is on the road',
+          'Drivers appear here the moment their client sends a position — no refreshing, no waiting.')
+      : emptyState('users', 'No fleet service connected',
+          'Point every client at the same company service and the whole crew shows up here, live: their run, their truck and where they are.',
+          `<button class="btn btn-sm btn-primary" data-act="fleet-setup">${icon('link')}Connect the crew</button>`);
   }
 
   const stateOf = (st) => ({
@@ -5289,7 +5376,8 @@ function paintLiveJob() {
 
 function consoleInner() {
   const a = Store.db.activity;
-  if (!a.length) return `<div class="empty">${icon('info')}<div>Nothing logged yet</div></div>`;
+  if (!a.length) return emptyState('info', 'Nothing logged yet',
+    'The client writes down what it does — links opening, runs starting, deliveries going up — so there is an answer when something looks wrong.');
   return a.slice(0, 60).map((r) => `<div class="con-row">
     <span class="con-time">${esc(fmt.clock(r.at))}</span>
     <span class="con-lvl ${esc(r.tag)}">${esc(r.tag)}</span>
@@ -5330,10 +5418,11 @@ function viewLogbook() {
   </div>
 
   <div class="stat-row mb-16">
-    <div class="stat"><div class="v">${fmt.n(rows.length)}</div><div class="k">Runs</div></div>
-    <div class="stat"><div class="v">${fmt.n(totalKm)}</div><div class="k">Kilometres</div></div>
-    <div class="stat"><div class="v">${fmt.eur(totalIncome)}</div><div class="k">Revenue</div></div>
-    <div class="stat"><div class="v">${avgDamage.toFixed(1)}%</div><div class="k">Avg damage</div></div>
+    ${statTile({ label: 'Runs', value: fmt.n(rows.length), raw: rows.length, icon: 'route' })}
+    ${statTile({ label: 'Kilometres', value: fmt.n(totalKm), raw: totalKm, icon: 'map', tone: 'info' })}
+    ${statTile({ label: 'Revenue', value: fmt.eur(totalIncome), icon: 'chart', tone: 'ok' })}
+    ${statTile({ label: 'Avg damage', value: avgDamage.toFixed(1) + '%', raw: avgDamage,
+      icon: 'wrench', tone: avgDamage > 5 ? 'warn' : 'brand' })}
   </div>
 
   <section class="card">
@@ -5351,7 +5440,9 @@ function viewLogbook() {
           <td class="t2" data-l="Completed">${esc(fmt.dt(r.finished))}</td>
           <td data-l="State"><span class="pill ok">${icon('check')}Synced</span></td>
         </tr>`).join('')}</tbody>
-      </table>` : `<div class="empty">${icon('book')}<div>No runs in this period</div></div>`}
+      </table>` : emptyState('book', 'No runs recorded yet',
+        'Every delivery finished in ETS2 or ATS lands here on its own — the route, the distance, what it paid and what it cost in damage.',
+        `<button class="btn btn-sm" data-act="nav" data-view="dashboard">${icon('activity')}Open the run monitor</button>`)}
     </div>
   </section>`;
 }
@@ -5388,11 +5479,12 @@ function viewProfile() {
     })()}
 
     <div class="stat-row mt-20">
-      <div class="stat"><div class="v">${fmt.n(s.totalKm)}</div><div class="k">Total km</div></div>
-      <div class="stat"><div class="v">${fmt.n(s.totalJobs)}</div><div class="k">Runs</div></div>
-      <div class="stat"><div class="v">${fmt.eur(s.totalIncome)}</div><div class="k">Revenue</div></div>
-      <div class="stat"><div class="v">${badges} / ${ACHIEVEMENTS.length}</div><div class="k">Badges</div></div>
-      <div class="stat"><div class="v">${fmt.n(db.pending.length)}</div><div class="k">Awaiting sync</div></div>
+      ${statTile({ label: 'Total km', value: fmt.n(s.totalKm), raw: s.totalKm, icon: 'map', tone: 'info' })}
+      ${statTile({ label: 'Runs', value: fmt.n(s.totalJobs), raw: s.totalJobs, icon: 'route' })}
+      ${statTile({ label: 'Revenue', value: fmt.eur(s.totalIncome), icon: 'chart', tone: 'ok' })}
+      ${statTile({ label: 'Badges', value: badges + ' / ' + ACHIEVEMENTS.length, icon: 'medal', tone: 'warn' })}
+      ${statTile({ label: 'Awaiting sync', value: fmt.n(db.pending.length), raw: db.pending.length,
+        icon: 'upload', tone: db.pending.length ? 'warn' : 'brand' })}
     </div>
   </div></section>
 
@@ -5653,8 +5745,11 @@ function viewStats() {
   const sess = Career.sessions();
   const badges = Career.badges(rec).filter((b) => b.done).length;
 
-  const big = (v, k, why) => `<div class="stat" title="${esc(why || '')}">
-    <div class="v">${v}</div><div class="k">${esc(k)}</div></div>`;
+  /* The same tile the rest of the client draws now. The icon says what the
+     figure is before the number is read, and the sentence that was only
+     ever a tooltip stays one. */
+  const big = (v, k, why, ic = 'info', tone = 'brand', raw) =>
+    statTile({ label: k, value: v, icon: ic, tone, title: why, raw });
 
   return `
   ${viewHead('Statistics', 'Your record at Gaming Nation',
@@ -5708,16 +5803,21 @@ function viewStats() {
     <div class="card-head"><span class="label">Career</span></div>
     <div class="card-body">
       <div class="stat-row">
-        ${big(fmt.n(rec.km), 'Total km', 'Distance credited to your Gaming Nation record.')}
-        ${big(fmt.n(rec.deliveries), 'Deliveries', 'Runs the company has credited.')}
-        ${big(fmt.eur(rec.earned), 'Earnings', 'Everything your runs have paid.')}
+        ${big(fmt.n(rec.km), 'Total km', 'Distance credited to your Gaming Nation record.',
+          'map', 'info', rec.km)}
+        ${big(fmt.n(rec.deliveries), 'Deliveries', 'Runs the company has credited.',
+          'box', 'brand', rec.deliveries)}
+        ${big(fmt.eur(rec.earned), 'Earnings', 'Everything your runs have paid.', 'chart', 'ok')}
         ${big(mins >= 1 ? fmt.dur(Math.round(mins)) : '—', 'Driving hours',
           sess.length ? sess.length + ' session' + (sess.length === 1 ? '' : 's') + ' recorded'
-            : 'No sessions recorded on this company record yet.')}
-        ${big(fmt.n(rec.convoys), 'Convoys', 'Official convoys attended.')}
-        ${big(fmt.n(Career.xp(rec)), 'XP', 'Worked out from the three figures above.')}
-        ${big(esc(rank.name), 'Rank', 'The rank the company has awarded you.')}
-        ${big(badges + ' / ' + ACHIEVEMENTS.length, 'Badges', 'Achievements earned.')}
+            : 'No sessions recorded on this company record yet.', 'clock', 'info')}
+        ${big(fmt.n(rec.convoys), 'Convoys', 'Official convoys attended.', 'users', 'brand', rec.convoys)}
+        ${big(fmt.n(Career.xp(rec)), 'XP', 'Worked out from the three figures above.',
+          'bolt', 'warn', Career.xp(rec))}
+        ${/* not esc()'d here: statTile escapes what it is given, and doing it
+              twice turns an apostrophe into &amp;#39; on screen */''}
+        ${big(rank.name, 'Rank', 'The rank the company has awarded you.', 'medal', 'warn')}
+        ${big(badges + ' / ' + ACHIEVEMENTS.length, 'Badges', 'Achievements earned.', 'trophy', 'warn')}
       </div>
     </div>
   </section>
@@ -5726,11 +5826,12 @@ function viewStats() {
     <div class="card-head"><span class="label">Today</span></div>
     <div class="card-body">
       <div class="stat-row">
-        ${big(fmt.km(day.km), 'Driven', 'Summed from the runs you finished since midnight.')}
-        ${big(fmt.eur(day.income), 'Earned', 'Summed from the same runs.')}
-        ${big(fmt.n(day.runs), 'Runs', 'Deliveries finished since midnight, queued ones included.')}
+        ${big(fmt.km(day.km), 'Driven', 'Summed from the runs you finished since midnight.', 'map', 'info')}
+        ${big(fmt.eur(day.income), 'Earned', 'Summed from the same runs.', 'chart', 'ok')}
+        ${big(fmt.n(day.runs), 'Runs', 'Deliveries finished since midnight, queued ones included.',
+          'route', 'brand', day.runs)}
         ${big(day.minutes >= 1 ? fmt.dur(Math.round(day.minutes)) : '—', 'At the wheel',
-          'Time in game today. A session still open counts up to now.')}
+          'Time in game today. A session still open counts up to now.', 'clock', 'info')}
       </div>
       ${day.runs ? '' : `<div class="t3 xs mt-12">Nothing has been finished today yet.
         These fill in from your runs, so they are right even if the client was closed at midnight.</div>`}
@@ -6660,7 +6761,8 @@ function viewMessages() {
 
     if (sel.id === MGMT_THREAD) {
       const m = notices[state.msgSel] || notices[0];
-      if (!m) return `<div class="empty">${icon('mail')}<div>No announcements</div></div>`;
+      if (!m) return emptyState('mail', 'No announcements',
+        'Notices posted by the company land here, and in the notification bell.');
       return `<div class="thread" style="display:block">
         <div class="b7 lg">${esc(m.subject)}</div>
         <div class="t3 xs mt-8">From ${esc(m.from)} · ${esc(fmt.dt(m.at))}</div>
@@ -7539,7 +7641,8 @@ function viewPending() {
           </div>
         </div>
       </div>`).join('')
-      : `<div class="empty">${icon('clock')}<div>Queue is empty. Finished runs land here before they are sent.</div></div>`}
+      : emptyState('clock', 'Nothing waiting to be sent',
+        'Finished runs only queue here when the company service cannot be reached. They go up by themselves the moment it answers.')}
   </div></section>`;
 }
 
@@ -7568,7 +7671,8 @@ function viewUploads() {
             ? `<span class="pill err">${icon('alert')}Offline</span>`
             : `<span class="pill warn">${icon('clock')}Queued</span>`}</td>
       </tr>`).join('')}</tbody>
-    </table>` : `<div class="empty">${icon('upload')}<div>Nothing queued. Delivery photos appear here.</div></div>`}
+    </table>` : emptyState('upload', 'No photos waiting',
+      'Screenshots attached to a delivery wait here until they have been uploaded, so nothing is lost if the link drops mid-run.')}
   </div></section>`;
 }
 
@@ -9469,6 +9573,7 @@ function render() {
     console.error('[GMN] the ' + state.view + ' screen failed to draw', err);
     ($('#main')).innerHTML = screenErrorHTML(state.view, err);
   }
+  animateCounts($('#main'));
 
   /* phone chrome */
   const tb = $('#tabbar');
@@ -9707,6 +9812,22 @@ function handle(act, t) {
       if (TileMap.map) TileMap.drawFleet();
       render();
       return;
+    case 'tile-preset': {
+      /* Fills the boxes in front of the driver rather than saving behind
+         them - Save is still the thing that decides. */
+      const site = UPDATE_FEED.replace(/\/version\.json$/, '');
+      const url = t.dataset.v === 'local'
+        ? 'tiles/{game}/{z}/{x}/{y}.png'
+        : site + '/api/tiles/{game}/{z}/{x}/{y}.png';
+      const set = (id, v) => { const el = $('#' + id); if (el) el.value = v; };
+      set('tsUrl', url);
+      set('tsMode', 'tiles');
+      set('tsMin', '0');
+      set('tsMax', '8');
+      set('tsSize', '256');
+      set('tsAttr', 'Gaming Nation — rendered from the game map');
+      return;
+    }
     case 'tile-save': saveTileSource(); return;
     case 'tile-calibrate': TileMap.beginCalibration(); return;
     case 'tile-calibrate-cancel': TileMap.cancelCalibration(); return;

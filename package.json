@@ -1,7 +1,7 @@
 {
   "name": "gaming-nation-trucker",
   "productName": "Gaming Nation Trucker",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Gaming Nation driver client - tracks ETS2/ATS runs live from the game and pushes the whole fleet to every screen in real time.",
   "author": "Gaming Nation",
   "license": "UNLICENSED",
@@ -50,6 +50,8 @@
     "smoke:search": "node tools/run-electron.js tools/smoke-search.js .",
     "smoke:downloadpage": "node tools/run-electron.js tools/smoke-download-page.js .",
     "smoke:downloads": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-download-gate.mjs",
+    "smoke:maptiles": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/smoke-tiles.mjs",
+    "tiles:push": "node tools/push-tiles.js",
     "release:collect": "node tools/collect-release.js --strict",
     "release:push": "node tools/push-release.js",
     "service": "node fleet-server.js",
