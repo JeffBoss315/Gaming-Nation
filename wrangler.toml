@@ -32,61 +32,61 @@ compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 
 # ------------------------------------------------------------------
-# The client installers
+# WHAT THE SITE KEEPS IN R2
 #
-# They are NOT in www/. They live in a private R2 bucket with no public
-# URL, and functions/api/download-link.js is the only way to one: it asks
-# Supabase — as the signed-in driver, under row level security — whether
-# their application is approved, and signs a link that lasts five minutes
-# if it is.
+# Two things, both too big to sit beside the pages — Cloudflare refuses any
+# single asset over 25 MiB:
 #
-# That is the difference between a gate and a suggestion. While the
-# builds sat on public GitHub Releases, the downloads page decided what
-# was OFFERED and anybody with the URL had the file anyway.
+#   the installers   ninety-six megabytes each, handed out by
+#                    functions/api/download/[build].js
+#   the game map     ETS2 and ATS rendered from the games' own files with
+#                    ts-map, served by functions/api/tiles/[[tile]].js
 #
-# SET UP ONCE
+# One binding serves both; the tiles live under a tiles/ prefix. Neither
+# has a public URL of its own, so the site is the only way to either.
 #
-#   1. Make the bucket
-#        npx wrangler r2 bucket create gaming-nation-releases
-#
-#   2. Put the builds in it (after npm run dist)
-#        npm run release:push
-#
-#   3. Give the Function a signing secret. Any long random string; it
-#      never leaves Cloudflare, and changing it invalidates every link
-#      already handed out, which is the way to revoke them.
-#        npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
-#
-#   4. Tell it where Supabase is. Not secrets — the anon key is public
-#      and is in supabase-client.js — but they belong in the environment
-#      rather than baked into a Function.
-#        Pages dashboard -> Settings -> Environment variables
-#          SUPABASE_URL       https://sfzeauvkguywidrqjntk.supabase.co
-#          SUPABASE_ANON_KEY  sb_publishable_...
-#
-# The binding below is what makes env.RELEASES exist inside the Function.
-# ------------------------------------------------------------------
-
-# COMMENTED OUT UNTIL R2 IS TURNED ON.
-#
-# Pages validates every binding when it publishes a Function, so a binding
-# naming a bucket that does not exist does not merely disable the gate —
-# it fails the whole deploy. The build succeeded, the site uploaded, and
-# then:
+# WHY THIS WAS COMMENTED OUT UNTIL NOW: Pages validates every binding when
+# it publishes a Function, and a binding naming a bucket that does not
+# exist does not merely disable the gate — it fails the whole deploy, after
+# the assets have already uploaded:
 #
 #   Error: Failed to publish your Function. Got error:
 #   R2 bucket 'gaming-nation-releases' not found.
 #
-# R2 has to be switched on once in the dashboard before any bucket can be
-# made; the API refuses with "Please enable R2 through the Cloudflare
-# Dashboard" (code 10042). It is a one-time activation, not something a
-# token can do.
+# R2 had to be switched on in the dashboard first, which a token cannot do
+# (the API refuses with code 10042). It is on, the bucket was created on
+# 2026-09-13, and the builds are in it — so this is live.
+# ------------------------------------------------------------------
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "gaming-nation-releases"
+
+# ------------------------------------------------------------------
+# WHERE SUPABASE IS
 #
-# Until then the Function deploys without a bucket, reports gate: 'off'
-# about itself, and the downloads page falls back to the public URL — see
-# functions/api/download-link.js. Uncomment this block the moment
-# `npx wrangler r2 bucket create gaming-nation-releases` succeeds.
+# These are here rather than in the dashboard because a Pages project
+# configured by a wrangler.toml takes its configuration from this file and
+# ignores what the dashboard holds — so anything left only there would
+# quietly stop existing the moment this file started being read.
 #
-# [[r2_buckets]]
-# binding = "RELEASES"
-# bucket_name = "gaming-nation-releases"
+# Not secrets. The publishable key is public by design and already ships
+# to every browser in supabase-client.js; the row level security rules in
+# supabase/migrations are what actually decide who may read what. The
+# Function forwards the driver's own token and holds no credential of its
+# own — see approvedDriver() in functions/_lib.js.
+# ------------------------------------------------------------------
+
+[vars]
+SUPABASE_URL = "https://sfzeauvkguywidrqjntk.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_5UTt258m0KUZigLXraZClw_nkXUTcMx"
+
+# STILL TO DO, AND IT CANNOT LIVE IN GIT: the signing secret. Without it
+# the download route serves every build to anybody who asks, which is what
+# it does today. With it, /api/download-link asks Supabase whether the
+# driver is approved and signs a link that lasts five minutes.
+#
+#   npx wrangler pages secret put GMN_DOWNLOAD_SECRET --project-name=gaming-nation
+#
+# Any long random string:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
