@@ -111,12 +111,21 @@ let failed = 0;
 for (const p of plan) {
   process.stdout.write('\nuploading ' + p.name + ' … ');
 
+  /* On Windows this runs through cmd, and cmd cuts an argument at every
+     space it sees. The project lives under "VS CODE\PROJECTS\GAMING
+     NATION", so the path arrived at wrangler as four separate arguments
+     and every upload failed with "Unknown arguments: CODE\PROJECTS\GAMING,
+     NATION\release\..." - a message that reads like a wrangler fault and
+     is entirely this line's doing. Quote what the shell would take apart. */
+  const shell = process.platform === 'win32';
+  const arg = (s) => (shell && /\s/.test(s) ? '"' + s + '"' : s);
+
   const res = spawnSync('npx', [
     'wrangler', 'r2', 'object', 'put',
-    bucket + '/' + p.name,
-    '--file', p.file,
+    arg(bucket + '/' + p.name),
+    '--file', arg(p.file),
     '--remote',
-  ], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' });
+  ], { cwd: ROOT, encoding: 'utf8', shell });
 
   if (res.status === 0) {
     console.log('ok');
