@@ -337,9 +337,20 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 /* ---------- split (messages / chats) ---------- */
 .split{display:grid;grid-template-columns:220px 1fr;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;min-height:330px}
 .split-list{background:var(--panel-2);border-right:1px solid var(--line);overflow-y:auto;max-height:440px}
-.split-item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background var(--t)}
+/* These are <button>s so the list can be walked with a keyboard. That
+   brings a browser's own button styling with it — centred text, a border,
+   a grey face, the wrong font — so it is reset back to the block row this
+   has always looked like. Only the behaviour is new. */
+.split-item{display:block;width:100%;text-align:left;font:inherit;color:inherit;
+  background:none;border:0;border-bottom:1px solid var(--line);
+  padding:10px 12px;cursor:pointer;transition:background var(--t)}
 .split-item:hover{background:var(--panel-3)}
 .split-item.on{background:var(--panel-3);box-shadow:inset 2px 0 0 var(--accent)}
+/* Tabbing through a conversation list has to show where it has got to. The
+   ring sits inside the row: an outline on a full-width row in a scrolling
+   pane gets clipped at the edges. */
+.split-item:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;
+  background:var(--panel-3)}
 .split-item.unread .split-title::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
   background:var(--accent);margin-left:6px;vertical-align:middle}
 .split-title{font-size:12.5px;font-weight:500}
@@ -973,12 +984,13 @@ body.can-install .install-cta{display:inline-flex}
 
 
 
-/* the region name, shouted beside its seam */
-
-
-
+/* the region name beside its seam. The base size in style.css is already
+   .72 of --region-fs; on a narrow screen it comes down again, and the
+   tracking comes in with it — letter-spacing that reads as cartography at
+   full width just pushes a long name like PACIFIC NORTHWEST off the map
+   on a phone. */
 @media (max-width:720px){
-  .region-label span{font-size:calc(var(--region-fs,16px) * .8)}
+  .region-label span{font-size:calc(var(--region-fs,16px) * .6);letter-spacing:.1em}
 }
 
 

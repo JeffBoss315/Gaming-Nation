@@ -4694,13 +4694,37 @@ function viewDashboard() {
     rankPct = Math.round(sum(gates.map((g) => clamp(g.cur / g.goal, 0, 1))) / gates.length * 100);
   }
 
-  /* 12-week mileage series */
-  const weeks = Array.from({ length: 12 }, (_, i) => {
-    const base = u.weekKm || 1200;
-    return Math.max(80, Math.round(base * (0.45 + Math.abs(Math.sin(i * 1.7 + u.km % 7)) * 1.05)));
-  });
-  const weekLabels = Array.from({ length: 12 }, (_, i) => 'W' + (i + 1));
-  const fleetWeeks = weeks.map((v) => Math.round(v * rand(6, 9)));
+  /* 12-week mileage series, bucketed out of the jobs actually recorded.
+
+     This was a sine wave. base was `u.weekKm || 1200`, so a driver who had
+     never moved fell through to 1200 and was shown a full twelve weeks of
+     driving — "12-week total 15,490 km", "best week 1,789 km" — in a card
+     sitting directly beside the tile that correctly read "Total distance
+     0 km". Two numbers for the same thing on one screen, one of them
+     invented. Fleet was the same series multiplied by a random 6–9.
+
+     db.jobs carries driverId, km and finished, which is all this needs,
+     and it is the same record the desktop client charts from its logbook.
+     Where there is nothing to draw, the card now says so, the way the
+     client's does, instead of drawing something. */
+  const WEEKS = 12;
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - (WEEKS * 7 - 1));
+  const weekFrom = weekStart.getTime();
+  const weekBucket = (rows) => {
+    const out = new Array(WEEKS).fill(0);
+    rows.forEach((j) => {
+      const at = new Date(j.finished || 0).getTime();
+      if (!Number.isFinite(at) || at < weekFrom) return;
+      out[Math.min(WEEKS - 1, Math.floor((at - weekFrom) / (7 * 86400000)))] += Number(j.km) || 0;
+    });
+    return out;
+  };
+  const allJobs = db.jobs || [];
+  const weeks = weekBucket(allJobs.filter((j) => j.driverId === u.id));
+  const weekLabels = Array.from({ length: WEEKS }, (_, i) => 'W' + (i + 1));
+  const fleetWeeks = weekBucket(allJobs);
 
   const myActivity = db.activity.filter((a) => a.driverId === u.id).slice(0, 5);
   const feed = Store.activityFor(u).slice(0, 7);
@@ -4766,19 +4790,27 @@ function viewDashboard() {
         <div class="card reveal d2">
           <div class="card-head">
             <div class="card-title">${icon('activity')}Your mileage — last 12 weeks</div>
-            <div class="seg">
+            ${sum(weeks) || sum(fleetWeeks) ? `<div class="seg">
               <button class="on" data-act="noop">Mine</button>
               <button data-act="dash-fleet-toggle">Fleet</button>
-            </div>
+            </div>` : ''}
           </div>
           <div class="card-body" id="mileageChart" data-mine='${JSON.stringify(weeks)}' data-fleet='${JSON.stringify(fleetWeeks)}'>
+            ${/* Either series having something is enough to draw. A driver
+                  who has not moved yet but whose crew has gets a flat line
+                  at zero and a working Fleet switch — which is their record,
+                  honestly drawn, and lets them see what the rest are doing.
+                  Gating on their own mileage alone put the switch on screen
+                  with nothing behind it to swap. */''}
+            ${sum(weeks) || sum(fleetWeeks) ? `
             ${areaChart([{ name: 'Your distance', values: weeks, color: '#8bd62b' }], weekLabels,
               { aria: 'Weekly distance driven', fmtY: (v) => Math.round(v / 100) / 10 + 'k', fmtT: fmt.km })}
             <div class="row-b mt-16 wrap gap-12">
-              ${[['12-week total', fmt.km(sum(weeks))], ['Weekly average', fmt.km(Math.round(sum(weeks) / 12))],
+              ${[['12-week total', fmt.km(sum(weeks))], ['Weekly average', fmt.km(Math.round(sum(weeks) / WEEKS))],
                  ['Best week', fmt.km(Math.max(...weeks))]].map(([k, v]) =>
                 `<div><div class="xs t3 cap b7">${k}</div><div class="b7 lg tnum">${v}</div></div>`).join('')}
-            </div>
+            </div>` : emptyState('activity', 'Nothing to chart yet',
+              'Finish a delivery and the weeks fill in from your record — one point per week, twelve weeks back.')}
           </div>
         </div>
 
@@ -4965,9 +4997,19 @@ function viewDrivers() {
         <p class="page-sub">${fmt.n(db.drivers.length)} drivers on the books · ${online} active right now</p>
       </div>
       <div class="row gap-8 wrap">
-        <div class="seg">
-          <button class="${state.ui.driverView === 'grid' ? 'on' : ''}" data-act="dv-view" data-v="grid">${icon('grid')}</button>
-          <button class="${state.ui.driverView === 'table' ? 'on' : ''}" data-act="dv-view" data-v="table">${icon('menu')}</button>
+        ${/* Icon-only, so the name has to be written on: with nothing but an
+              <svg> inside, both of these announced themselves as "button"
+              and neither said what it would do. title gives a pointer the
+              same answer on hover. aria-pressed is what makes a two-state
+              toggle a toggle rather than two buttons that happen to look
+              different when .on is set. */''}
+        <div class="seg" role="group" aria-label="How the roster is laid out">
+          <button class="${state.ui.driverView === 'grid' ? 'on' : ''}" data-act="dv-view" data-v="grid"
+            aria-label="Grid view" title="Grid view"
+            aria-pressed="${state.ui.driverView === 'grid'}">${icon('grid')}</button>
+          <button class="${state.ui.driverView === 'table' ? 'on' : ''}" data-act="dv-view" data-v="table"
+            aria-label="Table view" title="Table view"
+            aria-pressed="${state.ui.driverView === 'table'}">${icon('menu')}</button>
         </div>
         ${can('drivers.manage') ? `<button class="btn btn-primary" data-act="admin-add-driver">${icon('userPlus')}Add driver</button>` : ''}
       </div>
@@ -4978,11 +5020,18 @@ function viewDrivers() {
         <div class="search grow" style="max-width:340px">${icon('search')}
           <input class="input" id="driverSearch" placeholder="Search name, GMN ID, country…" value="${esc(state.ui.driverQuery)}" style="padding-left:38px">
         </div>
-        <select class="select" id="driverRank" style="width:auto;min-width:180px">
+        ${/* Both of these read their current option aloud and nothing else,
+              so "Distance driven" gave no clue it was the sort order. The
+              visible text is the value, not the label — there is no room
+              for a caption in this bar — so the name is carried on
+              aria-label, and title says the same on hover. */''}
+        <select class="select" id="driverRank" style="width:auto;min-width:180px"
+          aria-label="Filter by rank" title="Filter by rank">
           <option value="all">All ranks</option>
           ${RANKS.map((r) => `<option value="${r.key}" ${state.ui.driverRank === r.key ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
         </select>
-        <select class="select" id="driverSort" style="width:auto;min-width:170px">
+        <select class="select" id="driverSort" style="width:auto;min-width:170px"
+          aria-label="Sort drivers by" title="Sort drivers by">
           ${[['km', 'Distance driven'], ['rank', 'Rank'], ['convoys', 'Convoys'], ['attendance', 'Attendance'], ['joined', 'Longest serving'], ['name', 'Name A–Z']]
             .map(([v, l]) => `<option value="${v}" ${state.ui.driverSort === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}
         </select>
@@ -8923,13 +8972,18 @@ function handleAction(act, t, ev) {
     /* dashboard */
     case 'dash-fleet-toggle': {
       const host = $('#mileageChart'); if (!host) return;
+      /* With nothing driven the card holds an empty state and no <svg>, so
+         there is nothing to swap — and the Mine/Fleet switch is not drawn
+         in that case either. Guard anyway: this reads the element it is
+         about to overwrite. */
+      const svg = host.querySelector('svg'); if (!svg) return;
       const showFleet = !host.dataset.showing || host.dataset.showing === 'mine';
       const vals = JSON.parse(showFleet ? host.dataset.fleet : host.dataset.mine);
       host.dataset.showing = showFleet ? 'fleet' : 'mine';
       $$('.seg button', host.closest('.card')).forEach((b, i) =>
         b.classList.toggle('on', showFleet ? i === 1 : i === 0));
       const labels = Array.from({ length: 12 }, (_, i) => 'W' + (i + 1));
-      host.querySelector('svg').outerHTML = areaChart(
+      svg.outerHTML = areaChart(
         [{ name: showFleet ? 'Fleet distance' : 'Your distance', values: vals, color: showFleet ? '#b9e87a' : '#8bd62b' }],
         labels, { fmtY: (x) => Math.round(x / 100) / 10 + 'k', fmtT: fmt.km });
       return;
@@ -10891,8 +10945,8 @@ const LiveMap = {
     regionsFor(this.game).forEach((reg) => {
       const line = reg.line.map((p) => geoToGameLatLng(this.game, p[0], p[1]));
       L.polyline(line, { color: '#0b0d10', weight: 6, opacity: .8, interactive: false }).addTo(this.roadLayer);
-      L.polyline(line, { color: reg.color, weight: 2.6, opacity: .95 })
-        .bindTooltip(reg.name.replace('!', ''), { sticky: true }).addTo(this.roadLayer);
+      L.polyline(line, { color: reg.color, weight: 2.2, opacity: .62 })
+        .bindTooltip(reg.name, { sticky: true }).addTo(this.roadLayer);
       L.marker(geoToGameLatLng(this.game, reg.label[0], reg.label[1]), {
         interactive: false,
         icon: L.divIcon({ className: 'region-label', iconSize: [0, 0],
@@ -13336,17 +13390,17 @@ function clientDownloadUrl(build) {
 }
 
 const CLIENT_RELEASE = {
-  version: '1.2.4',
+  version: '1.2.6',
   builds: [
     { key: 'win-setup', label: 'Windows installer', icon: 'download',
-      file: 'release/Gaming-Nation-Tracker-1.2.4-windows-setup.exe',
-      size: '96.5 MB', note: 'Installs to your machine and adds a Start menu entry.' },
+      file: 'release/Gaming-Nation-Tracker-1.2.6-windows-setup.exe',
+      size: '96.8 MB', note: 'Installs to your machine and adds a Start menu entry.' },
     { key: 'win-portable', label: 'Windows portable', icon: 'bolt',
-      file: 'release/Gaming-Nation-Tracker-1.2.4-windows-portable.exe',
-      size: '96.0 MB', note: 'No installation — just run it. Good for a USB stick.' },
+      file: 'release/Gaming-Nation-Tracker-1.2.6-windows-portable.exe',
+      size: '96.4 MB', note: 'No installation — just run it. Good for a USB stick.' },
     { key: 'android', label: 'Android app', icon: 'phone',
-      file: 'release/Gaming-Nation-Tracker-1.2.4-android.apk',
-      size: '6.8 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
+      file: 'release/Gaming-Nation-Tracker-1.2.6-android.apk',
+      size: '7.2 MB', note: 'Android 7 or newer. Copy it to the phone and tap it.' },
   ],
 };
 

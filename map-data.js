@@ -764,50 +764,58 @@ const ROADS = { ets2: ROADS_ETS2, ats: ROADS_ATS };
 
 /* ---------- map regions ----------
    The games ship their world in chunks, and their own map draws the seam
-   between them as a coloured line with the region shouted beside it. These
+   between them as a coloured line with the region named beside it. These
    are those seams: rough dividers in real lat/lon, not political borders,
-   and purely a reading aid over the road network. */
+   and purely a reading aid over the road network.
+
+   Named for the ground they cover, not for the box they were sold in. The
+   game calls these "Viva la France!" and "Road to the Black Sea!" because
+   that is what the DLC is called, and the map was repeating the advert —
+   ten shouted titles in ten saturated brand colours over an otherwise
+   quiet screen. A driver reading this map wants to know they are looking
+   at France. The colour still separates one seam from the next; the word
+   beside it is now just the place. */
 const REGIONS = {
   ets2: [
-    { name: 'SCANDINAVIA!', color: '#7b4dff', label: [65.2, 3.0],
+    { name: 'Scandinavia', color: '#7b4dff', label: [65.2, 3.0],
       line: [[55.4, 7.6], [55.0, 9.4], [54.6, 11.0], [54.3, 12.6], [54.2, 14.3]] },
-    { name: 'GOING EAST!', color: '#c9a227', label: [54.6, 16.4],
+    { name: 'Going East', color: '#c9a227', label: [54.6, 16.4],
       line: [[54.6, 18.2], [53.2, 17.4], [52.0, 16.6], [50.9, 16.6], [49.9, 17.6],
              [49.1, 17.2], [48.3, 16.6], [47.2, 16.4], [46.4, 15.6]] },
-    { name: 'VIVA LA FRANCE!', color: '#1f9d3a', label: [45.6, -7.0],
+    { name: 'France', color: '#1f9d3a', label: [45.6, -7.0],
       line: [[50.9, 2.1], [49.4, 2.6], [48.2, 3.2], [47.0, 3.6], [45.9, 4.4],
              [45.0, 4.9], [44.2, 5.6], [43.4, 6.4]] },
-    { name: 'ITALIA!', color: '#c0392b', label: [40.0, 12.0],
+    { name: 'Italy', color: '#c0392b', label: [40.0, 12.0],
       line: [[44.6, 7.9], [45.1, 9.2], [45.3, 10.6], [45.4, 12.1], [45.6, 13.4]] },
-    { name: 'IBERIA!', color: '#e08a2e', label: [39.6, -12.4],
+    { name: 'Iberia', color: '#e08a2e', label: [39.6, -12.4],
       line: [[43.4, -1.8], [42.9, -0.6], [42.6, 0.7], [42.3, 1.7], [42.4, 3.1]] },
-    { name: 'BEYOND THE BALTIC SEA!', color: '#2fb6c9', label: [58.2, 20.6],
+    { name: 'Baltic States', color: '#2fb6c9', label: [58.2, 20.6],
       line: [[54.4, 20.9], [54.9, 22.6], [55.6, 24.2], [56.4, 25.6], [57.6, 26.6],
              [58.6, 27.4], [59.4, 28.2]] },
-    { name: 'ROAD TO THE BLACK SEA!', color: '#e05252', label: [43.0, 35.4],
+    { name: 'Black Sea', color: '#e05252', label: [43.0, 35.4],
       line: [[47.9, 22.2], [46.9, 21.4], [45.8, 21.1], [44.9, 22.4], [44.0, 22.9],
              [43.2, 23.3], [42.3, 23.4], [41.5, 24.6]] },
-    { name: 'WEST BALKANS!', color: '#6aa9f5', label: [37.6, 19.2],
+    { name: 'West Balkans', color: '#6aa9f5', label: [37.6, 19.2],
       line: [[46.6, 15.9], [46.0, 16.8], [45.5, 18.4], [45.2, 19.6], [44.6, 20.6],
              [43.4, 21.6], [42.4, 21.9], [41.4, 21.4]] },
-    { name: 'GREECE!', color: '#3fbfe0', label: [34.2, 24.4],
+    { name: 'Greece', color: '#3fbfe0', label: [34.2, 24.4],
       line: [[41.3, 20.8], [40.9, 22.0], [41.0, 23.6], [41.2, 25.2], [41.0, 26.4]] },
-    { name: 'HEART OF RUSSIA!', color: '#e57373', label: [57.6, 46.2],
+    { name: 'Western Russia', color: '#e57373', label: [57.6, 46.2],
       line: [[59.6, 30.9], [58.4, 31.8], [56.9, 32.4], [55.4, 32.6], [54.2, 33.6],
              [52.9, 34.4], [51.6, 36.4]] },
   ],
   ats: [
-    { name: 'CALIFORNIA!', color: '#e0a52e', label: [35.4, -125.0],
+    { name: 'California', color: '#e0a52e', label: [35.4, -125.0],
       line: [[42.0, -120.0], [40.6, -119.9], [39.0, -119.6], [37.6, -118.4],
              [36.0, -116.4], [34.6, -114.6], [32.7, -114.6]] },
-    { name: 'PACIFIC NORTHWEST!', color: '#3fbfe0', label: [47.8, -127.0],
+    { name: 'Pacific Northwest', color: '#3fbfe0', label: [47.8, -127.0],
       line: [[49.0, -117.0], [47.0, -116.9], [45.0, -117.0], [43.6, -117.0], [42.0, -117.0]] },
-    { name: 'MOUNTAIN WEST!', color: '#7b4dff', label: [45.6, -108.2],
+    { name: 'Mountain West', color: '#7b4dff', label: [45.6, -108.2],
       line: [[49.0, -111.0], [46.4, -111.2], [43.6, -111.3], [41.0, -111.1],
              [38.4, -110.4], [36.2, -109.1], [33.4, -109.1]] },
-    { name: 'TEXAS!', color: '#c0392b', label: [29.2, -100.2],
+    { name: 'Texas', color: '#c0392b', label: [29.2, -100.2],
       line: [[36.5, -103.0], [34.6, -103.0], [32.4, -103.1], [31.4, -104.5], [29.8, -104.9]] },
-    { name: 'THE PLAINS!', color: '#1f9d3a', label: [41.6, -97.4],
+    { name: 'The Plains', color: '#1f9d3a', label: [41.6, -97.4],
       line: [[43.5, -104.0], [41.2, -104.0], [39.0, -103.6], [37.0, -103.0], [35.0, -103.0]] },
   ],
 };

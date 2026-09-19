@@ -285,7 +285,7 @@ function animateCounts(root) {
 }
 
 /* ---------------- reference data ---------------- */
-const APP_VERSION = 'V1.2.4';   /* kept in step with package.json - scan.js fails if it drifts */
+const APP_VERSION = 'V1.2.6';   /* kept in step with package.json - scan.js fails if it drifts */
 
 /* The map itself — cities, roads, regions, projection — lives in
    map-data.js, shared with the web platform. */
@@ -2094,9 +2094,11 @@ const TileMap = {
       /* a dark underlay keeps the colour readable over a pale road */
       L.polyline(line, { color: '#0b0d10', weight: 6, opacity: .8,
         lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(this.roadLayer);
-      L.polyline(line, { color: reg.color, weight: 2.6, opacity: .95,
+      /* .62 rather than full strength: the seam is a divider, and at .95 it
+         read as the most important line on a map whose subject is roads. */
+      L.polyline(line, { color: reg.color, weight: 2.2, opacity: .62,
         lineCap: 'round', lineJoin: 'round' })
-        .bindTooltip(reg.name.replace('!', ''), { sticky: true })
+        .bindTooltip(reg.name, { sticky: true })
         .addTo(this.roadLayer);
 
       const at = geoToGameLatLng(gameKey, reg.label[0], reg.label[1]);
@@ -5941,6 +5943,13 @@ const ACH_GROUPS = [
   ['community', 'Community & legacy', 'star'],
 ];
 
+/* What each tier key is called on screen. Only 'plat' actually needs the
+   table, but a tier that is spelled out in one place and abbreviated in
+   another is how it went wrong the first time. */
+const TIER_NAME = {
+  bronze: 'Bronze', silver: 'Silver', gold: 'Gold', plat: 'Platinum',
+};
+
 const ACHIEVEMENTS = [
   { id: 'a-first',     name: 'First Delivery',        desc: 'Complete your first GMN delivery.',          icon: 'box',    tier: 'bronze', group: 'haul', metric: 'deliveries', goal: 1 },
   { id: 'a-10k',       name: '10,000 KM Driven',      desc: 'Cover 10,000 km under GMN colours.',         icon: 'route',  tier: 'bronze', group: 'haul', metric: 'km', goal: 10000 },
@@ -6155,6 +6164,11 @@ function viewAchievements() {
      different colour on a pale ground - #9aa3af is a fine silver on
      #0d111a and an unreadable one on white - and a value written into the
      element cannot be themed. */
+
+  /* The key is 'plat' because it is a key. Printed straight onto the card
+     it put BRONZE, SILVER, GOLD and then PLAT in the corner of the badge,
+     which reads as a word that got cut off — the highest tier in the game
+     labelled with an abbreviation nobody chose. */
   const card = (b) => `<div class="ach tier-${esc(b.a.tier)} ${b.done ? 'got' : ''}">
       ${badgeMark(b.a)}
       <div class="grow" style="min-width:0">
@@ -6167,7 +6181,7 @@ function viewAchievements() {
             : `<div class="ach-bar"><div class="ach-fill" style="width:${b.pct}%"></div></div>
                <div class="ach-pct">${b.pct}%</div>`}
       </div>
-      <span class="ach-tier">${esc(b.a.tier)}</span>
+      <span class="ach-tier">${esc(TIER_NAME[b.a.tier] || b.a.tier)}</span>
     </div>`;
 
   return `
@@ -6689,7 +6703,29 @@ const HostedService = {
   async start(lan) {
     if (!this.can()) return;
 
-    const res = await window.gmnDesktop.startService({ port: 7040, lan: !!lan });
+    /* can() only proves the preload bridge is there. Whether the main
+       process actually registered the handler is a separate question, and
+       when it has not — service-host.js failed to load, an older shell
+       running newer pages — invoke() rejects. Unguarded, that came out as
+       "Uncaught (in promise) No handler registered for 'service:start'":
+       nothing on screen, nothing in the log, and the auto-host path above
+       had already set its once-per-session latch, so the client never tried
+       again. refresh() and stop() both catch; this is the one that can
+       really fail, so it catches loudest. */
+    let res;
+    try {
+      res = await window.gmnDesktop.startService({ port: 7040, lan: !!lan });
+    } catch (e) {
+      this.status = Object.assign({}, this.status, {
+        running: false, available: false, error: e && e.message,
+      });
+      toast('This copy of the app cannot host the company service', 'err');
+      Store.log('err', 'Could not start the built-in company service: '
+        + ((e && e.message) || e));
+      render();
+      throw e;          /* the caller clears its latch and may try again */
+    }
+
     this.status = Object.assign({}, this.status, res, { available: true });
 
     if (res && res.error) {
@@ -7071,13 +7107,21 @@ function viewMessages() {
   <section class="card"><div class="card-body">
     <div class="split">
       <div class="split-list">
-        ${rows.map((r) => `<div class="split-item ${r.id === (sel && sel.id) ? 'on' : ''} ${r.unread ? 'unread' : ''}"
-          data-act="open-dm" data-id="${esc(r.id)}">
+        ${/* A button, not a div. Every one of these rows opens a
+              conversation, and as a <div data-act> the only way to open one
+              was to point at it: no tab stop, no Enter, nothing for a
+              screen reader to call it. The click delegation reads
+              closest('[data-act]'), so the element type was never what made
+              it work. aria-current marks the open thread, which .on only
+              ever said in colour. */''}
+        ${rows.map((r) => `<button type="button" class="split-item ${r.id === (sel && sel.id) ? 'on' : ''} ${r.unread ? 'unread' : ''}"
+          data-act="open-dm" data-id="${esc(r.id)}"
+          ${r.id === (sel && sel.id) ? 'aria-current="true"' : ''}>
           <div class="split-title">
             ${r.id === MGMT_THREAD ? '' : `<span class="dot ${r.online ? 'on' : ''}"></span>`}
             ${esc(r.title)}${r.unread ? ` <span class="pill sm">${r.unread}</span>` : ''}</div>
           <div class="split-sub">${esc(r.sub)}</div>
-        </div>`).join('')}
+        </button>`).join('')}
       </div>
       <div class="split-body">
         ${sel && sel.id !== MGMT_THREAD ? `<div class="dm-head">
@@ -7152,12 +7196,13 @@ function viewChats() {
 
   const row = (id, title, sub, ic) => {
     const n = unreadFor(id);
-    return `<div class="split-item ${open === id ? 'on' : ''} ${n ? 'unread' : ''}"
-        data-act="open-room" data-id="${esc(id)}">
+    return `<button type="button" class="split-item ${open === id ? 'on' : ''} ${n ? 'unread' : ''}"
+        data-act="open-room" data-id="${esc(id)}"
+        ${open === id ? 'aria-current="true"' : ''}>
       <div class="split-title">${icon(ic)} ${esc(title)}
         ${n ? `<span class="pill brand">${n}</span>` : ''}</div>
       <div class="split-sub">${esc(sub)}</div>
-    </div>`;
+    </button>`;
   };
 
   return `
@@ -8016,14 +8061,23 @@ function viewSettings() {
           <option value="ets2" ${s.game !== 'ats' ? 'selected' : ''}>Euro Truck Simulator 2</option>
           <option value="ats" ${s.game === 'ats' ? 'selected' : ''}>American Truck Simulator</option>
         </select></div>
-      <div class="row gap-8 wrap">
-        <div class="field" style="max-width:170px"><label for="setPoll">Telemetry poll (ms)</label>
+      ${/* Three flex items 8px apart, each capped at about 180px, put three
+            long labels end to end with nine pixels between them: on screen
+            "Telemetry poll (ms) Live job update (seconds) Heartbeat
+            (seconds)" read as one run-on line of text with some boxes
+            underneath it. They are one group — how often the client asks
+            the game, and how often it tells the company — so they are laid
+            out as one: the same .grid.g-3 the web console uses for its
+            forms, which already has the right gap and already collapses to
+            two columns and then one as the window narrows. */''}
+      <div class="grid g-3">
+        <div class="field"><label for="setPoll">Telemetry poll (ms)</label>
           <input class="input" id="setPoll" type="number" min="250" max="10000" step="250"
             value="${esc(String(s.pollRate || 400))}"></div>
-        <div class="field" style="max-width:190px"><label for="setJobSec">Live job update (seconds)</label>
+        <div class="field"><label for="setJobSec">Live job update (seconds)</label>
           <input class="input" id="setJobSec" type="number" min="5" max="300" step="5"
             value="${esc(String(s.jobUpdateSec || 10))}"></div>
-        <div class="field" style="max-width:180px"><label for="setBeatSec">Heartbeat (seconds)</label>
+        <div class="field"><label for="setBeatSec">Heartbeat (seconds)</label>
           <input class="input" id="setBeatSec" type="number" min="5" max="300" step="5"
             value="${esc(String(s.heartbeatSec || 15))}"></div>
       </div>
@@ -11161,7 +11215,12 @@ function startServices() {
     startServices.hosting = true;
 
     Store.log('info', 'No company service found — starting the one built into this app');
-    HostedService.start(!!Store.db.settings.hostServiceLan);
+    /* The latch is what stops this firing every minute. Keep it only if the
+       start actually got somewhere: if hosting is impossible in this build,
+       the minute timer below goes on looking for somebody else's service
+       instead of sitting on a latch set by an attempt that failed. */
+    Promise.resolve(HostedService.start(!!Store.db.settings.hostServiceLan))
+      .catch(() => { startServices.hosting = false; });
   };
 
   const findService = () => discoverLocalService().then((found) => {

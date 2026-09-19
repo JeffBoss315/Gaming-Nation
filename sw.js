@@ -5,7 +5,7 @@
    ============================================================ */
 /* The -r suffix is the cache revision: bump it when the strategy below
    changes, so activate() drops caches written under the old rules. */
-const CACHE = 'gamingnation-v1.0.0-r1';
+const CACHE = 'gamingnation-v1.0.0-r2';
 
 /* the app shell — everything needed to boot with no network */
 const SHELL = [
@@ -17,6 +17,16 @@ const SHELL = [
   './manifest.webmanifest',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/leaflet.css',
+  './vendor/supabase/supabase.js',
+  './supabase-client.js',
+  /* The typefaces are part of booting looking right, so they are shell and
+     not runtime cache. Only the latin subsets: fonts.css carries a
+     unicode-range per file, so a page that never renders Greek or Cyrillic
+     never asks for those, and precaching all thirteen would be fetching
+     240 KB to use 87 of it. The rest still cache on first use. */
+  './vendor/fonts/fonts.css',
+  './vendor/fonts/inter-latin.woff2',
+  './vendor/fonts/jetbrains-mono-latin.woff2',
   './gmn.jpg',
   './icons/mark.png',
   './icons/icon-192.png',

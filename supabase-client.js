@@ -2,11 +2,15 @@
 
    Loaded after the Supabase UMD bundle by every page that needs an account:
    the two web front-ends (login.html, admin.html) and the standalone driver
-   pages. The bundle comes off a CDN, so it can simply not be there — a
-   packaged desktop build opened offline, or a blocked request. Guard it:
-   window.gmnSupabase is then left undefined and the callers that need it
-   (resetGamingNationPassword) already say so instead of throwing here and
-   taking the rest of the page down with it. */
+   pages. The bundle used to come off a CDN, and in the packaged desktop
+   build — file:// pages, often started before the network is up — it simply
+   was not there: window.supabase undefined, no client, and every account
+   feature quietly offline in the shipped .exe. It is vendored now, next to
+   leaflet, at the version package.json pins, so it loads from disk and the
+   client is always built. The guard stays anyway: a file that fails to
+   parse should leave window.gmnSupabase undefined and let the callers that
+   need it (resetGamingNationPassword) say so, rather than throw here and
+   take the rest of the page down with it. */
 const SUPABASE_URL = 'https://sfzeauvkguywidrqjntk.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_5UTt258m0KUZigLXraZClw_nkXUTcMx';
 

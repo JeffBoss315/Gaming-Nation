@@ -4,6 +4,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="robots" content="noindex,nofollow">
+
+    <!-- The desktop client has no server in front of it to send headers, so
+         the policy has to travel in the page. Electron says so itself on
+         every launch: "no Content Security Policy set ... unnecessary
+         security risks". The window is already contextIsolated with node
+         integration off; this is the layer under that, and it matters
+         because the client does pull remote things in — map tiles, driver
+         avatars, the version feed.
+
+         script-src, style-src and font-src have no remote host at all:
+         every script, stylesheet and typeface this page uses ships inside
+         the app. 'unsafe-inline' is for the one inline block below, and
+         connect-src names the hosts the client really talks to — Supabase,
+         the website, the tile servers.
+
+         The bare `http: ws:` on the end is the company service. It is
+         usually on this machine, but the whole point of hosting it on the
+         LAN is that the rest of the crew type in whatever address they
+         were given, and CSP has no syntax for "any host on my network":
+         192.168.*:* is not a valid source and Chromium drops it. So this
+         is honest about what it is — connect may go to any plain-http
+         address. What the policy is still buying is the part that matters
+         here: no script, frame or object may come from anywhere but this
+         app, so there is no way in for injected code in the first place. -->
+
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        base-uri 'self';
+        object-src 'none';
+        frame-src 'none';
+        script-src 'self' 'unsafe-inline';
+        style-src 'self' 'unsafe-inline';
+        font-src 'self' data:;
+        img-src 'self' data: blob: https: http://localhost:* http://127.0.0.1:*;
+        media-src 'self' data: blob:;
+        worker-src 'self' blob:;
+        connect-src 'self' data: blob:
+            https://sfzeauvkguywidrqjntk.supabase.co
+            wss://sfzeauvkguywidrqjntk.supabase.co
+            https://gaming-nation.pages.dev
+            https://tile.openstreetmap.org
+            https://discord.com
+            http: ws:;
+    ">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
 
     <meta name="theme-color" content="#070910">
@@ -12,12 +56,12 @@
 
     <title>Gaming Nation Trucker</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
+    <!-- Inter and JetBrains Mono, from vendor/fonts rather than from Google.
+         These pages are file:// and the client is opened before the network
+         is up as often as not, so a stylesheet fetched over the wire meant
+         the app rendering in Segoe UI — and offline it meant that for good.
+         See vendor/fonts/README.md. -->
+    <link rel="stylesheet" href="vendor/fonts/fonts.css">
 
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
     <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
@@ -323,7 +367,7 @@
     <script src="map-data.js"></script>
 
     <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.min.js"></script>
+    <script src="vendor/supabase/supabase.js"></script>
 
     <!-- Gaming Nation Supabase configuration -->
     <script src="supabase-client.js"></script>
